@@ -1,4 +1,5 @@
 import { DashboardStats, Lead, LeadNote, Place, SearchJob, SearchArea, SearchQueryLog, AppSettings, IBGEState, IBGECity, PipelineStatus } from '../types';
+import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
 import {
   fetchAllLeadsFromFirestore,
   computeStatsFromLeads,
@@ -76,15 +77,62 @@ export const api = {
 
   // IBGE
   async getStates(): Promise<IBGEState[]> {
-    const res = await fetch('/api/ibge/states');
-    if (!res.ok) throw new Error('Falha ao carregar estados.');
-    return res.json();
+    try {
+      const res = await fetch('/api/ibge/states');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    } catch {
+      // Fallback
+    }
+
+    try {
+      const ibgeRes = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome', {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (ibgeRes.ok) {
+        const data = (await ibgeRes.json()) as IBGEState[];
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    } catch {
+      // Fallback
+    }
+
+    return BRAZILIAN_STATES;
   },
 
   async getCities(uf: string): Promise<IBGECity[]> {
-    const res = await fetch(`/api/ibge/cities/${uf}`);
-    if (!res.ok) throw new Error('Falha ao carregar cidades.');
-    return res.json();
+    const cleanUf = (uf || 'SP').toUpperCase().trim();
+    try {
+      const res = await fetch(`/api/ibge/cities/${cleanUf}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    } catch {
+      // Fallback
+    }
+
+    try {
+      const ibgeRes = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${cleanUf}/municipios`, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (ibgeRes.ok) {
+        const data = (await ibgeRes.json()) as IBGECity[];
+        if (Array.isArray(data) && data.length > 0) {
+          data.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          return data;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    const popular = POPULAR_CITIES_BY_STATE[cleanUf] || ['Capital', 'Região Central', 'Interior'];
+    return popular.map((nome, id) => ({ id: 1000 + id, nome }));
   },
 
   // Leads & Niches

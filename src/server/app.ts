@@ -115,6 +115,17 @@ app.get('/api/ibge/states', async (_req: Request, res: Response) => {
   }
 });
 
+app.get('/api/ibge/cities', async (req: Request, res: Response) => {
+  try {
+    const uf = (req.query.uf as string) || 'SP';
+    const cities = await fetchCitiesByState(uf);
+    res.json(cities);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
 app.get('/api/ibge/cities/:uf', async (req: Request, res: Response) => {
   try {
     const uf = req.params.uf;

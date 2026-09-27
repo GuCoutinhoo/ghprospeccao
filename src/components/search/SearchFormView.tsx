@@ -16,6 +16,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { IBGEState, IBGECity, SearchJob } from '../../types';
+import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from '../../lib/ibge/ibgeService';
 import { api } from '../../lib/api';
 
 interface SearchFormViewProps {
@@ -44,9 +45,11 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
   onJobStarted,
   onSelectExistingJob,
 }) => {
-  const [states, setStates] = useState<IBGEState[]>([]);
+  const [states, setStates] = useState<IBGEState[]>(BRAZILIAN_STATES);
   const [selectedState, setSelectedState] = useState<string>('SP');
-  const [cities, setCities] = useState<IBGECity[]>([]);
+  const [cities, setCities] = useState<IBGECity[]>(() =>
+    (POPULAR_CITIES_BY_STATE['SP'] || []).map((nome, id) => ({ id: 1000 + id, nome }))
+  );
   const [selectedCity, setSelectedCity] = useState<string>('all'); // 'all' ou nome
   const [loadingCities, setLoadingCities] = useState(false);
 
@@ -206,8 +209,8 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                   onChange={(e) => setSelectedState(e.target.value)}
                   className="w-full appearance-none rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-xs font-medium text-neutral-800 shadow-2xs focus:border-neutral-900 focus:outline-hidden"
                 >
-                  {states.map((st) => (
-                    <option key={st.id} value={st.sigla}>
+                  {(states && states.length > 0 ? states : BRAZILIAN_STATES).map((st) => (
+                    <option key={st.id || st.sigla} value={st.sigla}>
                       {st.nome} ({st.sigla})
                     </option>
                   ))}
