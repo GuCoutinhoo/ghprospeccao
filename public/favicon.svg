@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Background rounded square gradient for ultra sharp contrast on light/dark tabs -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+
+    <!-- Vibrant Orange Gradient matching the user's logo -->
+    <linearGradient id="orangeGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ea580c" />
+      <stop offset="50%" stop-color="#f97316" />
+      <stop offset="100%" stop-color="#fb923c" />
+    </linearGradient>
+
+    <!-- Handle Gradient -->
+    <linearGradient id="handleGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#c2410c" />
+      <stop offset="100%" stop-color="#f97316" />
+    </linearGradient>
+  </defs>
+
+  <!-- Dark base icon container with rounded smooth corners -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <g transform="translate(18, 14)">
+    <!-- 'H' Letter White Base & Structure -->
+    <!-- Left vertical bar of H (blended under G) -->
+    <path d="M 285 200 L 332 200 L 332 390 L 285 390 Z" fill="#ffffff" fill-opacity="0.95" />
+    
+    <!-- Horizontal connector bar of H -->
+    <path d="M 285 275 L 430 275 L 430 320 L 285 320 Z" fill="#ffffff" fill-opacity="0.95" />
+    
+    <!-- Right vertical bar of H -->
+    <path d="M 385 210 L 432 210 L 432 390 L 385 390 Z" fill="#ffffff" fill-opacity="0.95" />
+
+    <!-- 3 Ascending Bar Chart Bars forming top of the H in Orange Gradient -->
+    <!-- Bar 1 (Short) -->
+    <rect x="290" y="160" width="30" height="48" rx="8" fill="url(#orangeGrad)" />
+    <!-- Bar 2 (Medium) -->
+    <rect x="335" y="132" width="30" height="76" rx="8" fill="url(#orangeGrad)" />
+    <!-- Bar 3 (Tallest) -->
+    <rect x="380" y="100" width="30" height="108" rx="8" fill="url(#orangeGrad)" />
+
+    <!-- Magnifying Glass / Letter 'G' Body (Crisp White Monogram) -->
+    <path d="
+      M 215 90
+      A 115 115 0 1 0 315 285
+      L 315 240
+      L 230 240
+      L 230 200
+      L 355 200
+      L 355 298
+      A 155 155 0 1 1 215 50
+      Z
+    " fill="#ffffff" />
+
+    <!-- Magnifying Glass Diagonal Handle (Orange Pill/Bar pointing bottom-left) -->
+    <rect x="52" y="325" width="46" height="120" rx="23" transform="rotate(-45 75 385)" fill="url(#handleGrad)" />
+
+    <!-- Lead / User Silhouette inside the Magnifying Glass Lens (Orange Gradient) -->
+    <!-- Head -->
+    <circle cx="205" cy="180" r="32" fill="url(#orangeGrad)" />
+    <!-- Shoulders / Torso -->
+    <path d="M 152 265 C 152 225, 172 215, 205 215 C 238 215, 258 225, 258 265 Z" fill="url(#orangeGrad)" />
+  </g>
+</svg>

@@ -1,7 +1,28 @@
-import app from './src/server/app';
+import { spawn } from 'node:child_process';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+const isTsxLoaded = Boolean(
+  process.env.TSX_LOADED === '1' ||
+  process.execArgv.some((arg) => arg.includes('tsx')) ||
+  process.env.npm_lifecycle_script?.includes('tsx')
+);
+
+if (!isTsxLoaded) {
+  process.env.TSX_LOADED = '1';
+  const child = spawn(process.execPath, ['--import', 'tsx', ...process.argv.slice(1)], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  child.on('exit', (code, signal) => {
+    if (signal) process.kill(process.pid, signal);
+    else process.exit(code ?? 0);
+  });
+  await new Promise(() => {});
+}
+
+const { default: app } = await import('./src/server/app');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

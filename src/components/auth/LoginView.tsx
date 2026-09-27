@@ -33,8 +33,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       <div className="w-full max-w-sm space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-900 text-white font-bold text-base shadow-xs">
-            P
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-950 p-1.5 shadow-sm border border-neutral-800">
+            <img src="/favicon.svg" alt="GH Logo" className="h-full w-full object-contain" />
           </div>
           <h1 className="text-xl font-bold tracking-tight text-neutral-900">
             ProspectaPlaces B2B

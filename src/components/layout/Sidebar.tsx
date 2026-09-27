@@ -64,8 +64,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Brand Zone */}
         <div className="flex h-16 items-center justify-between px-5 border-b border-neutral-100">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-900 text-white font-bold text-sm tracking-tight shadow-xs">
-              P
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-950 p-1 shadow-sm border border-neutral-800 overflow-hidden">
+              <img src="/favicon.svg" alt="GH Logo" className="h-full w-full object-contain" />
             </div>
             <div>
               <span className="font-semibold text-neutral-900 text-sm tracking-tight flex items-center gap-1.5">
