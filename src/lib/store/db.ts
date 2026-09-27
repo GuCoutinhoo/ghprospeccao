@@ -23,14 +23,20 @@ interface DbSchema {
   settings: AppSettings;
 }
 
-const DATA_DIR = path.resolve(process.cwd(), '.data');
+const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const BUNDLED_DB_FILE = path.resolve(process.cwd(), '.data', 'db.json');
+const DATA_DIR = isVercel ? path.join('/tmp', '.data') : path.resolve(process.cwd(), '.data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-const INITIAL_KEY = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyBjXeqBW89Kdk_s6oxccrGLJvRtcTP1ec4';
+const INITIAL_KEY =
+  process.env.GOOGLE_MAPS_API_KEY ||
+  process.env.GOOGLE_PLACES_API_KEY ||
+  process.env.VITE_GOOGLE_MAPS_API_KEY ||
+  'AIzaSyBjXeqBW89Kdk_s6oxccrGLJvRtcTP1ec4';
 
 const INITIAL_SETTINGS: AppSettings = {
   googleMapsApiKey: INITIAL_KEY,
-  hasCustomKey: true,
+  hasCustomKey: Boolean(INITIAL_KEY && INITIAL_KEY.trim().length > 10),
   maxResultsPerJob: 100,
   maxCitiesPerJob: 15,
   requestDelayMs: 600,
@@ -58,21 +64,41 @@ class Database {
 
   private init() {
     try {
+      // 1. Tentar ler do DB_FILE ativo (ou /tmp/.data/db.json na Vercel)
+      if (fs.existsSync(DB_FILE)) {
+        const raw = fs.readFileSync(DB_FILE, 'utf-8');
+        this.data = JSON.parse(raw);
+        this.data.settings = { ...INITIAL_SETTINGS, ...(this.data.settings || {}) };
+        this.initialized = true;
+        return;
+      }
+
+      // 2. Se na Vercel /tmp ainda não tiver o arquivo, tentar copiar do bundle do projeto
+      if (isVercel && fs.existsSync(BUNDLED_DB_FILE)) {
+        try {
+          if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+          }
+          const bundledRaw = fs.readFileSync(BUNDLED_DB_FILE, 'utf-8');
+          this.data = JSON.parse(bundledRaw);
+          this.data.settings = { ...INITIAL_SETTINGS, ...(this.data.settings || {}) };
+          fs.writeFileSync(DB_FILE, bundledRaw, 'utf-8');
+          this.initialized = true;
+          return;
+        } catch (copyErr) {
+          console.warn('[DB] Erro ao copiar DB inicial para /tmp:', copyErr);
+        }
+      }
+
+      // 3. Fallback: criar diretório e inicializar
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
 
-      if (fs.existsSync(DB_FILE)) {
-        const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        this.data = JSON.parse(raw);
-        // Garante integridade de settings
-        this.data.settings = { ...INITIAL_SETTINGS, ...(this.data.settings || {}) };
-      } else {
-        // Criar dados iniciais
-        this.seedInitialData();
-        this.save();
-      }
-    } catch {
+      this.seedInitialData();
+      this.save();
+    } catch (err) {
+      console.warn('[DB] Erro durante inicialização do banco, usando dados em memória:', err);
       this.seedInitialData();
     }
     this.initialized = true;
@@ -95,7 +121,7 @@ class Database {
       }
       fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
     } catch (err) {
-      console.error('Falha ao salvar dados locais:', err);
+      console.warn('[DB] Não foi possível persistir no disco (ambiente somente leitura/serverless). Mantendo dados na memória:', err);
     }
   }
 
@@ -459,7 +485,11 @@ class Database {
 
   // --- SETTINGS ---
   public getSettings(): AppSettings {
-    const currentApiKey = process.env.GOOGLE_MAPS_API_KEY || this.data.settings.googleMapsApiKey;
+    const currentApiKey =
+      process.env.GOOGLE_MAPS_API_KEY ||
+      process.env.GOOGLE_PLACES_API_KEY ||
+      process.env.VITE_GOOGLE_MAPS_API_KEY ||
+      this.data.settings.googleMapsApiKey;
     return {
       ...this.data.settings,
       googleMapsApiKey: currentApiKey,
@@ -468,13 +498,15 @@ class Database {
   }
 
   public updateSettings(updates: Partial<AppSettings>): AppSettings {
+    const key = updates.googleMapsApiKey !== undefined ? updates.googleMapsApiKey : this.data.settings.googleMapsApiKey;
     this.data.settings = {
       ...this.data.settings,
       ...updates,
-      hasCustomKey: Boolean(updates.googleMapsApiKey && updates.googleMapsApiKey.trim() !== ''),
+      hasCustomKey: Boolean(key && key.trim() !== ''),
     };
     if (updates.googleMapsApiKey !== undefined) {
       process.env.GOOGLE_MAPS_API_KEY = updates.googleMapsApiKey;
+      process.env.GOOGLE_PLACES_API_KEY = updates.googleMapsApiKey;
     }
     this.save();
     return this.getSettings();

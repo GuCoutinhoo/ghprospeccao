@@ -14,6 +14,33 @@ import { LoginView } from './components/auth/LoginView';
 import { DashboardStats, Lead } from './types';
 import { api } from './lib/api';
 
+const DEFAULT_STATS: DashboardStats = {
+  totalLeads: 0,
+  newLeads: 0,
+  contactedLeads: 0,
+  interestedLeads: 0,
+  closedLeads: 0,
+  noWebsiteLeads: 0,
+  withPhoneLeads: 0,
+  responseRate: 0,
+  closingRate: 0,
+  leadsByDay: [],
+  leadsByNiche: [],
+  leadsByState: [],
+  pipelineDistribution: [
+    { status: 'NOVO', count: 0 },
+    { status: 'PRÉVIA CRIADA', count: 0 },
+    { status: 'CONTATADO', count: 0 },
+    { status: 'RESPONDEU', count: 0 },
+    { status: 'INTERESSADO', count: 0 },
+    { status: 'REUNIÃO', count: 0 },
+    { status: 'PROPOSTA', count: 0 },
+    { status: 'FECHADO', count: 0 },
+    { status: 'PERDIDO', count: 0 },
+  ],
+  topOpportunities: [],
+};
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>({
@@ -67,13 +94,22 @@ export default function App() {
     setIsRefreshing(true);
     try {
       const [s, set] = await Promise.all([
-        api.getDashboardStats(),
-        api.getSettings(),
+        api.getDashboardStats().catch((e) => {
+          console.warn('[App] Erro ao carregar stats da API:', e);
+          return null;
+        }),
+        api.getSettings().catch((e) => {
+          console.warn('[App] Erro ao carregar settings da API:', e);
+          return null;
+        }),
       ]);
-      setStats(s);
-      setHasCustomKey(set.hasCustomKey);
+      setStats(s || stats || DEFAULT_STATS);
+      if (set && typeof set.hasCustomKey === 'boolean') {
+        setHasCustomKey(set.hasCustomKey);
+      }
     } catch (err) {
       console.error('Falha ao carregar dados iniciais:', err);
+      if (!stats) setStats(DEFAULT_STATS);
     } finally {
       setIsRefreshing(false);
     }
@@ -226,9 +262,9 @@ export default function App() {
 
         {/* Viewport Principal */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {currentPath === '/dashboard' && stats && (
+          {currentPath === '/dashboard' && (
             <DashboardView
-              stats={stats}
+              stats={stats || DEFAULT_STATS}
               onSelectLead={(lead) => setSelectedLead(lead)}
               onNavigateToSearch={() => handleNavigate('/search')}
               onNavigateToLeads={() => handleNavigate('/leads')}

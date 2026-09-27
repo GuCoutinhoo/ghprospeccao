@@ -18,7 +18,42 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
+// CORS & Headers para produção e Vercel
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-matched-path, x-forwarded-uri');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Normalizador de rotas (caso venha sem /api na Vercel)
+app.use((req, _res, next) => {
+  if (
+    typeof req.url === 'string' &&
+    !req.url.startsWith('/api') &&
+    !req.url.startsWith('/assets') &&
+    !req.url.startsWith('/vite') &&
+    !req.url.startsWith('/@') &&
+    !req.url.includes('.')
+  ) {
+    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  }
+  next();
+});
+
 // --- ROTAS DA API ---
+
+// 0. HEALTH CHECK
+app.get('/api', (_req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    service: 'ProspectaPlaces B2B Engine API',
+    time: new Date().toISOString(),
+  });
+});
 
 // 1. AUTH (Supabase / Session mock)
 app.post('/api/auth/login', (req: Request, res: Response) => {
