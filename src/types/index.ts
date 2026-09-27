@@ -170,6 +170,7 @@ export interface DashboardStats {
 export interface AppSettings {
   googleMapsApiKey: string;
   hasCustomKey: boolean;
+  maskedKey?: string;
   maxResultsPerJob: number;
   maxCitiesPerJob: number;
   requestDelayMs: number;

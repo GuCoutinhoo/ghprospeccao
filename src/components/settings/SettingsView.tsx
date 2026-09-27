@@ -183,9 +183,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
           </p>
 
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-neutral-700">
-              GOOGLE_MAPS_API_KEY
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-neutral-700">
+                GOOGLE_MAPS_API_KEY
+              </label>
+              {settings?.maskedKey && (
+                <span className="text-[11px] text-neutral-500 font-mono">
+                  Ativa no servidor: <span className="font-semibold text-neutral-700">{settings.maskedKey}</span>
+                </span>
+              )}
+            </div>
             <div className="flex gap-2">
               <input
                 type="text"

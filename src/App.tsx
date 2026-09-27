@@ -62,7 +62,7 @@ export default function App() {
   // Dados globais
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [hasCustomKey, setHasCustomKey] = useState<boolean>(false);
+  const [hasCustomKey, setHasCustomKey] = useState<boolean>(true);
 
   // Link público de demonstração do mockup (acesso direto via ?leadId=... ou /preview?leadId=...)
   const [publicPreviewLead, setPublicPreviewLead] = useState<Lead | null>(null);
