@@ -390,6 +390,10 @@ app.get('/api/supabase/migrations', (_req: Request, res: Response) => {
 
 // --- VITE MIDDLEWARE / STATIC FILES ---
 async function startServer() {
+  if (process.env.VERCEL) {
+    return;
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -409,7 +413,12 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error('Falha ao iniciar o servidor:', err);
-  process.exit(1);
-});
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error('Falha ao iniciar o servidor:', err);
+    process.exit(1);
+  });
+}
+
+export { app };
+export default app;
