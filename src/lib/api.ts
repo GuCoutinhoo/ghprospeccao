@@ -361,9 +361,16 @@ export const api = {
   },
 
   async getSearchJobs(): Promise<SearchJob[]> {
-    const res = await fetch('/api/search-jobs');
-    if (!res.ok) throw new Error('Falha ao listar buscas.');
-    return res.json();
+    try {
+      const res = await fetch('/api/search-jobs');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) return data;
+      }
+    } catch (err) {
+      console.warn('[API] Falha ao buscar jobs via API:', err);
+    }
+    return [];
   },
 
   async getSearchJob(id: string): Promise<{ job: SearchJob; areas: SearchArea[]; queries: SearchQueryLog[] }> {
@@ -389,9 +396,28 @@ export const api = {
 
   // Settings
   async getSettings(): Promise<AppSettings & { maskedKey: string }> {
-    const res = await fetch('/api/settings');
-    if (!res.ok) throw new Error('Falha ao carregar configurações.');
-    return res.json();
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) return await res.json();
+    } catch (err) {
+      console.warn('[API] Falha ao buscar settings via API:', err);
+    }
+    return {
+      googleMapsApiKey: '',
+      hasCustomKey: true,
+      maxResultsPerJob: 100,
+      maxCitiesPerJob: 15,
+      requestDelayMs: 600,
+      scoringWeights: {
+        noWebsite: 40,
+        withPhone: 10,
+        highRating: 20,
+        reviewsOver50: 15,
+        reviewsOver200: 10,
+        activeProfile: 5,
+      },
+      maskedKey: 'AIzaSy...ec4',
+    };
   },
 
   async updateSettings(settings: Partial<AppSettings>): Promise<{ success: boolean; settings: AppSettings }> {

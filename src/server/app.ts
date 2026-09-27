@@ -26,6 +26,12 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
+
+  // Compatibilidade com rewrites da Vercel: se o prefixo /api tiver sido removido, garante ele
+  if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/assets') && !req.url.includes('.')) {
+    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  }
+
   next();
 });
 
@@ -310,13 +316,21 @@ app.post('/api/search-jobs', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Estado, cidade e nicho são obrigatórios.' });
     }
 
-    const cleanFilters = {
+    const cleanFilters: {
+      onlyWithoutWebsite: boolean;
+      onlyWithPhone: boolean;
+      minRating: number;
+      minReviews: number;
+      maxReviews?: number;
+    } = {
       onlyWithoutWebsite: filters?.onlyWithoutWebsite ?? true,
       onlyWithPhone: filters?.onlyWithPhone ?? false,
       minRating: Number(filters?.minRating ?? 0),
       minReviews: Number(filters?.minReviews ?? 0),
-      maxReviews: filters?.maxReviews ? Number(filters.maxReviews) : undefined,
     };
+    if (filters?.maxReviews !== undefined && filters?.maxReviews !== null && filters?.maxReviews !== '') {
+      cleanFilters.maxReviews = Number(filters.maxReviews);
+    }
 
     const { job, estimatedQueries, totalCities, totalAreas } = await createAndPrepareSearchJob({
       userId: 'default_user_1',

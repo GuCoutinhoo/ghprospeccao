@@ -265,16 +265,23 @@ export async function syncLeadUpdateToFirestoreDirect(
   const db = getClientFirestore();
   if (!db || !leadId) return;
 
+  const cleanUpdates: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(updates)) {
+    if (v !== undefined) {
+      cleanUpdates[k] = v;
+    }
+  }
+
   // Atualiza cache em memória local
   if (cachedLeads) {
     const idx = cachedLeads.findIndex((l) => l.id === leadId);
     if (idx !== -1) {
-      cachedLeads[idx] = { ...cachedLeads[idx], ...updates, updated_at: new Date().toISOString() };
+      cachedLeads[idx] = { ...cachedLeads[idx], ...cleanUpdates, updated_at: new Date().toISOString() };
     }
   }
 
   try {
-    await setDoc(doc(db, 'leads', leadId), updates, { merge: true });
+    await setDoc(doc(db, 'leads', leadId), cleanUpdates, { merge: true });
   } catch (err) {
     console.warn(`[Firebase Client] Falha ao sincronizar lead ${leadId} no Firestore:`, err);
   }

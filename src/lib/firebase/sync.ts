@@ -87,11 +87,28 @@ export async function fetchAllFromFirestore(): Promise<{
   }
 }
 
+function cleanForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) return data;
+  if (Array.isArray(data)) {
+    return data.map(cleanForFirestore) as unknown as T;
+  }
+  if (typeof data === 'object') {
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+      if (v !== undefined) {
+        clean[k] = cleanForFirestore(v);
+      }
+    }
+    return clean as T;
+  }
+  return data;
+}
+
 export async function syncLeadToFirestore(lead: Lead): Promise<void> {
   const db = getFirestoreDb();
   if (!db || !lead.id) return;
   try {
-    await setDoc(doc(db, 'leads', lead.id), lead, { merge: true });
+    await setDoc(doc(db, 'leads', lead.id), cleanForFirestore(lead), { merge: true });
   } catch (err) {
     console.warn(`[Firebase] Erro ao sincronizar lead ${lead.id}:`, err);
   }
@@ -101,7 +118,7 @@ export async function syncPlaceToFirestore(place: Place): Promise<void> {
   const db = getFirestoreDb();
   if (!db || !place.id) return;
   try {
-    await setDoc(doc(db, 'places', place.id), place, { merge: true });
+    await setDoc(doc(db, 'places', place.id), cleanForFirestore(place), { merge: true });
   } catch (err) {
     console.warn(`[Firebase] Erro ao sincronizar place ${place.id}:`, err);
   }
@@ -111,7 +128,7 @@ export async function syncJobToFirestore(job: SearchJob): Promise<void> {
   const db = getFirestoreDb();
   if (!db || !job.id) return;
   try {
-    await setDoc(doc(db, 'search_jobs', job.id), job, { merge: true });
+    await setDoc(doc(db, 'search_jobs', job.id), cleanForFirestore(job), { merge: true });
   } catch (err) {
     console.warn(`[Firebase] Erro ao sincronizar job ${job.id}:`, err);
   }
@@ -121,7 +138,7 @@ export async function syncSettingsToFirestore(settings: AppSettings): Promise<vo
   const db = getFirestoreDb();
   if (!db) return;
   try {
-    await setDoc(doc(db, 'settings', 'config'), settings, { merge: true });
+    await setDoc(doc(db, 'settings', 'config'), cleanForFirestore(settings), { merge: true });
   } catch (err) {
     console.warn('[Firebase] Erro ao salvar configurações no Firestore:', err);
   }
