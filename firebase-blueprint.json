@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "Place": {
+      "title": "Place",
+      "description": "Google Places business data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "place_id": { "type": "string" },
+        "name": { "type": "string" },
+        "formatted_address": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "phone": { "type": "string" },
+        "website": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviews_count": { "type": "number" }
+      }
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "B2B prospect lead with pipeline status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "place_id": { "type": "string" },
+        "business_name": { "type": "string" },
+        "niche": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "pipeline_status": { "type": "string" },
+        "opportunity_score": { "type": "number" },
+        "favorite": { "type": "boolean" },
+        "updated_at": { "type": "string" }
+      }
+    },
+    "SearchJob": {
+      "title": "SearchJob",
+      "description": "Prospecting execution batch job",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "niche": { "type": "string" },
+        "status": { "type": "string" },
+        "total_places_found": { "type": "number" }
+      }
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "System settings and preferences",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "googleMapsApiKey": { "type": "string" },
+        "hasCustomKey": { "type": "boolean" },
+        "maxResultsPerJob": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/places/{placeId}": {
+      "schema": "Place",
+      "description": "Global cache of enriched Google Places businesses"
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "All B2B prospect leads"
+    },
+    "/search_jobs/{jobId}": {
+      "schema": "SearchJob",
+      "description": "Prospecting search tasks"
+    },
+    "/settings/{settingId}": {
+      "schema": "Setting",
+      "description": "App settings"
+    }
+  }
+}

@@ -12,6 +12,13 @@ import {
   PipelineStatus,
 } from '../../types';
 import { calculateLeadScore, DEFAULT_SCORING_WEIGHTS } from '../scoring/leadScore';
+import {
+  fetchAllFromFirestore,
+  syncLeadToFirestore,
+  syncPlaceToFirestore,
+  syncJobToFirestore,
+  syncSettingsToFirestore,
+} from '../firebase/sync';
 
 interface DbSchema {
   places: Place[];
@@ -102,6 +109,32 @@ class Database {
       this.seedInitialData();
     }
     this.initialized = true;
+
+    // Sincroniza em background com o Google Cloud Firestore
+    this.syncFromFirestore().catch(() => {});
+  }
+
+  public async syncFromFirestore() {
+    try {
+      const remote = await fetchAllFromFirestore();
+      if (remote) {
+        if (remote.leads && remote.leads.length > 0) {
+          this.data.leads = remote.leads;
+        }
+        if (remote.places && remote.places.length > 0) {
+          this.data.places = remote.places;
+        }
+        if (remote.jobs && remote.jobs.length > 0) {
+          this.data.search_jobs = remote.jobs;
+        }
+        if (remote.settings) {
+          this.data.settings = { ...this.data.settings, ...remote.settings };
+        }
+        this.save();
+      }
+    } catch (err) {
+      console.warn('[DB] Falha na sincronização inicial do Firestore:', err);
+    }
   }
 
   private seedInitialData() {
@@ -136,10 +169,12 @@ class Database {
         updated_at: new Date().toISOString(),
       };
       this.save();
+      syncPlaceToFirestore(this.data.places[existingIndex]).catch(() => {});
       return { place: this.data.places[existingIndex], isNew: false };
     } else {
       this.data.places.push(place);
       this.save();
+      syncPlaceToFirestore(place).catch(() => {});
       return { place, isNew: true };
     }
   }
@@ -160,6 +195,7 @@ class Database {
 
     this.data.leads.unshift(lead);
     this.save();
+    syncLeadToFirestore(lead).catch(() => {});
     return { lead, created: true };
   }
 
@@ -279,6 +315,7 @@ class Database {
       updated_at: new Date().toISOString(),
     };
     this.save();
+    syncLeadToFirestore(this.data.leads[idx]).catch(() => {});
     return this.data.leads[idx];
   }
 
@@ -290,6 +327,7 @@ class Database {
     this.data.leads[idx].is_favorite = !current;
     this.data.leads[idx].updated_at = new Date().toISOString();
     this.save();
+    syncLeadToFirestore(this.data.leads[idx]).catch(() => {});
     return this.data.leads[idx];
   }
 
@@ -427,6 +465,7 @@ class Database {
   public createSearchJob(job: SearchJob): SearchJob {
     this.data.search_jobs.unshift(job);
     this.save();
+    syncJobToFirestore(job).catch(() => {});
     return job;
   }
 
@@ -450,6 +489,7 @@ class Database {
       updated_at: new Date().toISOString(),
     };
     this.save();
+    syncJobToFirestore(this.data.search_jobs[idx]).catch(() => {});
     return this.data.search_jobs[idx];
   }
 
@@ -509,6 +549,7 @@ class Database {
       process.env.GOOGLE_PLACES_API_KEY = updates.googleMapsApiKey;
     }
     this.save();
+    syncSettingsToFirestore(this.data.settings).catch(() => {});
     return this.getSettings();
   }
 }

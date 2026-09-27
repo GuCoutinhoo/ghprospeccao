@@ -1,0 +1,117 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  deleteDoc,
+  Firestore,
+} from 'firebase/firestore';
+import fs from 'fs';
+import path from 'path';
+import { Place, Lead, LeadNote, SearchJob, AppSettings } from '../../types';
+
+let dbInstance: Firestore | null = null;
+
+export function getFirestoreDb(): Firestore | null {
+  if (dbInstance) return dbInstance;
+  try {
+    const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+    if (!fs.existsSync(configPath)) {
+      return null;
+    }
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const app = !getApps().length ? initializeApp(config) : getApp();
+    dbInstance = getFirestore(app, config.firestoreDatabaseId || '(default)');
+    return dbInstance;
+  } catch (err) {
+    console.warn('[Firebase] Não foi possível inicializar Firestore:', err);
+    return null;
+  }
+}
+
+export async function fetchAllFromFirestore(): Promise<{
+  places: Place[];
+  leads: Lead[];
+  jobs: SearchJob[];
+  settings?: AppSettings;
+} | null> {
+  const db = getFirestoreDb();
+  if (!db) return null;
+
+  try {
+    const [leadsSnap, placesSnap, jobsSnap, settingsSnap] = await Promise.all([
+      getDocs(collection(db, 'leads')).catch(() => null),
+      getDocs(collection(db, 'places')).catch(() => null),
+      getDocs(collection(db, 'search_jobs')).catch(() => null),
+      getDoc(doc(db, 'settings', 'config')).catch(() => null),
+    ]);
+
+    const leads: Lead[] = [];
+    if (leadsSnap) {
+      leadsSnap.forEach((d) => leads.push(d.data() as Lead));
+    }
+
+    const places: Place[] = [];
+    if (placesSnap) {
+      placesSnap.forEach((d) => places.push(d.data() as Place));
+    }
+
+    const jobs: SearchJob[] = [];
+    if (jobsSnap) {
+      jobsSnap.forEach((d) => jobs.push(d.data() as SearchJob));
+    }
+
+    const settings = settingsSnap && settingsSnap.exists()
+      ? (settingsSnap.data() as AppSettings)
+      : undefined;
+
+    return { places, leads, jobs, settings };
+  } catch (err) {
+    console.warn('[Firebase] Erro ao carregar dados do Firestore:', err);
+    return null;
+  }
+}
+
+export async function syncLeadToFirestore(lead: Lead): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !lead.id) return;
+  try {
+    await setDoc(doc(db, 'leads', lead.id), lead, { merge: true });
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao sincronizar lead ${lead.id}:`, err);
+  }
+}
+
+export async function syncPlaceToFirestore(place: Place): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !place.id) return;
+  try {
+    await setDoc(doc(db, 'places', place.id), place, { merge: true });
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao sincronizar place ${place.id}:`, err);
+  }
+}
+
+export async function syncJobToFirestore(job: SearchJob): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !job.id) return;
+  try {
+    await setDoc(doc(db, 'search_jobs', job.id), job, { merge: true });
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao sincronizar job ${job.id}:`, err);
+  }
+}
+
+export async function syncSettingsToFirestore(settings: AppSettings): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db) return;
+  try {
+    await setDoc(doc(db, 'settings', 'config'), settings, { merge: true });
+  } catch (err) {
+    console.warn('[Firebase] Erro ao salvar configurações no Firestore:', err);
+  }
+}
