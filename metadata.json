@@ -1,0 +1,6 @@
+{
+  "name": "ProspectaPlaces B2B",
+  "description": "Sistema de inteligência comercial e prospecção de estabelecimentos sem site via Google Places API oficial e IBGE.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
