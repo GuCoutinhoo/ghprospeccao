@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "includeFiles": "{.data/**,firebase-applet-config.json}",
       "maxDuration": 60
     }
