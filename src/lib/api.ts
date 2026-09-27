@@ -221,4 +221,10 @@ export const api = {
     const res = await fetch('/api/supabase/migrations');
     return res.text();
   },
+
+  async syncFirestore(): Promise<{ success: boolean; leadsCount: number; message: string }> {
+    const res = await fetch('/api/sync', { method: 'POST' });
+    if (!res.ok) throw new Error('Falha na sincronização.');
+    return res.json();
+  },
 };

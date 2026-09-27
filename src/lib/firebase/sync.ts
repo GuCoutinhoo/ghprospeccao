@@ -13,19 +13,30 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { Place, Lead, LeadNote, SearchJob, AppSettings } from '../../types';
+import firebaseConfigJson from '../../../firebase-applet-config.json';
 
 let dbInstance: Firestore | null = null;
 
 export function getFirestoreDb(): Firestore | null {
   if (dbInstance) return dbInstance;
   try {
-    const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
-    if (!fs.existsSync(configPath)) {
+    let config = firebaseConfigJson as Record<string, string>;
+    if (!config || !config.projectId) {
+      const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+      if (fs.existsSync(configPath)) {
+        config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      }
+    }
+    if (!config || !config.projectId) {
+      console.warn('[Firebase] Configuração do Firebase não encontrada.');
       return null;
     }
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const app = !getApps().length ? initializeApp(config) : getApp();
-    dbInstance = getFirestore(app, config.firestoreDatabaseId || '(default)');
+    const databaseId =
+      config.firestoreDatabaseId ||
+      process.env.FIRESTORE_DATABASE_ID ||
+      'ai-studio-prospectaplacesb-a0f0acf2-92de-4dc6-84d3-27efdba900e9';
+    dbInstance = getFirestore(app, databaseId);
     return dbInstance;
   } catch (err) {
     console.warn('[Firebase] Não foi possível inicializar Firestore:', err);

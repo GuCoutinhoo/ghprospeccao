@@ -4,7 +4,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/index.ts": {
-      "includeFiles": ".data/**",
+      "includeFiles": "{.data/**,firebase-applet-config.json}",
       "maxDuration": 60
     }
   },

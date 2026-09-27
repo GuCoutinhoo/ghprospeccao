@@ -30,15 +30,45 @@ app.use((req, res, next) => {
 });
 
 
+// Middleware assíncrono para garantir sincronização com o Firestore antes de qualquer consulta à API
+app.use('/api', async (req, _res, next) => {
+  if (req.path === '' || req.path === '/') {
+    return next();
+  }
+  try {
+    await db.ensureInitialized();
+  } catch (err) {
+    console.warn('[Server] Falha ao sincronizar com Firestore:', err);
+  }
+  next();
+});
+
 // --- ROTAS DA API ---
 
-// 0. HEALTH CHECK
+// 0. HEALTH CHECK & SYNC
 app.get('/api', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     service: 'ProspectaPlaces B2B Engine API',
     time: new Date().toISOString(),
   });
+});
+
+app.post('/api/sync', async (_req: Request, res: Response) => {
+  try {
+    const result = await db.syncFromFirestore();
+    const stats = db.getDashboardStats();
+    res.json({
+      success: true,
+      message: 'Sincronização com o Firestore concluída com sucesso!',
+      leadsCount: result.leadsCount,
+      placesCount: result.placesCount,
+      stats,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
 });
 
 // 1. AUTH (Supabase / Session mock)

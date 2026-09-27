@@ -64,6 +64,7 @@ class Database {
   };
 
   private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
     this.init();
@@ -114,16 +115,53 @@ class Database {
     this.syncFromFirestore().catch(() => {});
   }
 
-  public async syncFromFirestore() {
+  public async ensureInitialized(): Promise<void> {
+    if (this.initialized && this.data.leads && this.data.leads.length > 0) {
+      return;
+    }
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = (async () => {
+      if (!this.initialized) {
+        this.init();
+      }
+      // Se a base local estiver vazia (ex: na Vercel em cold start sem arquivo persistido),
+      // busca imediatamente do Firestore em nuvem
+      if (!this.data.leads || this.data.leads.length === 0) {
+        console.log('[DB] Base local sem dados. Conectando e sincronizando com o Google Firestore...');
+        await this.syncFromFirestore();
+        console.log(`[DB] Firestore sincronizado: ${this.data.leads.length} leads carregados.`);
+      }
+    })().finally(() => {
+      this.initPromise = null;
+    });
+
+    return this.initPromise;
+  }
+
+  public async syncFromFirestore(): Promise<{ leadsCount: number; placesCount: number }> {
     try {
       const remote = await fetchAllFromFirestore();
       if (remote) {
         if (remote.leads && remote.leads.length > 0) {
           this.data.leads = remote.leads;
+        } else if (this.data.leads && this.data.leads.length > 0) {
+          // Se nuvem estiver vazia, sincroniza dados locais para o Firestore
+          for (const l of this.data.leads) {
+            syncLeadToFirestore(l).catch(() => {});
+          }
         }
+
         if (remote.places && remote.places.length > 0) {
           this.data.places = remote.places;
+        } else if (this.data.places && this.data.places.length > 0) {
+          for (const p of this.data.places) {
+            syncPlaceToFirestore(p).catch(() => {});
+          }
         }
+
         if (remote.jobs && remote.jobs.length > 0) {
           this.data.search_jobs = remote.jobs;
         }
@@ -132,8 +170,16 @@ class Database {
         }
         this.save();
       }
+      return {
+        leadsCount: this.data.leads.length,
+        placesCount: this.data.places.length,
+      };
     } catch (err) {
       console.warn('[DB] Falha na sincronização inicial do Firestore:', err);
+      return {
+        leadsCount: this.data.leads.length,
+        placesCount: this.data.places.length,
+      };
     }
   }
 

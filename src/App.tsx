@@ -115,6 +115,18 @@ export default function App() {
     }
   };
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await api.syncFirestore().catch((e) => console.warn('[App] Sincronização Firestore falhou:', e));
+      await loadInitialData();
+    } catch (err) {
+      console.error('Falha ao atualizar dados:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleNavigate = (path: string) => {
     setCurrentPath(path);
     if (!path.startsWith('/search/')) {
@@ -256,7 +268,7 @@ export default function App() {
           subtitle={headerMeta.subtitle}
           onOpenMobile={() => setIsMobileSidebarOpen(true)}
           onNewSearch={currentPath !== '/search' ? () => handleNavigate('/search') : undefined}
-          onRefresh={loadInitialData}
+          onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
         />
 
