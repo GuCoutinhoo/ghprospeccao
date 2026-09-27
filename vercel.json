@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "vite build",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/index.ts": {
+    "api/*.{js,ts}": {
       "includeFiles": ".data/**",
       "maxDuration": 60
     }
