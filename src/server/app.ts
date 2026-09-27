@@ -29,20 +29,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Normalizador de rotas (caso venha sem /api na Vercel)
-app.use((req, _res, next) => {
-  if (
-    typeof req.url === 'string' &&
-    !req.url.startsWith('/api') &&
-    !req.url.startsWith('/assets') &&
-    !req.url.startsWith('/vite') &&
-    !req.url.startsWith('/@') &&
-    !req.url.includes('.')
-  ) {
-    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
-  }
-  next();
-});
 
 // --- ROTAS DA API ---
 
