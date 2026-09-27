@@ -308,7 +308,7 @@ export default function App() {
             />
           )}
 
-          {currentPath === '/settings' && <SettingsView />}
+          {currentPath === '/settings' && <SettingsView onSettingsUpdated={loadInitialData} />}
         </main>
       </div>
 

@@ -112,9 +112,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             Integrações Oficiais
           </div>
 
-          <div className="mx-2 rounded-lg border border-neutral-150 bg-neutral-50/70 p-3 text-xs space-y-2">
+          <div
+            onClick={() => onNavigate('/settings')}
+            className="mx-2 rounded-lg border border-neutral-150 bg-neutral-50/70 p-3 text-xs space-y-2 cursor-pointer hover:border-neutral-300 hover:bg-neutral-100/60 transition-all group"
+            title="Clique para gerenciar suas chaves de API e configurações"
+          >
             <div className="flex items-center justify-between text-[11px]">
-              <span className="text-neutral-600 font-medium flex items-center gap-1.5">
+              <span className="text-neutral-600 group-hover:text-neutral-900 font-medium flex items-center gap-1.5 transition-colors">
                 <MapPin className="h-3.5 w-3.5 text-neutral-500" />
                 Google Places API
               </span>
@@ -139,10 +143,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
             </div>
 
-            <p className="text-[11px] text-neutral-400 leading-tight pt-1">
-              {hasCustomKey
-                ? 'Chave oficial configurada para consultas ilimitadas.'
-                : 'Configure sua chave em Configurações para produção.'}
+            <p className="text-[11px] leading-tight pt-1">
+              {hasCustomKey ? (
+                <span className="text-emerald-700 font-medium">Chave oficial conectada para buscas reais.</span>
+              ) : (
+                <span className="text-amber-700 font-medium underline group-hover:text-amber-900">
+                  Clique aqui para ativar sua chave oficial ➔
+                </span>
+              )}
             </p>
           </div>
         </nav>

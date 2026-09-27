@@ -17,7 +17,11 @@ import {
 import { AppSettings } from '../../types';
 import { api } from '../../lib/api';
 
-export const SettingsView: React.FC = () => {
+interface SettingsViewProps {
+  onSettingsUpdated?: () => void;
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated }) => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState<string>('');
   const [maxResults, setMaxResults] = useState<number>(100);
@@ -83,6 +87,9 @@ export const SettingsView: React.FC = () => {
         scoringWeights: weights,
       });
       setSaveSuccess(true);
+      if (onSettingsUpdated) {
+        onSettingsUpdated();
+      }
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       console.error(err);
