@@ -1444,9 +1444,6 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
-  if (req.url && !req.url.startsWith("/api") && !req.url.startsWith("/assets") && !req.url.includes(".")) {
-    req.url = "/api" + (req.url.startsWith("/") ? req.url : "/" + req.url);
-  }
   next();
 });
 app.use("/api", async (req, _res, next) => {

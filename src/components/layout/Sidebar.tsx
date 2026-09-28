@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div>
               <span className="font-semibold text-neutral-900 text-sm tracking-tight flex items-center gap-1.5">
-                ProspectaPlaces
+                GH Prospecção
               </span>
               <span className="text-[10px] text-neutral-400 font-mono tracking-wider block uppercase">
                 B2B Lead Engine
