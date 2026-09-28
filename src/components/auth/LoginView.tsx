@@ -33,11 +33,18 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       <div className="w-full max-w-sm space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-950 p-1.5 shadow-sm border border-neutral-800">
-            <img src="/favicon.svg" alt="GH Logo" className="h-full w-full object-contain" />
+          <div className="mx-auto flex h-16 w-auto items-center justify-center">
+            <img
+              src="/icone-logo.png"
+              alt="GH Prospecção Logo"
+              className="h-14 w-auto object-contain"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/icone%20logo.png';
+              }}
+            />
           </div>
           <h1 className="text-xl font-bold tracking-tight text-neutral-900">
-            ProspectaPlaces B2B
+            GH Prospecção
           </h1>
           <p className="text-xs text-neutral-500">
             Inteligência comercial para prospecção de empresas locais sem website

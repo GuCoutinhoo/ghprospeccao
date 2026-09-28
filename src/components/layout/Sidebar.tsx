@@ -63,9 +63,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {/* Brand Zone */}
         <div className="flex h-16 items-center justify-between px-5 border-b border-neutral-100">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-950 p-1 shadow-sm border border-neutral-800 overflow-hidden">
-              <img src="/favicon.svg" alt="GH Logo" className="h-full w-full object-contain" />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center shrink-0">
+              <img
+                src="/icone-logo.png"
+                alt="GH Prospecção Logo"
+                className="h-10 w-10 object-contain"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/icone%20logo.png';
+                }}
+              />
             </div>
             <div>
               <span className="font-semibold text-neutral-900 text-sm tracking-tight flex items-center gap-1.5">
