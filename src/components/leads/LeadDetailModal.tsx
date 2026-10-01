@@ -184,7 +184,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   });
 
   const { badgeBg } = getScoreColorClass(lead.lead_score);
-  const waUrl = getWhatsAppUrl(lead.phone, lead.name);
+  const waUrl = getWhatsAppUrl(lead.phone, lead.name, lead.niche);
   const NicheIcon = getNicheIcon(lead.niche);
 
   // URL do Google Maps oficial e Embed interativo

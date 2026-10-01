@@ -264,7 +264,19 @@ class Database {
     let filtered = [...this.data.leads];
 
     if (params.state && params.state !== 'ALL') {
-      filtered = filtered.filter((l) => l.state.toUpperCase() === params.state!.toUpperCase());
+      const targetState = params.state.toUpperCase().trim();
+      filtered = filtered.filter((l) => {
+        const ls = (l.state || '').toUpperCase().trim();
+        if (ls === targetState) return true;
+        if (targetState === 'SP' && (ls.includes('SÃO PAULO') || ls.includes('SAO PAULO'))) return true;
+        if (targetState === 'RJ' && ls.includes('RIO DE JANEIRO')) return true;
+        if (targetState === 'MG' && ls.includes('MINAS GERAIS')) return true;
+        if (targetState === 'ES' && (ls.includes('ESPÍRITO SANTO') || ls.includes('ESPIRITO SANTO'))) return true;
+        if (targetState === 'PR' && (ls.includes('PARANÁ') || ls.includes('PARANA'))) return true;
+        if (targetState === 'SC' && ls.includes('SANTA CATARINA')) return true;
+        if (targetState === 'RS' && ls.includes('RIO GRANDE DO SUL')) return true;
+        return false;
+      });
     }
 
     if (params.city && params.city !== 'ALL') {
@@ -344,6 +356,26 @@ class Database {
     }
     return Object.entries(counts)
       .map(([niche, count]) => ({ niche, count }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  public getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string }): { state: string; count: number }[] {
+    const counts: Record<string, number> = {};
+    let leads = this.data.leads;
+    if (params?.onlyFavorites) {
+      leads = leads.filter((l) => l.is_favorite === true);
+    }
+    if (params?.niche && params.niche !== 'ALL') {
+      leads = leads.filter((l) => (l.niche || '').toLowerCase().includes(params.niche!.toLowerCase()));
+    }
+    for (const lead of leads) {
+      const s = (lead.state || '').toUpperCase().trim();
+      if (s) {
+        counts[s] = (counts[s] || 0) + 1;
+      }
+    }
+    return Object.entries(counts)
+      .map(([state, count]) => ({ state, count }))
       .sort((a, b) => b.count - a.count);
   }
 

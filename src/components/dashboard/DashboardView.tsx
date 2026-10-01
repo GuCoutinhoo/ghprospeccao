@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Compass,
   Heart,
+  Zap,
 } from 'lucide-react';
 import { DashboardStats, Lead } from '../../types';
 import { getScoreColorClass } from '../../lib/scoring/leadScore';
@@ -26,6 +27,7 @@ interface DashboardViewProps {
   onNavigateToSearch: () => void;
   onNavigateToLeads: () => void;
   onNavigateToFavorites?: () => void;
+  onNavigateToOutreach?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -34,6 +36,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToSearch,
   onNavigateToLeads,
   onNavigateToFavorites,
+  onNavigateToOutreach,
 }) => {
   const kpiCards = [
     {
@@ -124,6 +127,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Banner de Chamada para a Esteira Relâmpago (Speed Outreach) */}
+      {onNavigateToOutreach && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-amber-300 bg-linear-to-r from-amber-500 via-amber-400 to-orange-400 p-4 sm:p-5 shadow-xs text-neutral-950">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-amber-400 shadow-md">
+              <Zap className="h-6 w-6 fill-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-base tracking-tight text-neutral-950">
+                  Modo Esteira de Prospecção Relâmpago
+                </span>
+                <span className="rounded-full bg-neutral-950 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                  🔥 1-Click
+                </span>
+              </div>
+              <p className="text-xs text-neutral-900/90 mt-0.5 max-w-xl font-medium">
+                Chame de 50 a 100+ clientes/dia no WhatsApp e Direct do Instagram com 1 toque, textos prontos e meta diária.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onNavigateToOutreach}
+            className="flex items-center justify-center gap-2 rounded-xl bg-neutral-950 px-4 py-2.5 text-xs font-bold text-white hover:bg-neutral-900 active:scale-95 transition-all shadow-md shrink-0 cursor-pointer"
+          >
+            <Zap className="h-4 w-4 fill-amber-400 text-amber-400" />
+            <span>Iniciar Esteira Agora</span>
+          </button>
+        </div>
+      )}
 
       {/* Grid de 9 Métricas Executivas */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-9 gap-3">

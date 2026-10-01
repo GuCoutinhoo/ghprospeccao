@@ -169,7 +169,7 @@ export const PipelineKanbanView: React.FC<PipelineKanbanViewProps> = ({
                 ) : (
                   cards.map((lead) => {
                     const { badgeBg } = getScoreColorClass(lead.lead_score);
-                    const waUrl = getWhatsAppUrl(lead.phone, lead.name);
+                    const waUrl = getWhatsAppUrl(lead.phone, lead.name, lead.niche);
 
                     return (
                       <div

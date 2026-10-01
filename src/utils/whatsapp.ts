@@ -45,15 +45,41 @@ export function formatBrazilianPhone(phone?: string | null): string {
   return phone;
 }
 
-export function getWhatsAppUrl(phone?: string | null, companyName?: string): string | null {
+export function getBarbeariaWhatsAppPitch(companyName: string): string {
+  const hour = new Date().getHours();
+  const saudacao = hour >= 5 && hour < 12 ? 'bom dia' : hour >= 18 || hour < 5 ? 'boa noite' : 'boa tarde';
+
+  return `Olá ${saudacao}, tudo bem?
+
+Meu nome é Gustavo, trabalho com posicionamento digital e conheci o trabalho da ${companyName}.
+
+Percebi que vocês têm uma estrutura muito boa, mas ainda não contam com um site próprio. Com isso, quem conhece vocês pela internet pode não enxergar de cara os diferenciais da barbearia e acabar procurando outra opção.
+
+Por isso, montei uma prévia de um site de alto padrão para vocês, pensado para valorizar a marca e facilitar o agendamento.
+
+Posso te mandar o link pra você ver como ficou?`;
+}
+
+export function getWhatsAppUrl(
+  phone?: string | null,
+  companyName?: string,
+  niche?: string
+): string | null {
   const normalized = normalizeBrazilianPhone(phone);
   if (!normalized) return null;
 
+  const isBarbearia =
+    (niche || '').toLowerCase().includes('barbearia') ||
+    (companyName || '').toLowerCase().includes('barbearia') ||
+    (companyName || '').toLowerCase().includes('barber');
+
   let text = '';
-  if (companyName) {
+  if (isBarbearia) {
+    text = getBarbeariaWhatsAppPitch(companyName || 'barbearia');
+  } else if (companyName) {
     const greeting = 'Olá! Tudo bem?';
-    text = encodeURIComponent(`${greeting} Gostaria de falar com o responsável pela ${companyName}.`);
+    text = `${greeting} Gostaria de falar com o responsável pela ${companyName}.`;
   }
 
-  return `https://wa.me/${normalized}${text ? `?text=${text}` : ''}`;
+  return `https://wa.me/${normalized}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
 }

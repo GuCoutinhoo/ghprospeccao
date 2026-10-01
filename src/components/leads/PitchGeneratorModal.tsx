@@ -13,9 +13,16 @@ import {
   User,
   Building,
   Flame,
+  Instagram,
+  Volume2,
 } from 'lucide-react';
 import { Lead } from '../../types';
-import { generatePitches, COMMON_OBJECTIONS, PitchType } from '../../lib/pitch/pitchGenerator';
+import {
+  generatePitches,
+  COMMON_OBJECTIONS,
+  PitchType,
+  getInstagramSearchUrl,
+} from '../../lib/pitch/pitchGenerator';
 
 interface PitchGeneratorModalProps {
   lead: Lead;
@@ -152,9 +159,14 @@ export const PitchGeneratorModal: React.FC<PitchGeneratorModalProps> = ({
                     : 'border-transparent text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'
                 }`}
               >
+                {p.type === 'niche_specialized' && <Sparkles className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />}
                 {p.type === 'mockup' && <Flame className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />}
+                {p.type === 'instagram_direct' && <Instagram className="h-3.5 w-3.5 text-pink-500" />}
+                {p.type === 'audio_script' && <Volume2 className="h-3.5 w-3.5 text-amber-500" />}
                 {p.type === 'call' && <Phone className="h-3.5 w-3.5 text-blue-500" />}
-                {p.type !== 'mockup' && p.type !== 'call' && <MessageCircle className="h-3.5 w-3.5 text-emerald-500" />}
+                {p.type !== 'mockup' && p.type !== 'niche_specialized' && p.type !== 'instagram_direct' && p.type !== 'audio_script' && p.type !== 'call' && (
+                  <MessageCircle className="h-3.5 w-3.5 text-emerald-500" />
+                )}
                 <span>{p.title.split('(')[0]}</span>
               </button>
             );
@@ -190,6 +202,19 @@ export const PitchGeneratorModal: React.FC<PitchGeneratorModalProps> = ({
                   >
                     {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
                     <span>{copied ? 'Copiado!' : 'Copiar Texto'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCopy(activePitch.text);
+                      window.open(getInstagramSearchUrl(lead.name, lead.city), '_blank');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-700 text-white font-semibold text-xs transition-colors shadow-2xs cursor-pointer"
+                    title="Copia o texto e abre o Instagram para mandar Direct"
+                  >
+                    <Instagram className="h-3.5 w-3.5" />
+                    <span>Abrir Direct</span>
                   </button>
 
                   {lead.phone && (

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Lead } from '../../types';
 import { api } from '../../lib/api';
+import { getWhatsAppUrl } from '../../utils/whatsapp';
 
 interface FavoritesViewProps {
   onSelectLead: (lead: Lead) => void;
@@ -429,9 +430,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {favorites.map((lead) => {
             const NicheIcon = getNicheIcon(lead.niche);
-            const cleanPhone = lead.phone ? lead.phone.replace(/\D/g, '') : null;
-            const waNumber = cleanPhone ? (cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`) : null;
-            const waUrl = waNumber ? `https://wa.me/${waNumber}` : null;
+            const waUrl = getWhatsAppUrl(lead.phone, lead.name, lead.niche);
             const mapsUrl = lead.maps_url || (lead.place_id ? `https://www.google.com/maps/place/?q=place_id:${lead.place_id}` : null);
 
             let badgeBg = 'bg-neutral-100 text-neutral-800 border-neutral-200';
@@ -601,9 +600,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
               <tbody className="divide-y divide-neutral-100">
                 {favorites.map((lead) => {
                   const NicheIcon = getNicheIcon(lead.niche);
-                  const cleanPhone = lead.phone ? lead.phone.replace(/\D/g, '') : null;
-                  const waNumber = cleanPhone ? (cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`) : null;
-                  const waUrl = waNumber ? `https://wa.me/${waNumber}` : null;
+                  const waUrl = getWhatsAppUrl(lead.phone, lead.name, lead.niche);
                   const mapsUrl = lead.maps_url || (lead.place_id ? `https://www.google.com/maps/place/?q=place_id:${lead.place_id}` : null);
 
                   return (

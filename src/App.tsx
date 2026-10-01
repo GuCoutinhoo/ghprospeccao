@@ -10,6 +10,8 @@ import { LeadDetailModal } from './components/leads/LeadDetailModal';
 import { WebsiteMockupView } from './components/preview/WebsiteMockupView';
 import { PipelineKanbanView } from './components/pipeline/PipelineKanbanView';
 import { SettingsView } from './components/settings/SettingsView';
+import { SpeedOutreachView } from './components/outreach/SpeedOutreachView';
+import { TemplatesView } from './components/templates/TemplatesView';
 import { LoginView } from './components/auth/LoginView';
 import { DashboardStats, Lead } from './types';
 import { api } from './lib/api';
@@ -193,6 +195,18 @@ export default function App() {
         subtitle: 'Gerenciamento comercial, filtros de qualificação e exportação',
       };
     }
+    if (currentPath === '/outreach') {
+      return {
+        title: 'Esteira Relâmpago de Prospecção (1-Click)',
+        subtitle: 'Disparo rápido no WhatsApp e Direct do Instagram com metas e atalhos',
+      };
+    }
+    if (currentPath === '/templates') {
+      return {
+        title: 'Modelos de Abordagem & Copywriting de Vendas',
+        subtitle: 'Scripts validados para WhatsApp, Instagram Direct, Áudio e Fechamento',
+      };
+    }
     if (currentPath === '/favorites') {
       return {
         title: 'Leads & Estabelecimentos Favoritos',
@@ -281,6 +295,7 @@ export default function App() {
               onNavigateToSearch={() => handleNavigate('/search')}
               onNavigateToLeads={() => handleNavigate('/leads')}
               onNavigateToFavorites={() => handleNavigate('/favorites')}
+              onNavigateToOutreach={() => handleNavigate('/outreach')}
             />
           )}
 
@@ -304,6 +319,23 @@ export default function App() {
               onSelectLead={(lead) => setSelectedLead(lead)}
               initialNicheFilter={leadsNicheFilter}
               initialStateFilter={leadsStateFilter}
+              onStartSpeedOutreach={() => handleNavigate('/outreach')}
+            />
+          )}
+
+          {currentPath === '/outreach' && (
+            <SpeedOutreachView
+              onSelectLead={(lead) => setSelectedLead(lead)}
+              onNavigateToPipeline={() => handleNavigate('/pipeline')}
+              onNavigateToLeads={() => handleNavigate('/leads')}
+              onNavigateToTemplates={() => handleNavigate('/templates')}
+            />
+          )}
+
+          {currentPath === '/templates' && (
+            <TemplatesView
+              onNavigateToOutreach={() => handleNavigate('/outreach')}
+              onSelectLead={(lead) => setSelectedLead(lead)}
             />
           )}
 

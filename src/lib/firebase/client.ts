@@ -190,7 +190,19 @@ export function filterLeadsList(
   let filtered = [...leads];
 
   if (params.state && params.state !== 'ALL') {
-    filtered = filtered.filter((l) => l.state?.toUpperCase() === params.state!.toUpperCase());
+    const targetState = params.state.toUpperCase().trim();
+    filtered = filtered.filter((l) => {
+      const ls = (l.state || '').toUpperCase().trim();
+      if (ls === targetState) return true;
+      if (targetState === 'SP' && (ls.includes('SÃO PAULO') || ls.includes('SAO PAULO'))) return true;
+      if (targetState === 'RJ' && ls.includes('RIO DE JANEIRO')) return true;
+      if (targetState === 'MG' && ls.includes('MINAS GERAIS')) return true;
+      if (targetState === 'ES' && (ls.includes('ESPÍRITO SANTO') || ls.includes('ESPIRITO SANTO'))) return true;
+      if (targetState === 'PR' && (ls.includes('PARANÁ') || ls.includes('PARANA'))) return true;
+      if (targetState === 'SC' && ls.includes('SANTA CATARINA')) return true;
+      if (targetState === 'RS' && ls.includes('RIO GRANDE DO SUL')) return true;
+      return false;
+    });
   }
 
   if (params.city && params.city !== 'ALL') {

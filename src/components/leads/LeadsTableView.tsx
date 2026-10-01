@@ -37,11 +37,43 @@ import { Lead, PipelineStatus } from '../../types';
 import { api } from '../../lib/api';
 import { getScoreColorClass } from '../../lib/scoring/leadScore';
 import { formatBrazilianPhone, getWhatsAppUrl } from '../../utils/whatsapp';
+import { BRAZILIAN_STATES } from '../../lib/ibge/ibgeService';
+
+const STATE_NAMES: Record<string, string> = {
+  SP: 'São Paulo',
+  RJ: 'Rio de Janeiro',
+  MG: 'Minas Gerais',
+  ES: 'Espírito Santo',
+  PR: 'Paraná',
+  SC: 'Santa Catarina',
+  RS: 'Rio Grande do Sul',
+  BA: 'Bahia',
+  PE: 'Pernambuco',
+  CE: 'Ceará',
+  GO: 'Goiás',
+  DF: 'Distrito Federal',
+  MT: 'Mato Grosso',
+  MS: 'Mato Grosso do Sul',
+  PA: 'Pará',
+  AM: 'Amazonas',
+  MA: 'Maranhão',
+  PB: 'Paraíba',
+  RN: 'Rio Grande do Norte',
+  AL: 'Alagoas',
+  SE: 'Sergipe',
+  PI: 'Piauí',
+  TO: 'Tocantins',
+  RO: 'Rondônia',
+  AC: 'Acre',
+  AP: 'Amapá',
+  RR: 'Roraima',
+};
 
 interface LeadsTableViewProps {
   onSelectLead: (lead: Lead) => void;
   initialNicheFilter?: string;
   initialStateFilter?: string;
+  onStartSpeedOutreach?: () => void;
 }
 
 function getNicheIcon(niche: string) {
@@ -59,6 +91,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   onSelectLead,
   initialNicheFilter,
   initialStateFilter,
+  onStartSpeedOutreach,
 }) => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -83,6 +116,10 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   // Lista dinâmica de nichos/categorias
   const [niches, setNiches] = useState<{ niche: string; count: number }[]>([]);
+  // Lista dinâmica de estados com contagem
+  const [statesSummary, setStatesSummary] = useState<{ state: string; count: number }[]>([]);
+  // Modo de exibição das abas superiores ('both' | 'niche' | 'state')
+  const [filterTab, setFilterTab] = useState<'both' | 'niche' | 'state'>('both');
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -95,14 +132,27 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   useEffect(() => {
     loadLeads();
     loadNiches();
+    loadStates();
   }, [page, stateFilter, cityFilter, nicheFilter, statusFilter, onlyWithoutWebsite, onlyWithPhone, onlyFavorites, minScore, sortBy]);
 
   const loadNiches = async () => {
     try {
-      const data = await api.getNiches();
+      const data = await api.getNiches({ onlyFavorites });
       setNiches(data);
     } catch (err) {
       console.error('Erro ao carregar categorias:', err);
+    }
+  };
+
+  const loadStates = async () => {
+    try {
+      const data = await api.getStatesSummary({
+        onlyFavorites,
+        niche: nicheFilter !== 'ALL' ? nicheFilter : undefined,
+      });
+      setStatesSummary(data);
+    } catch (err) {
+      console.error('Erro ao carregar estados:', err);
     }
   };
 
@@ -203,130 +253,313 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* 1. Barra de Abas de Categorias / Nichos */}
-      <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-2xs space-y-3">
-        <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
+      {/* 1. Barra de Abas de Categorias / Nichos & Estados / Regiões */}
+      <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-2xs space-y-3.5">
+        {/* Cabeçalho com Título & Seletor de Abas (Nichos vs Estados vs Ambos) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2.5 border-b border-neutral-100">
           <div className="flex items-center gap-2">
-            <Tags className="h-4 w-4 text-neutral-800" />
-            <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
-              Categorias & Nichos de Mercado
-            </h3>
+            <div className="inline-flex p-1 rounded-xl bg-neutral-100 border border-neutral-200/80">
+              <button
+                type="button"
+                onClick={() => setFilterTab('both')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  filterTab === 'both'
+                    ? 'bg-white text-neutral-900 shadow-2xs'
+                    : 'text-neutral-600 hover:text-neutral-900'
+                }`}
+                title="Visualizar nichos e estados simultaneamente"
+              >
+                <Layers className="h-3.5 w-3.5 text-indigo-600" />
+                <span>Todos os Filtros</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterTab('niche')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  filterTab === 'niche'
+                    ? 'bg-white text-neutral-900 shadow-2xs'
+                    : 'text-neutral-600 hover:text-neutral-900'
+                }`}
+                title="Filtrar estabelecimentos por segmento comercial"
+              >
+                <Tags className="h-3.5 w-3.5 text-neutral-700" />
+                <span>Por Nicho</span>
+                {nicheFilter !== 'ALL' && (
+                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterTab('state')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  filterTab === 'state'
+                    ? 'bg-white text-neutral-900 shadow-2xs'
+                    : 'text-neutral-600 hover:text-neutral-900'
+                }`}
+                title="Filtrar estabelecimentos por estado ou região do Brasil"
+              >
+                <MapPin className="h-3.5 w-3.5 text-blue-600" />
+                <span>Por Estado / Região</span>
+                {stateFilter !== 'ALL' && (
+                  <span className="h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
+                )}
+              </button>
+            </div>
           </div>
+
           <span className="text-[11px] text-neutral-400 hidden sm:inline">
-            Clique na aba para isolar os estabelecimentos de cada segmento
+            Clique nas abas abaixo para isolar as lojas por nicho de mercado ou estado
           </span>
         </div>
 
-        {/* Abas com scroll horizontal suave */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5">
-          {/* Aba: Todas as Categorias */}
-          <button
-            type="button"
-            onClick={() => {
-              setNicheFilter('ALL');
-              setPage(1);
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
-              nicheFilter === 'ALL' && !onlyFavorites
-                ? 'bg-neutral-900 text-white shadow-xs'
-                : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900'
-            }`}
-          >
-            <Store className="h-3.5 w-3.5" />
-            <span>Todas as Categorias</span>
-            <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                nicheFilter === 'ALL' && !onlyFavorites ? 'bg-white/20 text-white' : 'bg-neutral-200 text-neutral-700'
-              }`}
-            >
-              {niches.reduce((acc, curr) => acc + curr.count, 0) || total}
-            </span>
-          </button>
-
-          {/* Aba Especial: Favoritos */}
-          <button
-            type="button"
-            onClick={() => {
-              setOnlyFavorites(!onlyFavorites);
-              setPage(1);
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
-              onlyFavorites
-                ? 'bg-rose-600 text-white shadow-xs'
-                : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-            }`}
-            title="Mostrar apenas leads marcados como favoritos"
-          >
-            <Heart className={`h-3.5 w-3.5 ${onlyFavorites ? 'fill-white text-white' : 'fill-rose-500 text-rose-500'}`} />
-            <span>Favoritos</span>
-            {onlyFavorites && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/20 text-white">
-                Filtro Ativo
+        {/* LINHA 1: NICHOS & SEGMENTOS */}
+        {(filterTab === 'niche' || filterTab === 'both') && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium">
+              <span className="flex items-center gap-1.5 uppercase font-bold tracking-wider text-neutral-700 text-[10px]">
+                <Tags className="h-3 w-3 text-amber-500" />
+                Segmentos Comerciais
               </span>
-            )}
-          </button>
+              {nicheFilter !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNicheFilter('ALL');
+                    setPage(1);
+                  }}
+                  className="text-neutral-400 hover:text-neutral-800 text-[10px] underline cursor-pointer"
+                >
+                  Ver todos os nichos
+                </button>
+              )}
+            </div>
 
-          {/* Abas dinâmicas por nicho */}
-          {niches.map((item) => {
-            const Icon = getNicheIcon(item.niche);
-            const isSelected = nicheFilter.toLowerCase() === item.niche.toLowerCase();
-            return (
+            {/* Abas com scroll horizontal suave */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5">
+              {/* Aba: Todas as Categorias */}
               <button
-                key={item.niche}
                 type="button"
                 onClick={() => {
-                  setNicheFilter(item.niche);
+                  setNicheFilter('ALL');
                   setPage(1);
                 }}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
-                  isSelected
+                  nicheFilter === 'ALL' && !onlyFavorites
                     ? 'bg-neutral-900 text-white shadow-xs'
                     : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900'
                 }`}
               >
-                <Icon className={`h-3.5 w-3.5 ${isSelected ? 'text-amber-400' : 'text-neutral-500'}`} />
-                <span>{item.niche}</span>
+                <Store className="h-3.5 w-3.5" />
+                <span>Todas as Categorias</span>
                 <span
                   className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-neutral-200 text-neutral-700'
+                    nicheFilter === 'ALL' && !onlyFavorites ? 'bg-white/20 text-white' : 'bg-neutral-200 text-neutral-700'
                   }`}
                 >
-                  {item.count}
+                  {niches.reduce((acc, curr) => acc + curr.count, 0) || total}
                 </span>
               </button>
-            );
-          })}
-        </div>
 
-        {/* Indicador de Filtros Ativos (Categoria / Favoritos) */}
-        {(nicheFilter !== 'ALL' || onlyFavorites) && (
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100 text-xs text-neutral-600">
-            <div className="flex items-center gap-2">
+              {/* Aba Especial: Favoritos */}
+              <button
+                type="button"
+                onClick={() => {
+                  setOnlyFavorites(!onlyFavorites);
+                  setPage(1);
+                }}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+                  onlyFavorites
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                }`}
+                title="Mostrar apenas leads marcados como favoritos"
+              >
+                <Heart className={`h-3.5 w-3.5 ${onlyFavorites ? 'fill-white text-white' : 'fill-rose-500 text-rose-500'}`} />
+                <span>Favoritos</span>
+                {onlyFavorites && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/20 text-white">
+                    Filtro Ativo
+                  </span>
+                )}
+              </button>
+
+              {/* Abas dinâmicas por nicho */}
+              {niches.map((item) => {
+                const Icon = getNicheIcon(item.niche);
+                const isSelected = nicheFilter.toLowerCase() === item.niche.toLowerCase();
+                return (
+                  <button
+                    key={item.niche}
+                    type="button"
+                    onClick={() => {
+                      setNicheFilter(item.niche);
+                      setPage(1);
+                    }}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-neutral-900 text-white shadow-xs'
+                        : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900'
+                    }`}
+                  >
+                    <Icon className={`h-3.5 w-3.5 ${isSelected ? 'text-amber-400' : 'text-neutral-500'}`} />
+                    <span>{item.niche}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-neutral-200 text-neutral-700'
+                      }`}
+                    >
+                      {item.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* LINHA 2: ESTADOS & REGIÕES DO BRASIL */}
+        {(filterTab === 'state' || filterTab === 'both') && (
+          <div className="space-y-1.5 pt-1 border-t border-neutral-100/80">
+            <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium">
+              <span className="flex items-center gap-1.5 uppercase font-bold tracking-wider text-neutral-700 text-[10px]">
+                <MapPin className="h-3 w-3 text-blue-600" />
+                Região & Estados do Brasil
+              </span>
+              {stateFilter !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStateFilter('ALL');
+                    setPage(1);
+                  }}
+                  className="text-neutral-400 hover:text-neutral-800 text-[10px] underline cursor-pointer"
+                >
+                  Ver todos os estados
+                </button>
+              )}
+            </div>
+
+            {/* Abas dinâmicas por estado com scroll suave */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5">
+              {/* Todos os Estados */}
+              <button
+                type="button"
+                onClick={() => {
+                  setStateFilter('ALL');
+                  setPage(1);
+                }}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+                  stateFilter === 'ALL'
+                    ? 'bg-neutral-900 text-white shadow-xs'
+                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900'
+                }`}
+              >
+                <span>🇧🇷 Todos os Estados</span>
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                    stateFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-neutral-200 text-neutral-700'
+                  }`}
+                >
+                  {statesSummary.reduce((acc, curr) => acc + curr.count, 0) || total}
+                </span>
+              </button>
+
+              {/* Abas dos estados presentes na base de dados */}
+              {statesSummary.map((item) => {
+                const uf = item.state.toUpperCase();
+                const fullName = STATE_NAMES[uf] || uf;
+                const isSelected = stateFilter.toUpperCase() === uf;
+
+                return (
+                  <button
+                    key={uf}
+                    type="button"
+                    onClick={() => {
+                      setStateFilter(uf);
+                      setPage(1);
+                    }}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-blue-50/60 text-blue-900 border border-blue-200/60 hover:bg-blue-100 hover:text-blue-950'
+                    }`}
+                  >
+                    <MapPin className={`h-3.5 w-3.5 ${isSelected ? 'text-amber-300' : 'text-blue-600'}`} />
+                    <span>{fullName} ({uf})</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {item.count}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* Seletor rápido para qualquer outro estado da federação */}
+              <div className="shrink-0 flex items-center gap-1.5 pl-1">
+                <select
+                  value={statesSummary.some((s) => s.state.toUpperCase() === stateFilter.toUpperCase()) ? '' : stateFilter}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setStateFilter(e.target.value);
+                      setPage(1);
+                    }
+                  }}
+                  className="rounded-xl border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 shadow-2xs focus:border-neutral-900 focus:outline-hidden cursor-pointer"
+                >
+                  <option value="">+ Outro Estado</option>
+                  {BRAZILIAN_STATES.map((st) => (
+                    <option key={st.sigla} value={st.sigla}>
+                      {st.nome} ({st.sigla})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Indicador de Filtros Ativos (Categoria / Estado / Favoritos) */}
+        {(nicheFilter !== 'ALL' || stateFilter !== 'ALL' || onlyFavorites) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-neutral-100 text-xs text-neutral-600">
+            <div className="flex flex-wrap items-center gap-2">
               {nicheFilter !== 'ALL' && (
-                <span>
-                  Categoria: <strong className="text-neutral-900">{nicheFilter}</strong>
+                <span className="inline-flex items-center gap-1.5 bg-neutral-100 text-neutral-800 px-2.5 py-1 rounded-lg font-medium border border-neutral-200">
+                  <Tags className="h-3 w-3 text-neutral-500" />
+                  Nicho: <strong className="text-neutral-900">{nicheFilter}</strong>
                 </span>
               )}
-              {nicheFilter !== 'ALL' && onlyFavorites && <span>·</span>}
+              {stateFilter !== 'ALL' && (
+                <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-1 rounded-lg font-medium">
+                  <MapPin className="h-3 w-3 text-blue-600" />
+                  Estado: <strong className="text-blue-900">{STATE_NAMES[stateFilter.toUpperCase()] || stateFilter} ({stateFilter.toUpperCase()})</strong>
+                </span>
+              )}
               {onlyFavorites && (
-                <span className="inline-flex items-center gap-1 font-semibold text-rose-600">
+                <span className="inline-flex items-center gap-1.5 font-semibold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
                   <Heart className="h-3 w-3 fill-rose-500 text-rose-500" />
                   Apenas Favoritos
                 </span>
               )}
-              <span className="text-neutral-400">({total} lojas)</span>
+              <span className="text-neutral-400 font-mono">({total} lojas encontradas)</span>
             </div>
 
             <button
               type="button"
               onClick={() => {
                 setNicheFilter('ALL');
+                setStateFilter('ALL');
+                setCityFilter('ALL');
                 setOnlyFavorites(false);
                 setPage(1);
               }}
-              className="text-[11px] font-medium text-neutral-500 hover:text-neutral-900 underline"
+              className="text-[11px] font-medium text-neutral-500 hover:text-neutral-900 underline cursor-pointer"
             >
-              Limpar filtros de categoria/favoritos
+              Limpar filtros de categoria/estado
             </button>
           </div>
         )}
@@ -389,11 +622,23 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
               <FileSpreadsheet className="h-3.5 w-3.5 text-neutral-600" />
               <span className="hidden md:inline">Exportar</span>
             </button>
+
+            {onStartSpeedOutreach && (
+              <button
+                type="button"
+                onClick={onStartSpeedOutreach}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-neutral-950 bg-amber-400 hover:bg-amber-300 active:scale-95 rounded-lg transition-all shadow-xs shrink-0 cursor-pointer"
+                title="Abrir Esteira Relâmpago para prospecção em alta velocidade"
+              >
+                <Zap className="h-3.5 w-3.5 fill-neutral-950" />
+                <span>Esteira 1-Click</span>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Dropdowns de Filtragem */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2 border-t border-neutral-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 pt-2 border-t border-neutral-100">
           {/* Ordenação */}
           <div>
             <label className="block text-[10px] font-medium text-neutral-400 mb-1">Ordenar por</label>
@@ -406,6 +651,26 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
               <option value="reviews">Mais avaliações</option>
               <option value="rating">Maior nota</option>
               <option value="recent">Mais recentes</option>
+            </select>
+          </div>
+
+          {/* Estado / UF */}
+          <div>
+            <label className="block text-[10px] font-medium text-neutral-400 mb-1">Estado (UF)</label>
+            <select
+              value={stateFilter}
+              onChange={(e) => {
+                setStateFilter(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-700 shadow-2xs focus:border-neutral-900 focus:outline-hidden font-medium"
+            >
+              <option value="ALL">Todos os estados</option>
+              {BRAZILIAN_STATES.map((st) => (
+                <option key={st.sigla} value={st.sigla}>
+                  {st.nome} ({st.sigla})
+                </option>
+              ))}
             </select>
           </div>
 
@@ -469,7 +734,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
           {/* Apenas favoritos */}
           <div className="flex items-end pb-1.5">
-            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-neutral-700">
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-700">
               <input
                 type="checkbox"
                 checked={onlyFavorites}
@@ -479,13 +744,24 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                 }}
                 className="rounded-sm border-neutral-300 text-rose-600 focus:ring-rose-500"
               />
-              <Heart className={`h-3 w-3 ${onlyFavorites ? 'fill-rose-500 text-rose-500' : 'text-neutral-400'}`} />
-              <span className="font-medium text-[11px]">Apenas favoritos</span>
+              <span className="font-medium text-[11px] text-rose-700 flex items-center gap-1">
+                <Heart className={`h-3 w-3 ${onlyFavorites ? 'fill-rose-500' : ''}`} />
+                Apenas favoritos
+              </span>
             </label>
           </div>
+        </div>
 
-          {/* Contador de resultados */}
-          <div className="flex items-end justify-end pb-1.5 text-xs text-neutral-500 font-mono">
+        {/* Rodapé da barra de filtros com contador */}
+        <div className="flex items-center justify-between pt-1 text-xs text-neutral-500 font-mono border-t border-neutral-100">
+          <div>
+            {stateFilter !== 'ALL' && (
+              <span className="text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-sans font-medium text-[11px]">
+                📍 Estado ativo: {STATE_NAMES[stateFilter.toUpperCase()] || stateFilter} ({stateFilter.toUpperCase()})
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
             Total: <span className="font-bold text-neutral-900 ml-1 tabular-nums">{total} lojas</span>
           </div>
         </div>
@@ -513,7 +789,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {leads.map((lead) => {
               const { badgeBg } = getScoreColorClass(lead.lead_score);
-              const waUrl = getWhatsAppUrl(lead.phone, lead.name);
+              const waUrl = getWhatsAppUrl(lead.phone, lead.name, lead.niche);
               const NicheIcon = getNicheIcon(lead.niche);
               const mapsUrl = lead.maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name} ${lead.address || `${lead.city} ${lead.state}`}`)}`;
 
@@ -720,7 +996,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
               <tbody className="divide-y divide-neutral-100 bg-white">
                 {leads.map((lead) => {
                   const { badgeBg } = getScoreColorClass(lead.lead_score);
-                  const waUrl = getWhatsAppUrl(lead.phone, lead.name);
+                  const waUrl = getWhatsAppUrl(lead.phone, lead.name, lead.niche);
                   const mapsUrl = lead.maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name} ${lead.address || `${lead.city} ${lead.state}`}`)}`;
 
                   return (

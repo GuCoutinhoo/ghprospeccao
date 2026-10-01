@@ -13,6 +13,8 @@ import {
   X,
   Heart,
   Database,
+  Zap,
+  MessageSquareQuote,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +38,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Buscar Leads', path: '/search', icon: Search },
     { label: 'Base de Leads', path: '/leads', icon: Users },
+    { label: 'Esteira Relâmpago', path: '/outreach', icon: Zap, badge: '⚡ 1-Click' },
+    { label: 'Modelos de Abordagem', path: '/templates', icon: MessageSquareQuote, badge: 'Copy' },
     { label: 'Favoritos', path: '/favorites', icon: Heart },
     { label: 'Pipeline Comercial', path: '/pipeline', icon: KanbanSquare },
     { label: 'Configurações', path: '/settings', icon: Settings },
@@ -112,6 +116,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-white' : 'text-neutral-400'}`} />
                 <span className="truncate">{item.label}</span>
+                {item.badge && (
+                  <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                    active ? 'bg-amber-400 text-neutral-950' : 'bg-amber-100 text-amber-900 border border-amber-300'
+                  }`}>
+                    {item.badge}
+                  </span>
+                )}
               </button>
             );
           })}

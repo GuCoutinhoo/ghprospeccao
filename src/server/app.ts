@@ -160,6 +160,18 @@ app.get('/api/niches', (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/states-summary', (req: Request, res: Response) => {
+  try {
+    const onlyFavorites = req.query.onlyFavorites === 'true';
+    const niche = req.query.niche as string;
+    const states = db.getStatesSummary({ onlyFavorites, niche });
+    res.json(states);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
 app.get('/api/leads', (req: Request, res: Response) => {
   try {
     const {

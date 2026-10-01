@@ -167,6 +167,43 @@ export const api = {
       .sort((a, b) => b.count - a.count);
   },
 
+  async getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string }): Promise<{ state: string; count: number }[]> {
+    try {
+      const query = new URLSearchParams();
+      if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
+      if (params?.niche && params.niche !== 'ALL') query.set('niche', params.niche);
+      const url = `/api/states-summary${query.toString() ? '?' + query.toString() : ''}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn('[API] /api/states-summary falhou, calculando direto do Firestore...', err);
+    }
+
+    const allLeads = await fetchAllLeadsFromFirestore();
+    let leads = allLeads;
+    if (params?.onlyFavorites) {
+      leads = leads.filter((l) => l.is_favorite === true);
+    }
+    if (params?.niche && params.niche !== 'ALL') {
+      leads = leads.filter((l) => (l.niche || '').toLowerCase().includes(params.niche!.toLowerCase()));
+    }
+    const counts: Record<string, number> = {};
+    for (const l of leads) {
+      const s = (l.state || '').toUpperCase().trim();
+      if (s) {
+        counts[s] = (counts[s] || 0) + 1;
+      }
+    }
+    return Object.entries(counts)
+      .map(([state, count]) => ({ state, count }))
+      .sort((a, b) => b.count - a.count);
+  },
+
   async getLeads(params: {
     state?: string;
     city?: string;
