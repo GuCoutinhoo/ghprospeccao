@@ -127,9 +127,94 @@ export function normalizePlace(raw: GooglePlaceRaw, fallbackCity: string, fallba
   };
 }
 
+const NICHE_TO_PLACE_TYPES: Record<string, string[]> = {
+  barbearia: ['barber_shop', 'hair_salon'],
+  salao: ['beauty_salon', 'hair_salon'],
+  dentista: ['dentist', 'dental_clinic'],
+  odonto: ['dentist', 'dental_clinic'],
+  restaurante: ['restaurant'],
+  pizzaria: ['restaurant', 'meal_delivery'],
+  academia: ['gym', 'fitness_center'],
+  estetica: ['beauty_salon', 'spa'],
+  advogado: ['lawyer'],
+  oficina: ['car_repair'],
+  mecanica: ['car_repair'],
+  imobiliaria: ['real_estate_agency'],
+  pet: ['pet_store', 'veterinary_care'],
+  contabilidade: ['accounting'],
+  eletricista: ['electrician'],
+  solar: ['point_of_interest'],
+  fotografo: ['point_of_interest'],
+};
+
+export function getIncludedTypesForQuery(query: string): string[] | undefined {
+  const norm = query
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  for (const [key, types] of Object.entries(NICHE_TO_PLACE_TYPES)) {
+    if (norm.includes(key)) {
+      return types;
+    }
+  }
+  return undefined;
+}
+
 /**
- * Consulta oficial à Google Places API (New) Text Search
- * Endpoint: POST https://places.googleapis.com/v1/places:searchText
+ * Consulta alternativa via searchNearby quando a cota de searchText estiver esgotada
+ */
+export async function searchPlacesNearby(
+  apiKey: string,
+  center: { latitude: number; longitude: number },
+  radius: number,
+  includedTypes?: string[]
+): Promise<{ places: GooglePlaceRaw[]; error?: string }> {
+  const endpoint = 'https://places.googleapis.com/v1/places:searchNearby';
+  const body: Record<string, unknown> = {
+    locationRestriction: {
+      circle: {
+        center,
+        radius: Math.max(1000, Math.min(radius || 8000, 50000)),
+      },
+    },
+    maxResultCount: 20,
+  };
+
+  if (includedTypes && includedTypes.length > 0) {
+    body.includedTypes = includedTypes;
+  }
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': OFFICIAL_PLACES_FIELD_MASK,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorJson = await response.json().catch(() => null);
+      return {
+        places: [],
+        error: errorJson?.error?.message || `HTTP ${response.status}`,
+      };
+    }
+
+    const data = (await response.json()) as GooglePlacesSearchResponse;
+    return { places: data.places || [] };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { places: [], error: msg };
+  }
+}
+
+/**
+ * Consulta oficial à Google Places API (New) com fallback automático para searchNearby
+ * Garante que a busca NUNCA trave por limite de cota temporário do endpoint searchText
  */
 export async function searchPlacesOfficial(
   query: string,
@@ -142,7 +227,8 @@ export async function searchPlacesOfficial(
       };
     };
     maxResultCount?: number;
-  }
+  },
+  maxRetries = 2
 ): Promise<{ places: GooglePlaceRaw[]; error?: string; isQuotaExceeded?: boolean }> {
   if (!apiKey || apiKey.trim() === '') {
     return { places: [], error: 'GOOGLE_MAPS_API_KEY_MISSING' };
@@ -168,38 +254,83 @@ export async function searchPlacesOfficial(
     };
   }
 
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': OFFICIAL_PLACES_FIELD_MASK,
-      },
-      body: JSON.stringify(body),
-    });
+  let lastError: string | undefined;
 
-    if (!response.ok) {
-      const errorJson = await response.json().catch(() => null);
-      const errorMessage = errorJson?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-      const isQuota = response.status === 429 || errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('resource_exhausted');
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': OFFICIAL_PLACES_FIELD_MASK,
+        },
+        body: JSON.stringify(body),
+      });
 
-      return {
-        places: [],
-        error: errorMessage,
-        isQuotaExceeded: isQuota,
-      };
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => null);
+        const errorMessage = errorJson?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+        lastError = errorMessage;
+
+        // Se for limite de cota do SearchTextRequest (429 / RESOURCE_EXHAUSTED),
+        // recorre transparentemente ao searchNearby para NÃO interromper a varredura
+        if (response.status === 429 || errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('resource_exhausted')) {
+          console.warn('[Places] Cota de SearchTextRequest atingida, alternando imediatamente para searchNearby...');
+          const center = options?.locationBias?.circle?.center;
+          if (center) {
+            const types = getIncludedTypesForQuery(query);
+            const nearbyRes = await searchPlacesNearby(apiKey, center, options?.locationBias?.circle?.radius || 8000, types);
+            if (nearbyRes.places && nearbyRes.places.length > 0) {
+              return { places: nearbyRes.places };
+            }
+          }
+        }
+
+        const isTemporary = response.status === 503 || response.status === 500;
+        if (isTemporary && attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+
+        break;
+      }
+
+      const data = (await response.json()) as GooglePlacesSearchResponse;
+      if (data.places && data.places.length > 0) {
+        return { places: data.places };
+      }
+
+      // Se searchText não retornou resultados, tenta searchNearby se houver coordenadas
+      if (options?.locationBias?.circle?.center) {
+        const types = getIncludedTypesForQuery(query);
+        const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius, types);
+        if (nearbyRes.places && nearbyRes.places.length > 0) {
+          return { places: nearbyRes.places };
+        }
+      }
+
+      return { places: [] };
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err.message : String(err);
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
     }
-
-    const data = await response.json() as GooglePlacesSearchResponse;
-    return {
-      places: data.places || [],
-    };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return {
-      places: [],
-      error: `Falha na requisição: ${errorMsg}`,
-    };
   }
+
+  // Fallback final: se searchText falhou completamente mas temos coordenadas da área/cidade, tentar searchNearby
+  if (options?.locationBias?.circle?.center) {
+    try {
+      const types = getIncludedTypesForQuery(query);
+      const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 8000, types);
+      if (nearbyRes.places && nearbyRes.places.length > 0) {
+        return { places: nearbyRes.places };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return { places: [], error: lastError };
 }

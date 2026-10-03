@@ -53,9 +53,9 @@ const INITIAL_KEY =
 const INITIAL_SETTINGS: AppSettings = {
   googleMapsApiKey: INITIAL_KEY,
   hasCustomKey: Boolean(INITIAL_KEY && INITIAL_KEY.trim().length > 10),
-  maxResultsPerJob: 100,
-  maxCitiesPerJob: 15,
-  requestDelayMs: 600,
+  maxResultsPerJob: 0, // 0 = Sem limite
+  maxCitiesPerJob: 0, // 0 = Sem limite
+  requestDelayMs: 400,
   scoringWeights: DEFAULT_SCORING_WEIGHTS,
 };
 
@@ -397,10 +397,11 @@ class Database {
 
     const total = filtered.length;
     const page = Math.max(1, params.page || 1);
-    const limit = Math.max(1, Math.min(params.limit || 50, 100));
-    const totalPages = Math.ceil(total / limit) || 1;
-    const offset = (page - 1) * limit;
-    const paginated = filtered.slice(offset, offset + limit);
+    const isUnlimited = params.limit === 0 || params.limit === -1 || (typeof params.limit === 'string' && (params.limit === 'all' || params.limit === '0'));
+    const limit = isUnlimited ? Math.max(1, total) : Math.max(1, params.limit || 50);
+    const totalPages = isUnlimited ? 1 : (Math.ceil(total / limit) || 1);
+    const offset = isUnlimited ? 0 : (page - 1) * limit;
+    const paginated = isUnlimited ? filtered : filtered.slice(offset, offset + limit);
 
     return { leads: paginated, total, page, totalPages };
   }

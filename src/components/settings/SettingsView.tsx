@@ -24,9 +24,9 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated }) => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState<string>('');
-  const [maxResults, setMaxResults] = useState<number>(100);
-  const [maxCities, setMaxCities] = useState<number>(15);
-  const [requestDelay, setRequestDelay] = useState<number>(600);
+  const [maxResults, setMaxResults] = useState<number>(0);
+  const [maxCities, setMaxCities] = useState<number>(0);
+  const [requestDelay, setRequestDelay] = useState<number>(400);
 
   // Pesos do lead score
   const [weights, setWeights] = useState({
@@ -268,18 +268,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
 
             <div>
               <label className="block text-[11px] font-medium text-neutral-600 mb-1">
-                Máximo de cidades por busca
+                Máximo de cidades por busca (0 = Sem limite)
               </label>
               <input
                 type="number"
-                min={1}
-                max={50}
+                min={0}
+                max={500}
                 value={maxCities}
                 onChange={(e) => setMaxCities(Number(e.target.value))}
                 className="w-full rounded-md border border-neutral-200 p-2 text-xs font-mono"
               />
               <span className="text-[10px] text-neutral-400 mt-1 block">
-                Controle de volume financeiro por lote.
+                0 para ilimitado (busca em todas as cidades do estado).
               </span>
             </div>
 

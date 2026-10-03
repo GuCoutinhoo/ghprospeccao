@@ -205,7 +205,7 @@ app.get('/api/leads', (req: Request, res: Response) => {
       search: search as string,
       sortBy: sortBy as 'score' | 'reviews' | 'rating' | 'recent',
       page: page ? Number(page) : 1,
-      limit: limit ? Number(limit) : 50,
+      limit: limit === 'all' || limit === '0' || limit === '-1' ? 0 : (limit ? Number(limit) : 50),
     });
 
     res.json(result);

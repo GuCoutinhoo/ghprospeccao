@@ -236,7 +236,7 @@ export const api = {
       if (params.search) query.set('search', params.search);
       if (params.sortBy) query.set('sortBy', params.sortBy);
       if (params.page) query.set('page', String(params.page));
-      if (params.limit) query.set('limit', String(params.limit));
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
 
       const res = await fetch(`/api/leads?${query.toString()}`);
       if (res.ok) {

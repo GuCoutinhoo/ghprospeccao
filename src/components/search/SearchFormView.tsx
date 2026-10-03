@@ -56,8 +56,8 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
   const [niche, setNiche] = useState<string>('Barbearia');
   const [customNiche, setCustomNiche] = useState<string>('');
 
-  // Filtros comerciais (padrões flexíveis para não descartar oportunidades reais)
-  const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(true);
+  // Filtros comerciais (livres e sem limites artificiais)
+  const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(false);
   const [onlyWithPhone, setOnlyWithPhone] = useState<boolean>(false);
   const [minRating, setMinRating] = useState<number>(0);
   const [minReviews, setMinReviews] = useState<number>(0);
@@ -67,8 +67,6 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
   const [recentJobs, setRecentJobs] = useState<SearchJob[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
 
-  // Modal de confirmação com estimativa
-  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -125,27 +123,15 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
 
   const activeNiche = customNiche.trim() ? customNiche.trim() : niche;
 
-  // Estimativa de consultas e cobertura
-  const estimatedCitiesCount = selectedCity === 'all' ? Math.min(cities.length || 15, 15) : 1;
-  const estimatedQueriesCount = selectedCity === 'all'
-    ? estimatedCitiesCount * 3
-    : selectedCity === 'São Paulo' || selectedCity === 'Rio de Janeiro'
-    ? 10
-    : 2;
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     if (!activeNiche) {
       setErrorMessage('Por favor informe ou selecione o nicho de mercado.');
       return;
     }
-    setShowConfirmModal(true);
-  };
 
-  const confirmAndStartSearch = async () => {
     setIsSubmitting(true);
-    setErrorMessage(null);
     try {
       const res = await api.createSearchJob({
         state: selectedState,
@@ -160,7 +146,6 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
         },
       });
 
-      setShowConfirmModal(false);
       onJobStarted(res.job.id);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -404,85 +389,24 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
 
             <button
               type="submit"
-              className="flex items-center gap-2 rounded-lg bg-neutral-900 px-5 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-xs"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 rounded-lg bg-neutral-900 px-5 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
             >
-              <Play className="h-4 w-4 fill-white" />
-              <span>INICIAR BUSCA DE LEADS</span>
+              {isSubmitting ? (
+                <>
+                  <RotateCw className="h-4 w-4 animate-spin text-white" />
+                  <span>INICIANDO BUSCA...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 fill-white" />
+                  <span>INICIAR BUSCA DE LEADS</span>
+                </>
+              )}
             </button>
           </div>
         </form>
       </div>
-
-      {/* Modal de Confirmação com Estimativa */}
-      {showConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/50 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-xl border border-neutral-200 bg-white p-6 shadow-xl space-y-4">
-            <div className="flex items-center gap-2.5 text-neutral-900">
-              <AlertCircle className="h-5 w-5 text-neutral-700" />
-              <h3 className="text-sm font-semibold tracking-tight">
-                Confirmar Execução de Prospecção
-              </h3>
-            </div>
-
-            <div className="text-xs text-neutral-600 space-y-2 leading-relaxed">
-              <p>
-                O sistema criará uma tarefa assíncrona em segundo plano para consultar as regiões geográficas selecionadas com controle de taxa e deduplicação automática.
-              </p>
-
-              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-1.5 font-mono text-[11px]">
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Nicho:</span>
-                  <span className="font-semibold text-neutral-900">{activeNiche}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Estado / Região:</span>
-                  <span className="font-semibold text-neutral-900">{selectedState}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Cidades no lote:</span>
-                  <span className="font-semibold text-neutral-900">{estimatedCitiesCount} cidades</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Estimativa de consultas:</span>
-                  <span className="font-semibold text-neutral-900">~{estimatedQueriesCount} chamadas</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Filtro principal:</span>
-                  <span className="font-semibold text-neutral-900">
-                    {onlyWithoutWebsite ? 'Apenas sem site' : 'Todos'} + {onlyWithPhone ? 'Com telefone' : ''}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowConfirmModal(false)}
-                disabled={isSubmitting}
-                className="px-4 py-2 text-xs font-medium text-neutral-700 bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmAndStartSearch}
-                disabled={isSubmitting}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors shadow-xs disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <>
-                    <RotateCw className="h-3.5 w-3.5 animate-spin" />
-                    <span>Iniciando...</span>
-                  </>
-                ) : (
-                  <span>Confirmar e Iniciar</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Histórico de Buscas / Search Jobs */}
       <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-2xs">

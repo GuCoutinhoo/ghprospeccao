@@ -29,10 +29,13 @@ export async function createAndPrepareSearchJob(params: {
   let targetCities: string[] = [];
 
   if (params.city === 'all') {
-    // Buscar cidades do estado
+    // Buscar cidades do estado sem limites artificiais
     const ibgeCities = await fetchCitiesByState(params.state);
-    const maxCities = settings.maxCitiesPerJob || 15;
-    targetCities = ibgeCities.slice(0, maxCities).map((c) => c.nome);
+    if (settings.maxCitiesPerJob && settings.maxCitiesPerJob > 0) {
+      targetCities = ibgeCities.slice(0, settings.maxCitiesPerJob).map((c) => c.nome);
+    } else {
+      targetCities = ibgeCities.map((c) => c.nome);
+    }
     if (targetCities.length === 0) {
       targetCities = POPULAR_CITIES_BY_STATE[params.state] || ['Capital'];
     }
@@ -183,30 +186,7 @@ export async function runSearchJob(jobId: string) {
 
       const durationMs = Date.now() - startTime;
 
-      // Se atingiu cota na API oficial, pausa automaticamente
-      if (isQuotaExceeded) {
-        const quotaMsg = 'O limite temporário da API do Google foi atingido. A busca foi pausada automaticamente e poderá ser retomada.';
-        db.updateSearchArea(area.id, { status: 'failed', error: quotaMsg });
-        db.logSearchQuery({
-          id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-          search_job_id: jobId,
-          search_area_id: area.id,
-          query,
-          status: 'quota_exceeded',
-          results_count: 0,
-          duration_ms: durationMs,
-          error_details: quotaMsg,
-          created_at: new Date().toISOString(),
-        });
-        db.updateSearchJob(jobId, {
-          status: 'paused',
-          error_message: quotaMsg,
-        });
-        activeWorkers.delete(jobId);
-        return;
-      }
-
-      // Log da consulta
+      // Log da consulta realizada
       db.logSearchQuery({
         id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         search_job_id: jobId,
@@ -367,7 +347,15 @@ export function resumeSearchJob(jobId: string): boolean {
     worker.paused = false;
   }
 
-  db.updateSearchJob(jobId, { status: 'running' });
+  // Limpa erro e reseta áreas que falharam para tentar novamente
+  db.updateSearchJob(jobId, { status: 'running', error_message: undefined });
+  const areas = db.getSearchAreas(jobId);
+  for (const a of areas) {
+    if (a.status === 'failed' || a.status === 'processing') {
+      db.updateSearchArea(a.id, { status: 'pending', error: undefined });
+    }
+  }
+
   // Roda em segundo plano
   runSearchJob(jobId).catch(console.error);
   return true;

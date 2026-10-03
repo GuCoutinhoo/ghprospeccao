@@ -217,9 +217,22 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
         </div>
 
         {job.error_message && (
-          <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-700" />
-            <div>{job.error_message}</div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-700" />
+              <div>{job.error_message}</div>
+            </div>
+            {job.status === 'paused' && (
+              <button
+                type="button"
+                onClick={handleResume}
+                disabled={actionLoading}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-amber-600 text-white font-semibold hover:bg-amber-700 transition-colors shadow-2xs cursor-pointer self-start sm:self-auto shrink-0"
+              >
+                <Play className="h-3.5 w-3.5 fill-white" />
+                <span>Continuar Varredura</span>
+              </button>
+            )}
           </div>
         )}
 

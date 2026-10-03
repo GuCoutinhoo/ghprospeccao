@@ -98,6 +98,8 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   const [total, setTotal] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
+  // Tamanho da página: 0 = Sem limite (exibe todos os leads sem paginação)
+  const [pageSize, setPageSize] = useState<number>(0);
 
   // Modo de visualização: 'cards' (Vitrine de Lojas) ou 'table' (Tabela de Dados)
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
@@ -145,7 +147,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     loadLeads();
     loadNiches();
     loadStates();
-  }, [page, stateFilter, cityFilter, nicheFilter, statusFilter, onlyWithoutWebsite, onlyWithPhone, onlyFavorites, minScore, sortBy]);
+  }, [page, pageSize, stateFilter, cityFilter, nicheFilter, statusFilter, onlyWithoutWebsite, onlyWithPhone, onlyFavorites, minScore, sortBy]);
 
   // Monitora se há buscas rodando em segundo plano e recarrega em tempo real
   useEffect(() => {
@@ -219,7 +221,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         search,
         sortBy,
         page,
-        limit: 50,
+        limit: pageSize,
       });
 
       setLeads(data.leads);
@@ -1146,27 +1148,52 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
           </div>
 
           {/* Paginação */}
-          <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-neutral-200 bg-white text-xs text-neutral-600 shadow-2xs">
-            <span className="font-mono tabular-nums">
-              Página {page} de {totalPages} ({total} lojas encontradas)
-            </span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 rounded-xl border border-neutral-200 bg-white text-xs text-neutral-600 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <span className="font-mono tabular-nums">
+                {pageSize === 0 ? (
+                  <span className="font-semibold text-neutral-900">Mostrando todos os {total} leads (Sem limite)</span>
+                ) : (
+                  <span>Página {page} de {totalPages} ({total} lojas encontradas)</span>
+                )}
+              </span>
 
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="p-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-40 transition-colors"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="p-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-40 transition-colors"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1.5 border-l border-neutral-200 pl-3">
+                <span className="text-[11px] text-neutral-400">Exibição:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-800 focus:outline-hidden cursor-pointer"
+                >
+                  <option value={0}>Sem limite (Todos {total})</option>
+                  <option value={50}>50 por página</option>
+                  <option value={100}>100 por página</option>
+                  <option value={200}>200 por página</option>
+                </select>
+              </div>
             </div>
+
+            {pageSize > 0 && totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="p-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-40 transition-colors cursor-pointer"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="p-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-40 transition-colors cursor-pointer"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -1322,27 +1349,52 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
           </div>
 
           {/* Paginação Tabela */}
-          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-200/80 bg-neutral-50/50 text-xs text-neutral-600">
-            <span className="font-mono tabular-nums">
-              Página {page} de {totalPages} ({total} lojas)
-            </span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-neutral-200/80 bg-neutral-50/50 text-xs text-neutral-600">
+            <div className="flex items-center gap-3">
+              <span className="font-mono tabular-nums">
+                {pageSize === 0 ? (
+                  <span className="font-semibold text-neutral-900">Mostrando todos os {total} leads (Sem limite)</span>
+                ) : (
+                  <span>Página {page} de {totalPages} ({total} lojas)</span>
+                )}
+              </span>
 
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="p-1 rounded border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-40 transition-colors"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="p-1 rounded border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-40 transition-colors"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1.5 border-l border-neutral-200 pl-3">
+                <span className="text-[11px] text-neutral-400">Exibição:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-800 focus:outline-hidden cursor-pointer"
+                >
+                  <option value={0}>Sem limite (Todos {total})</option>
+                  <option value={50}>50 por página</option>
+                  <option value={100}>100 por página</option>
+                  <option value={200}>200 por página</option>
+                </select>
+              </div>
             </div>
+
+            {pageSize > 0 && totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="p-1 rounded border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-40 transition-colors cursor-pointer"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="p-1 rounded border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-40 transition-colors cursor-pointer"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
