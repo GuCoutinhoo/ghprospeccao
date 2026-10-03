@@ -48,6 +48,21 @@ export interface GooglePlacesSearchResponse {
   };
 }
 
+const SOCIAL_MEDIA_DOMAINS = [
+  'instagram.com',
+  'facebook.com',
+  'fb.com',
+  'wa.me',
+  'whatsapp.com',
+  'linktr.ee',
+  'linktree.com',
+  'tiktok.com',
+  'google.com',
+  'goo.gl',
+  'bio.site',
+  'beacons.ai',
+];
+
 export function hasWebsite(rawWebsiteUri?: string | null): { hasWebsite: boolean; status: WebsiteStatus } {
   if (!rawWebsiteUri || rawWebsiteUri.trim() === '') {
     return { hasWebsite: false, status: 'no_website' };
@@ -61,6 +76,13 @@ export function hasWebsite(rawWebsiteUri?: string | null): { hasWebsite: boolean
     if (url.hostname.length < 3 || !url.hostname.includes('.')) {
       return { hasWebsite: false, status: 'invalid_website' };
     }
+
+    // Se for rede social ou link de WhatsApp/Linktree, a empresa NÃO tem site institucional próprio
+    const isSocial = SOCIAL_MEDIA_DOMAINS.some((domain) => url.hostname.includes(domain));
+    if (isSocial) {
+      return { hasWebsite: false, status: 'no_website' };
+    }
+
     return { hasWebsite: true, status: 'website_found' };
   } catch {
     return { hasWebsite: false, status: 'invalid_website' };

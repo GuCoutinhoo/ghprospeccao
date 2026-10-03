@@ -5,6 +5,7 @@ import {
   computeStatsFromLeads,
   filterLeadsList,
   syncLeadUpdateToFirestoreDirect,
+  invalidateLeadsCache,
 } from './firebase/client';
 
 export const api = {
@@ -33,7 +34,7 @@ export const api = {
       const res = await fetch('/api/dashboard/stats');
       if (res.ok) {
         const data = await res.json();
-        if (data && typeof data.totalLeads === 'number' && data.totalLeads > 0) {
+        if (data && typeof data.totalLeads === 'number') {
           return data;
         }
       }
@@ -144,7 +145,7 @@ export const api = {
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           return data;
         }
       }
@@ -176,7 +177,7 @@ export const api = {
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           return data;
         }
       }
@@ -240,7 +241,7 @@ export const api = {
       const res = await fetch(`/api/leads?${query.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        if (data && typeof data.total === 'number' && data.total > 0) {
+        if (data && Array.isArray(data.leads) && typeof data.total === 'number') {
           return data;
         }
       }
@@ -394,6 +395,7 @@ export const api = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Falha ao iniciar busca.');
     }
+    invalidateLeadsCache();
     return res.json();
   },
 

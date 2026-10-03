@@ -469,5 +469,31 @@ app.get('/api/supabase/migrations', (_req: Request, res: Response) => {
   res.send(SUPABASE_MIGRATIONS_SQL);
 });
 
+// Auto-recuperação de jobs em andamento após reinício do processo
+setTimeout(() => {
+  try {
+    const jobs = db.getAllSearchJobs();
+    for (const job of jobs) {
+      if (job.status === 'running') {
+        const areas = db.getSearchAreas(job.id);
+        const hasPending = areas.some((a) => a.status === 'pending' || a.status === 'processing' || a.status === 'failed');
+        if (hasPending) {
+          for (const a of areas) {
+            if (a.status === 'processing') {
+              db.updateSearchArea(a.id, { status: 'pending' });
+            }
+          }
+          console.log(`[Server] Retomando busca pendente ${job.id} (${job.niche} em ${job.city})...`);
+          runSearchJob(job.id).catch(console.error);
+        } else {
+          db.updateSearchJob(job.id, { status: 'completed' });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Server] Falha ao verificar jobs anteriores:', err);
+  }
+}, 2000);
+
 export { app };
 export default app;

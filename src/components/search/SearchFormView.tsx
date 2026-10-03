@@ -56,11 +56,11 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
   const [niche, setNiche] = useState<string>('Barbearia');
   const [customNiche, setCustomNiche] = useState<string>('');
 
-  // Filtros comerciais
+  // Filtros comerciais (padrões flexíveis para não descartar oportunidades reais)
   const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(true);
-  const [onlyWithPhone, setOnlyWithPhone] = useState<boolean>(true);
-  const [minRating, setMinRating] = useState<number>(4.0);
-  const [minReviews, setMinReviews] = useState<number>(20);
+  const [onlyWithPhone, setOnlyWithPhone] = useState<boolean>(false);
+  const [minRating, setMinRating] = useState<number>(0);
+  const [minReviews, setMinReviews] = useState<number>(0);
   const [maxReviews, setMaxReviews] = useState<string>('');
 
   // Histórico de jobs

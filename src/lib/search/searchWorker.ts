@@ -133,161 +133,168 @@ export async function runSearchJob(jobId: string) {
   const citiesSeen = new Set<string>();
 
   for (const area of pendingAreas) {
-    // Checagem de pausa ou cancelamento
-    const currentWorker = activeWorkers.get(jobId);
-    if (!currentWorker || currentWorker.cancelled) {
-      db.updateSearchJob(jobId, { status: 'cancelled' });
-      activeWorkers.delete(jobId);
-      return;
-    }
+    try {
+      // Checagem de pausa ou cancelamento
+      const currentWorker = activeWorkers.get(jobId);
+      if (!currentWorker || currentWorker.cancelled) {
+        db.updateSearchJob(jobId, { status: 'cancelled' });
+        activeWorkers.delete(jobId);
+        return;
+      }
 
-    if (currentWorker.paused) {
-      db.updateSearchJob(jobId, { status: 'paused' });
-      return;
-    }
+      if (currentWorker.paused) {
+        db.updateSearchJob(jobId, { status: 'paused' });
+        return;
+      }
 
-    // Marca área como em processamento
-    db.updateSearchArea(area.id, {
-      status: 'processing',
-      attempts: area.attempts + 1,
-    });
+      // Marca área como em processamento
+      db.updateSearchArea(area.id, {
+        status: 'processing',
+        attempts: area.attempts + 1,
+      });
 
-    const query = `${job.niche} em ${area.city} ${area.state}`;
-    const startTime = Date.now();
+      const query = `${job.niche} em ${area.city} ${area.state}`;
+      const startTime = Date.now();
 
-    let rawPlaces: GooglePlaceRaw[] = [];
-    let isQuotaExceeded = false;
-    let queryError: string | undefined;
+      let rawPlaces: GooglePlaceRaw[] = [];
+      let isQuotaExceeded = false;
+      let queryError: string | undefined;
 
-    // Consulta oficial à Google Places API (New) Text Search
-    const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || '';
-    const res = await searchPlacesOfficial(query, apiKey, {
-      locationBias: {
-        circle: {
-          center: { latitude: area.lat, longitude: area.lng },
-          radius: area.radius,
+      // Consulta oficial à Google Places API (New) Text Search
+      const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || '';
+      const res = await searchPlacesOfficial(query, apiKey, {
+        locationBias: {
+          circle: {
+            center: { latitude: area.lat, longitude: area.lng },
+            radius: area.radius,
+          },
         },
-      },
-      maxResultCount: 20,
-    });
+        maxResultCount: 20,
+      });
 
-    if (res.isQuotaExceeded) {
-      isQuotaExceeded = true;
-      queryError = res.error;
-    } else if (res.error) {
-      queryError = res.error;
-    } else {
-      rawPlaces = res.places;
-    }
+      if (res.isQuotaExceeded) {
+        isQuotaExceeded = true;
+        queryError = res.error;
+      } else if (res.error) {
+        queryError = res.error;
+      } else {
+        rawPlaces = res.places;
+      }
 
-    const durationMs = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
 
-    // Se atingiu cota na API oficial, pausa automaticamente
-    if (isQuotaExceeded) {
-      const quotaMsg = 'O limite temporário da API do Google foi atingido. A busca foi pausada automaticamente e poderá ser retomada.';
-      db.updateSearchArea(area.id, { status: 'failed', error: quotaMsg });
+      // Se atingiu cota na API oficial, pausa automaticamente
+      if (isQuotaExceeded) {
+        const quotaMsg = 'O limite temporário da API do Google foi atingido. A busca foi pausada automaticamente e poderá ser retomada.';
+        db.updateSearchArea(area.id, { status: 'failed', error: quotaMsg });
+        db.logSearchQuery({
+          id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          search_job_id: jobId,
+          search_area_id: area.id,
+          query,
+          status: 'quota_exceeded',
+          results_count: 0,
+          duration_ms: durationMs,
+          error_details: quotaMsg,
+          created_at: new Date().toISOString(),
+        });
+        db.updateSearchJob(jobId, {
+          status: 'paused',
+          error_message: quotaMsg,
+        });
+        activeWorkers.delete(jobId);
+        return;
+      }
+
+      // Log da consulta
       db.logSearchQuery({
         id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         search_job_id: jobId,
         search_area_id: area.id,
         query,
-        status: 'quota_exceeded',
-        results_count: 0,
+        status: queryError ? 'error' : 'success',
+        results_count: rawPlaces.length,
         duration_ms: durationMs,
-        error_details: quotaMsg,
+        error_details: queryError,
         created_at: new Date().toISOString(),
       });
-      db.updateSearchJob(jobId, {
-        status: 'paused',
-        error_message: quotaMsg,
-      });
-      activeWorkers.delete(jobId);
-      return;
-    }
 
-    // Log da consulta
-    db.logSearchQuery({
-      id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-      search_job_id: jobId,
-      search_area_id: area.id,
-      query,
-      status: queryError ? 'error' : 'success',
-      results_count: rawPlaces.length,
-      duration_ms: durationMs,
-      error_details: queryError,
-      created_at: new Date().toISOString(),
-    });
+      let newPlacesFound = 0;
+      let newWithoutWebsite = 0;
+      let newLeadsCreated = 0;
 
-    let newPlacesFound = 0;
-    let newWithoutWebsite = 0;
-    let newLeadsCreated = 0;
+      for (const raw of rawPlaces) {
+        const normalizedPlace = normalizePlace(raw, area.city, area.state);
+        const { isNew } = db.upsertPlace(normalizedPlace);
+        if (isNew) {
+          newPlacesFound++;
+        }
 
-    for (const raw of rawPlaces) {
-      const normalizedPlace = normalizePlace(raw, area.city, area.state);
-      const { isNew } = db.upsertPlace(normalizedPlace);
-      if (isNew) {
-        newPlacesFound++;
-      }
+        if (normalizedPlace.website_status === 'no_website') {
+          newWithoutWebsite++;
+        }
 
-      if (normalizedPlace.website_status === 'no_website') {
-        newWithoutWebsite++;
-      }
+        // Aplica filtros comerciais para criação do Lead
+        const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
+        if (matchesFilters) {
+          const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
+          const { created } = db.createLead({
+            id: `lead_${normalizedPlace.place_id}`,
+            user_id: job.user_id,
+            place_id: normalizedPlace.place_id,
+            name: normalizedPlace.name,
+            niche: job.niche,
+            state: normalizedPlace.state,
+            city: normalizedPlace.city,
+            address: normalizedPlace.formatted_address,
+            phone: normalizedPlace.phone,
+            website: normalizedPlace.website,
+            website_status: normalizedPlace.website_status,
+            maps_url: normalizedPlace.maps_url,
+            rating: normalizedPlace.rating || 0,
+            reviews_count: normalizedPlace.reviews_count || 0,
+            lead_score: score,
+            pipeline_status: 'NOVO',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
 
-      // Aplica filtros comerciais para criação do Lead
-      const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
-      if (matchesFilters) {
-        const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
-        const { created } = db.createLead({
-          id: `lead_${normalizedPlace.place_id}`,
-          user_id: job.user_id,
-          place_id: normalizedPlace.place_id,
-          name: normalizedPlace.name,
-          niche: job.niche,
-          state: normalizedPlace.state,
-          city: normalizedPlace.city,
-          address: normalizedPlace.formatted_address,
-          phone: normalizedPlace.phone,
-          website: normalizedPlace.website,
-          website_status: normalizedPlace.website_status,
-          maps_url: normalizedPlace.maps_url,
-          rating: normalizedPlace.rating || 0,
-          reviews_count: normalizedPlace.reviews_count || 0,
-          lead_score: score,
-          pipeline_status: 'NOVO',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-
-        if (created) {
+          // Incrementa leads encontrados no job mesmo se já existia na base de dados
           newLeadsCreated++;
         }
       }
-    }
 
-    citiesSeen.add(area.city);
+      citiesSeen.add(area.city);
 
-    // Atualiza status da área
-    db.updateSearchArea(area.id, {
-      status: 'completed',
-      places_found: rawPlaces.length,
-      processed_at: new Date().toISOString(),
-    });
+      // Atualiza status da área
+      db.updateSearchArea(area.id, {
+        status: 'completed',
+        places_found: rawPlaces.length,
+        processed_at: new Date().toISOString(),
+      });
 
-    // Atualiza progresso do Job
-    const updatedJob = db.getSearchJob(jobId);
-    if (updatedJob) {
-      db.updateSearchJob(jobId, {
-        processed_search_areas: updatedJob.processed_search_areas + 1,
-        processed_cities: citiesSeen.size,
-        places_found: updatedJob.places_found + newPlacesFound,
-        places_without_website: updatedJob.places_without_website + newWithoutWebsite,
-        leads_created: updatedJob.leads_created + newLeadsCreated,
+      // Atualiza progresso do Job
+      const updatedJob = db.getSearchJob(jobId);
+      if (updatedJob) {
+        db.updateSearchJob(jobId, {
+          processed_search_areas: updatedJob.processed_search_areas + 1,
+          processed_cities: citiesSeen.size,
+          places_found: updatedJob.places_found + (newPlacesFound || rawPlaces.length),
+          places_without_website: updatedJob.places_without_website + newWithoutWebsite,
+          leads_created: updatedJob.leads_created + newLeadsCreated,
+        });
+      }
+
+      // Delay de proteção contra rate limit
+      const delay = Math.max(300, settings.requestDelayMs || 600);
+      await new Promise((r) => setTimeout(r, delay));
+    } catch (areaErr) {
+      console.warn(`[SearchWorker] Erro ao processar área ${area.id}:`, areaErr);
+      db.updateSearchArea(area.id, {
+        status: 'failed',
+        error: areaErr instanceof Error ? areaErr.message : String(areaErr),
       });
     }
-
-    // Delay de proteção contra rate limit
-    const delay = Math.max(300, settings.requestDelayMs || 600);
-    await new Promise((r) => setTimeout(r, delay));
   }
 
   // Conclui o Job

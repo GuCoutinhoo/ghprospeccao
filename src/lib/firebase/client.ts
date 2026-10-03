@@ -31,6 +31,20 @@ let cachedLeads: Lead[] | null = null;
 let lastFetchTime = 0;
 const CACHE_TTL_MS = 15000; // 15 segundos de cache em memória para navegação rápida
 
+export function invalidateLeadsCache() {
+  cachedLeads = null;
+  lastFetchTime = 0;
+}
+
+function normalizeStr(str?: string | null): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 export async function fetchAllLeadsFromFirestore(forceRefresh = false): Promise<Lead[]> {
   const now = Date.now();
   if (!forceRefresh && cachedLeads && now - lastFetchTime < CACHE_TTL_MS) {
@@ -206,11 +220,16 @@ export function filterLeadsList(
   }
 
   if (params.city && params.city !== 'ALL') {
-    filtered = filtered.filter((l) => l.city?.toLowerCase() === params.city!.toLowerCase());
+    const targetCity = normalizeStr(params.city);
+    filtered = filtered.filter((l) => normalizeStr(l.city) === targetCity);
   }
 
   if (params.niche && params.niche !== 'ALL') {
-    filtered = filtered.filter((l) => l.niche?.toLowerCase().includes(params.niche!.toLowerCase()));
+    const targetNiche = normalizeStr(params.niche);
+    filtered = filtered.filter((l) => {
+      const ln = normalizeStr(l.niche);
+      return ln.includes(targetNiche) || targetNiche.includes(ln);
+    });
   }
 
   if (params.status && params.status !== 'ALL') {
@@ -242,11 +261,11 @@ export function filterLeadsList(
   }
 
   if (params.search && params.search.trim() !== '') {
-    const q = params.search.toLowerCase().trim();
+    const q = normalizeStr(params.search);
     filtered = filtered.filter(
       (l) =>
-        l.name?.toLowerCase().includes(q) ||
-        l.city?.toLowerCase().includes(q) ||
+        normalizeStr(l.name).includes(q) ||
+        normalizeStr(l.city).includes(q) ||
         (l.phone && l.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '')))
     );
   }

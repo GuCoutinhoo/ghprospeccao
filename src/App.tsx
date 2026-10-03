@@ -134,6 +134,11 @@ export default function App() {
     if (!path.startsWith('/search/')) {
       setActiveSearchJobId(null);
     }
+    // Quando navega diretamente para /leads pelo menu, limpa filtros contextuais de buscas antigas
+    if (path === '/leads') {
+      setLeadsNicheFilter(undefined);
+      setLeadsStateFilter(undefined);
+    }
   };
 
   const handleJobStarted = (jobId: string) => {

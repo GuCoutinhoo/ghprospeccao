@@ -108,11 +108,14 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   const [cityFilter, setCityFilter] = useState<string>('ALL');
   const [nicheFilter, setNicheFilter] = useState<string>(initialNicheFilter || 'ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(true);
+  const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(false);
   const [onlyWithPhone, setOnlyWithPhone] = useState<boolean>(false);
   const [onlyFavorites, setOnlyFavorites] = useState<boolean>(false);
   const [minScore, setMinScore] = useState<number>(0);
   const [sortBy, setSortBy] = useState<'score' | 'reviews' | 'rating' | 'recent'>('score');
+
+  // Detecção de job de busca ativo no background
+  const [runningJob, setRunningJob] = useState<any | null>(null);
 
   // Lista dinâmica de nichos/categorias
   const [niches, setNiches] = useState<{ niche: string; count: number }[]>([]);
@@ -123,17 +126,62 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Sincroniza quando filtros iniciais forem passados (ex: ao vir da busca)
   useEffect(() => {
-    if (initialNicheFilter) {
-      setNicheFilter(initialNicheFilter);
+    if (initialNicheFilter !== undefined) {
+      setNicheFilter(initialNicheFilter || 'ALL');
+      setPage(1);
     }
   }, [initialNicheFilter]);
+
+  useEffect(() => {
+    if (initialStateFilter !== undefined) {
+      setStateFilter(initialStateFilter || 'ALL');
+      setPage(1);
+    }
+  }, [initialStateFilter]);
 
   useEffect(() => {
     loadLeads();
     loadNiches();
     loadStates();
   }, [page, stateFilter, cityFilter, nicheFilter, statusFilter, onlyWithoutWebsite, onlyWithPhone, onlyFavorites, minScore, sortBy]);
+
+  // Monitora se há buscas rodando em segundo plano e recarrega em tempo real
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    const checkRunningJobs = async () => {
+      try {
+        const jobs = await api.getSearchJobs();
+        const active = jobs.find((j) => j.status === 'running' || j.status === 'pending');
+        if (active) {
+          setRunningJob(active);
+          loadLeads();
+          loadNiches();
+          loadStates();
+        } else {
+          setRunningJob((prev: any) => {
+            if (prev) {
+              loadLeads();
+              loadNiches();
+              loadStates();
+            }
+            return null;
+          });
+        }
+      } catch (err) {
+        console.warn('Erro ao verificar status das buscas:', err);
+      }
+    };
+
+    checkRunningJobs();
+    interval = setInterval(checkRunningJobs, 3000);
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, []);
 
   const loadNiches = async () => {
     try {
@@ -251,8 +299,65 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     document.body.removeChild(link);
   };
 
+  const hasActiveFilters =
+    (nicheFilter && nicheFilter !== 'ALL') ||
+    (stateFilter && stateFilter !== 'ALL') ||
+    (cityFilter && cityFilter !== 'ALL') ||
+    (statusFilter && statusFilter !== 'ALL') ||
+    onlyWithoutWebsite ||
+    onlyWithPhone ||
+    onlyFavorites ||
+    minScore > 0 ||
+    Boolean(search && search.trim() !== '');
+
+  const handleClearAllFilters = () => {
+    setNicheFilter('ALL');
+    setStateFilter('ALL');
+    setCityFilter('ALL');
+    setStatusFilter('ALL');
+    setOnlyWithoutWebsite(false);
+    setOnlyWithPhone(false);
+    setOnlyFavorites(false);
+    setMinScore(0);
+    setSearch('');
+    setPage(1);
+  };
+
   return (
     <div className="space-y-4">
+      {/* Banner de Varredura em Andamento em Tempo Real */}
+      {runningJob && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-blue-200 bg-blue-50/90 text-blue-900 shadow-2xs animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+              <RotateCw className="h-5 w-5 animate-spin" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-800">
+                  Varredura Ativa no Google Maps
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-200 text-blue-900 border border-blue-300">
+                  {runningJob.leads_created || 0} leads adicionados
+                </span>
+              </div>
+              <p className="text-xs text-blue-700 mt-0.5">
+                Processando <strong>{runningJob.niche}</strong> em{' '}
+                <strong>{runningJob.city === 'all' ? `todas as cidades de ${runningJob.state}` : `${runningJob.city}, ${runningJob.state}`}</strong>. A base é atualizada automaticamente a cada 3 segundos.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadLeads}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-900 bg-white border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs self-start sm:self-auto shrink-0"
+          >
+            <RotateCw className="h-3.5 w-3.5" />
+            <span>Atualizar Agora</span>
+          </button>
+        </div>
+      )}
+
       {/* 1. Barra de Abas de Categorias / Nichos & Estados / Regiões */}
       <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-2xs space-y-3.5">
         {/* Cabeçalho com Título & Seletor de Abas (Nichos vs Estados vs Ambos) */}
@@ -615,6 +720,20 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
             <button
               type="button"
+              onClick={() => {
+                loadLeads();
+                loadNiches();
+                loadStates();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors shadow-2xs shrink-0 cursor-pointer"
+              title="Recarregar dados da lista"
+            >
+              <RotateCw className="h-3.5 w-3.5 text-neutral-600" />
+              <span className="hidden md:inline">Atualizar</span>
+            </button>
+
+            <button
+              type="button"
               onClick={exportToCsv}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors shadow-2xs shrink-0"
               title="Exportar para planilha Excel / CSV"
@@ -767,6 +886,67 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         </div>
       </div>
 
+      {/* Faixa de Filtros Ativos com 1-Click para Limpar */}
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border border-amber-200 bg-amber-50/80 text-amber-950 text-xs shadow-2xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-bold text-neutral-900 flex items-center gap-1">
+              <Filter className="h-3.5 w-3.5 text-amber-700" />
+              Filtros ativos:
+            </span>
+            {nicheFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-amber-300 font-semibold text-neutral-900 shadow-2xs">
+                🏷️ Nicho: {nicheFilter}
+              </span>
+            )}
+            {stateFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-amber-300 font-semibold text-neutral-900 shadow-2xs">
+                📍 Estado: {STATE_NAMES[stateFilter.toUpperCase()] || stateFilter} ({stateFilter.toUpperCase()})
+              </span>
+            )}
+            {cityFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-amber-300 font-semibold text-neutral-900 shadow-2xs">
+                🏙️ Cidade: {cityFilter}
+              </span>
+            )}
+            {statusFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-amber-300 font-semibold text-neutral-900 shadow-2xs">
+                📌 Status: {statusFilter}
+              </span>
+            )}
+            {onlyWithoutWebsite && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-amber-300 font-semibold text-neutral-900 shadow-2xs">
+                🌐 Apenas sem site
+              </span>
+            )}
+            {onlyWithPhone && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-amber-300 font-semibold text-neutral-900 shadow-2xs">
+                📞 Apenas c/ telefone
+              </span>
+            )}
+            {minScore > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-amber-300 font-semibold text-neutral-900 shadow-2xs">
+                ⭐ Score {minScore}+
+              </span>
+            )}
+            {search && search.trim() !== '' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-amber-300 font-semibold text-neutral-900 shadow-2xs">
+                🔍 "{search}"
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleClearAllFilters}
+            className="flex items-center gap-1 text-xs font-bold text-neutral-950 bg-amber-300 hover:bg-amber-400 px-3 py-1.5 rounded-lg transition-all cursor-pointer shadow-2xs shrink-0"
+          >
+            <RotateCw className="h-3 w-3" />
+            <span>Limpar Filtros e Ver Todos</span>
+          </button>
+        </div>
+      )}
+
       {/* Conteúdo: Vitrine de Lojas em Cards ou Tabela */}
       {loading ? (
         <div className="py-20 text-center text-xs text-neutral-400 flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white">
@@ -774,14 +954,28 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
           <span>Carregando estabelecimentos e dados do Maps...</span>
         </div>
       ) : leads.length === 0 ? (
-        <div className="py-16 text-center space-y-2 rounded-xl border border-neutral-200 bg-white">
-          <Globe className="h-8 w-8 text-neutral-300 mx-auto" />
-          <h4 className="text-sm font-semibold text-neutral-800">
-            Nenhuma loja encontrada com estes filtros
+        <div className="py-16 text-center space-y-3 rounded-xl border border-neutral-200 bg-white p-6 shadow-2xs">
+          <Globe className="h-10 w-10 text-neutral-300 mx-auto" />
+          <h4 className="text-sm font-bold text-neutral-900">
+            Nenhuma loja encontrada com os filtros selecionados
           </h4>
-          <p className="text-xs text-neutral-400 max-w-sm mx-auto">
-            Inicie uma nova busca comercial ou relaxe os filtros de pontuação e região.
+          <p className="text-xs text-neutral-500 max-w-md mx-auto">
+            {hasActiveFilters
+              ? 'Os filtros atuais (nicho, estado ou opções de site/telefone) restringiram todos os resultados. Clique abaixo para limpar os filtros e visualizar todas as lojas da sua base comercial.'
+              : 'Nenhum lead cadastrado no momento. Use o menu "Buscar Leads" para prospectar novas lojas via Google Maps.'}
           </p>
+          {hasActiveFilters && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleClearAllFilters}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg transition-all cursor-pointer shadow-xs"
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+                <span>Limpar Filtros e Ver Todos os Leads</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : viewMode === 'cards' ? (
         /* MODO 1: VITRINE DE LOJAS (CARDS RICOS E BONITOS) */

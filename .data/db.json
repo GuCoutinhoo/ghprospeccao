@@ -456,7 +456,7 @@
       "maps_url": "https://maps.google.com/?cid=17122876516699927833&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "postal_code": "13100-201",
       "business_status": "OPERATIONAL",
-      "last_fetched_at": "2026-09-26T23:32:19.792Z",
+      "last_fetched_at": "2026-10-03T12:33:42.164Z",
       "website": "https://www.abarbearia.net/a-barbearia-unidade-nova-campinas/",
       "phone": "(19) 98990-7633",
       "website_status": "website_found",
@@ -469,14 +469,14 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-26T23:32:19.792Z",
+      "created_at": "2026-10-03T12:33:42.164Z",
       "lng": -47.045005800000006,
       "id": "ChIJ14Aj6DjPyJQRGfXGlnitoO0",
       "city": "Campinas",
       "place_id": "ChIJ14Aj6DjPyJQRGfXGlnitoO0",
       "state": "SP",
       "reviews_count": 783,
-      "updated_at": "2026-09-26T23:32:19.792Z"
+      "updated_at": "2026-10-03T12:33:42.164Z"
     },
     {
       "website_status": "website_found",
@@ -695,10 +695,10 @@
     {
       "place_id": "ChIJ27f8ZjXPyJQR1T0LA_6UOjo",
       "id": "ChIJ27f8ZjXPyJQR1T0LA_6UOjo",
-      "created_at": "2026-09-26T23:32:19.791Z",
+      "created_at": "2026-10-03T12:33:42.122Z",
       "lat": -22.90886,
       "reviews_count": 956,
-      "updated_at": "2026-09-26T23:32:19.791Z",
+      "updated_at": "2026-10-03T12:33:42.122Z",
       "postal_code": "13015-001",
       "state": "SP",
       "city": "Campinas",
@@ -707,7 +707,7 @@
       "lng": -47.056920000000005,
       "business_status": "OPERATIONAL",
       "phone": "(19) 98148-6722",
-      "last_fetched_at": "2026-09-26T23:32:19.791Z",
+      "last_fetched_at": "2026-10-03T12:33:42.122Z",
       "name": "Barbearia Gold Mustache - Unidade Centro",
       "formatted_address": "Rua Barão de Jaguara, 625 - Centro, Campinas - SP, 13015-001, Brasil",
       "raw_types": [
@@ -1517,25 +1517,25 @@
       "phone": "(19) 3307-4596",
       "raw_types": [
         "barber_shop",
+        "beauty_salon",
         "hair_care",
         "pub",
-        "beauty_salon",
         "bar",
         "health",
-        "store",
         "service",
+        "store",
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-26T23:32:19.795Z",
+      "created_at": "2026-10-03T12:33:42.252Z",
       "lng": -47.077970699999995,
       "city": "Campinas",
       "formatted_address": "Av. João Erbolato, 56 - Jardim Chapadão, Campinas - SP, 13070-070, Brasil",
       "place_id": "ChIJ7c2keSLGyJQRgtauSHkDGxQ",
-      "last_fetched_at": "2026-09-26T23:32:19.795Z",
+      "last_fetched_at": "2026-10-03T12:33:42.252Z",
       "state": "SP",
       "business_status": "OPERATIONAL",
-      "updated_at": "2026-09-26T23:32:19.795Z"
+      "updated_at": "2026-10-03T12:33:42.252Z"
     },
     {
       "lng": -46.5608577,
@@ -2612,14 +2612,14 @@
     {
       "id": "ChIJDfs5MSDJyJQRdUUtPxV_CMo",
       "business_status": "OPERATIONAL",
-      "last_fetched_at": "2026-09-26T23:32:19.796Z",
+      "last_fetched_at": "2026-10-03T12:33:42.244Z",
       "city": "Campinas",
       "state": "SP",
       "maps_url": "https://maps.google.com/?cid=14558025524706100597&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "postal_code": "13010-040",
       "rating": 5,
       "lng": -47.0598653,
-      "created_at": "2026-09-26T23:32:19.796Z",
+      "created_at": "2026-10-03T12:33:42.244Z",
       "website": "https://www.trinks.com/wolf-studio-baber%20Agende%20seu%20horario%20conosco%20pelo%20nosso%20site.%20simples%20e%20f%C3%A1cil!",
       "place_id": "ChIJDfs5MSDJyJQRdUUtPxV_CMo",
       "raw_types": [
@@ -2636,7 +2636,7 @@
       "phone": "(19) 98216-8527",
       "name": "Wolf Studio Barber",
       "lat": -22.906649899999998,
-      "updated_at": "2026-09-26T23:32:19.796Z"
+      "updated_at": "2026-10-03T12:33:42.244Z"
     },
     {
       "state": "SP",
@@ -3028,15 +3028,15 @@
       "formatted_address": "R. Bernardino de Campos, 476 - Centro, Campinas - SP, 13010-150, Brasil",
       "website_status": "no_website",
       "rating": 5,
-      "last_fetched_at": "2026-09-26T23:32:19.793Z",
+      "last_fetched_at": "2026-10-03T12:33:42.205Z",
       "business_status": "OPERATIONAL",
       "city": "Campinas",
       "phone": "(19) 99156-3904",
       "maps_url": "https://maps.google.com/?cid=7965887373188431744&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "raw_types": [
         "barber_shop",
-        "hair_care",
         "beauty_salon",
+        "hair_care",
         "health",
         "service",
         "point_of_interest",
@@ -3047,8 +3047,8 @@
       "id": "ChIJH-UacRzJyJQRgH-qX1yEjG4",
       "place_id": "ChIJH-UacRzJyJQRgH-qX1yEjG4",
       "postal_code": "13010-150",
-      "created_at": "2026-09-26T23:32:19.793Z",
-      "updated_at": "2026-09-26T23:32:19.793Z",
+      "created_at": "2026-10-03T12:33:42.205Z",
+      "updated_at": "2026-10-03T12:33:42.206Z",
       "lat": -22.9054941,
       "name": "Kaká Cortes - Barbearia",
       "state": "SP"
@@ -4031,7 +4031,7 @@
       "name": "Barbearia Umano Studio",
       "reviews_count": 388,
       "phone": "(19) 99264-0292",
-      "last_fetched_at": "2026-09-26T23:32:19.792Z",
+      "last_fetched_at": "2026-10-03T12:33:42.148Z",
       "business_status": "OPERATIONAL",
       "website": "https://umanostudio.com.br/",
       "formatted_address": "R. Mal. Deodoro, 967 - Centro, Campinas - SP, 13010-301, Brasil",
@@ -4044,11 +4044,11 @@
         "point_of_interest",
         "establishment"
       ],
-      "updated_at": "2026-09-26T23:32:19.792Z",
+      "updated_at": "2026-10-03T12:33:42.148Z",
       "id": "ChIJMTc_8jsqOkwR4pvAUujThmg",
       "lat": -22.9013959,
       "postal_code": "13010-301",
-      "created_at": "2026-09-26T23:32:19.792Z",
+      "created_at": "2026-10-03T12:33:42.148Z",
       "state": "SP",
       "city": "Campinas",
       "place_id": "ChIJMTc_8jsqOkwR4pvAUujThmg"
@@ -4337,7 +4337,7 @@
     },
     {
       "website_status": "website_found",
-      "updated_at": "2026-09-26T23:32:19.794Z",
+      "updated_at": "2026-10-03T12:33:42.189Z",
       "formatted_address": "Av. Dr. Thomaz Alves, 122 - B - Centro, Campinas - SP, 13010-160, Brasil",
       "lng": -47.0608618,
       "id": "ChIJORZqH0rPyJQRNYkdquHaB_w",
@@ -4346,7 +4346,7 @@
       "city": "Campinas",
       "reviews_count": 296,
       "postal_code": "13010-160",
-      "created_at": "2026-09-26T23:32:19.794Z",
+      "created_at": "2026-10-03T12:33:42.189Z",
       "raw_types": [
         "barber_shop",
         "hair_care",
@@ -4360,7 +4360,7 @@
       "rating": 4.9,
       "website": "https://www.instagram.com/scobar.store_barbearia/",
       "lat": -22.9093886,
-      "last_fetched_at": "2026-09-26T23:32:19.794Z",
+      "last_fetched_at": "2026-10-03T12:33:42.189Z",
       "business_status": "OPERATIONAL",
       "place_id": "ChIJORZqH0rPyJQRNYkdquHaB_w"
     },
@@ -5519,7 +5519,7 @@
     {
       "id": "ChIJUapNsDbPyJQRaxXy98hMXoI",
       "name": "A Barbearia l Cambuí",
-      "created_at": "2026-09-26T23:32:19.794Z",
+      "created_at": "2026-10-03T12:33:42.229Z",
       "state": "SP",
       "formatted_address": "R. Maria Monteiro, 1576 - Cambuí, Campinas - SP, 13025-152, Brasil",
       "raw_types": [
@@ -5530,7 +5530,7 @@
         "point_of_interest",
         "establishment"
       ],
-      "updated_at": "2026-09-26T23:32:19.794Z",
+      "updated_at": "2026-10-03T12:33:42.229Z",
       "lng": -47.053819399999995,
       "place_id": "ChIJUapNsDbPyJQRaxXy98hMXoI",
       "city": "Campinas",
@@ -5540,7 +5540,7 @@
       "website_status": "website_found",
       "rating": 4.8,
       "business_status": "OPERATIONAL",
-      "last_fetched_at": "2026-09-26T23:32:19.794Z",
+      "last_fetched_at": "2026-10-03T12:33:42.229Z",
       "lat": -22.8904842,
       "reviews_count": 315,
       "phone": "(19) 99876-8710"
@@ -5575,19 +5575,19 @@
       "phone": "(19) 99985-2402"
     },
     {
-      "updated_at": "2026-09-26T23:32:19.791Z",
+      "updated_at": "2026-10-03T12:33:42.198Z",
       "business_status": "OPERATIONAL",
       "lat": -22.8893928,
-      "last_fetched_at": "2026-09-26T23:32:19.791Z",
+      "last_fetched_at": "2026-10-03T12:33:42.197Z",
       "rating": 5,
-      "reviews_count": 1124,
+      "reviews_count": 1142,
       "state": "SP",
       "postal_code": "13073-012",
       "city": "Campinas",
       "id": "ChIJV2E7cDTHyJQReAGb4F_J2uk",
       "formatted_address": "Av. Brasil, 628 - Jardim Guanabara, Campinas - SP, 13073-012, Brasil",
       "place_id": "ChIJV2E7cDTHyJQReAGb4F_J2uk",
-      "created_at": "2026-09-26T23:32:19.791Z",
+      "created_at": "2026-10-03T12:33:42.197Z",
       "website": "https://blackbartbarbearia.com.br/",
       "lng": -47.0645446,
       "phone": "(19) 97163-9995",
@@ -6789,18 +6789,18 @@
       "id": "ChIJbQm6UVTPyJQRG6UewezTvYg",
       "phone": "(19) 97153-1577",
       "formatted_address": "Av. Francisco Glicério, 186 - Sl 2 Sala 2 - Vila Lidia, Campinas - SP, 13026-501, Brasil",
-      "reviews_count": 181,
+      "reviews_count": 180,
       "website_status": "website_found",
       "maps_url": "https://maps.google.com/?cid=9853264573562266907&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "name": "London Barbearia CPS",
       "lng": -47.0559729,
       "rating": 5,
-      "last_fetched_at": "2026-09-26T23:32:19.797Z",
+      "last_fetched_at": "2026-10-03T12:33:42.298Z",
       "business_status": "OPERATIONAL",
       "state": "SP",
       "place_id": "ChIJbQm6UVTPyJQRG6UewezTvYg",
-      "created_at": "2026-09-26T23:32:19.797Z",
-      "updated_at": "2026-09-26T23:32:19.797Z",
+      "created_at": "2026-10-03T12:33:42.298Z",
+      "updated_at": "2026-10-03T12:33:42.299Z",
       "city": "Campinas",
       "raw_types": [
         "barber_shop",
@@ -7261,7 +7261,7 @@
       "rating": 5
     },
     {
-      "created_at": "2026-09-26T23:32:19.796Z",
+      "created_at": "2026-10-03T12:33:42.236Z",
       "rating": 4.9,
       "id": "ChIJdxlwu2PJyJQRgIZzvbEry_M",
       "name": "Barbearia Cuba Libre",
@@ -7278,13 +7278,13 @@
       ],
       "maps_url": "https://maps.google.com/?cid=17567182813876422272&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "lat": -22.9003764,
-      "updated_at": "2026-09-26T23:32:19.796Z",
+      "updated_at": "2026-10-03T12:33:42.236Z",
       "website_status": "website_found",
       "reviews_count": 166,
       "place_id": "ChIJdxlwu2PJyJQRgIZzvbEry_M",
       "state": "SP",
       "city": "Campinas",
-      "last_fetched_at": "2026-09-26T23:32:19.796Z",
+      "last_fetched_at": "2026-10-03T12:33:42.236Z",
       "postal_code": "13020-260",
       "business_status": "OPERATIONAL",
       "lng": -47.0647418
@@ -7376,8 +7376,8 @@
     {
       "place_id": "ChIJec5-tezJyJQRx2zNASmrkCQ",
       "phone": "(19) 3233-0987",
-      "reviews_count": 79,
-      "updated_at": "2026-09-26T23:32:19.797Z",
+      "reviews_count": 84,
+      "updated_at": "2026-10-03T12:33:42.214Z",
       "lat": -22.9078528,
       "website_status": "no_website",
       "raw_types": [
@@ -7391,10 +7391,10 @@
       "city": "Campinas",
       "id": "ChIJec5-tezJyJQRx2zNASmrkCQ",
       "postal_code": "13010-000",
-      "created_at": "2026-09-26T23:32:19.797Z",
+      "created_at": "2026-10-03T12:33:42.213Z",
       "lng": -47.0588698,
       "state": "SP",
-      "last_fetched_at": "2026-09-26T23:32:19.797Z",
+      "last_fetched_at": "2026-10-03T12:33:42.213Z",
       "name": "The Brothers Barbershop",
       "business_status": "OPERATIONAL",
       "rating": 4.9,
@@ -8068,7 +8068,7 @@
     {
       "business_status": "OPERATIONAL",
       "website_status": "website_found",
-      "last_fetched_at": "2026-09-26T23:32:19.790Z",
+      "last_fetched_at": "2026-10-03T12:33:42.140Z",
       "name": "Barbearia Cambuí - Campinas",
       "id": "ChIJhx9xyazIyJQRnKF2HCcoi9o",
       "formatted_address": "R. Dr. Diogo Prado, 335 - Cambuí, Campinas - SP, 13024-210, Brasil",
@@ -8085,15 +8085,15 @@
         "establishment"
       ],
       "phone": "(19) 3236-1881",
-      "created_at": "2026-09-26T23:32:19.790Z",
+      "created_at": "2026-10-03T12:33:42.140Z",
       "city": "Campinas",
       "rating": 4.9,
       "place_id": "ChIJhx9xyazIyJQRnKF2HCcoi9o",
       "state": "SP",
       "postal_code": "13024-210",
       "lat": -22.888686399999997,
-      "reviews_count": 965,
-      "updated_at": "2026-09-26T23:32:19.790Z"
+      "reviews_count": 966,
+      "updated_at": "2026-10-03T12:33:42.140Z"
     },
     {
       "website_status": "website_found",
@@ -8213,14 +8213,14 @@
       "maps_url": "https://maps.google.com/?cid=565709169477353838&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "id": "ChIJie0uWsvHyJQRbgHhDH7N2Qc",
       "name": "Barbearia Rafa Reis",
-      "updated_at": "2026-09-26T23:32:19.793Z",
+      "updated_at": "2026-10-03T12:33:42.221Z",
       "formatted_address": "R. Barreto Leme, 2168 - Cambuí, Campinas - SP, 13025-085, Brasil",
-      "created_at": "2026-09-26T23:32:19.793Z",
+      "created_at": "2026-10-03T12:33:42.221Z",
       "raw_types": [
         "barber_shop",
+        "beauty_salon",
         "hair_salon",
         "hair_care",
-        "beauty_salon",
         "health",
         "service",
         "point_of_interest",
@@ -8232,21 +8232,21 @@
       "city": "Campinas",
       "rating": 4.8,
       "postal_code": "13025-085",
-      "last_fetched_at": "2026-09-26T23:32:19.793Z",
+      "last_fetched_at": "2026-10-03T12:33:42.221Z",
       "state": "SP",
-      "reviews_count": 418,
+      "reviews_count": 419,
       "business_status": "OPERATIONAL",
       "website": "https://barbeariarafareis.com/",
       "lat": -22.898184099999998,
       "place_id": "ChIJie0uWsvHyJQRbgHhDH7N2Qc"
     },
     {
-      "created_at": "2026-09-26T23:32:19.795Z",
+      "created_at": "2026-10-03T12:33:42.322Z",
       "phone": "(19) 97107-0444",
-      "reviews_count": 374,
+      "reviews_count": 375,
       "lat": -22.9100209,
       "maps_url": "https://maps.google.com/?cid=13845147130525781743&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
-      "last_fetched_at": "2026-09-26T23:32:19.795Z",
+      "last_fetched_at": "2026-10-03T12:33:42.322Z",
       "business_status": "OPERATIONAL",
       "website_status": "website_found",
       "website": "https://estacaocampinas.com.br/",
@@ -8254,7 +8254,7 @@
       "postal_code": "13032-377",
       "city": "Campinas",
       "id": "ChIJj0NOXIPJyJQR7w4C4vXXI8A",
-      "updated_at": "2026-09-26T23:32:19.795Z",
+      "updated_at": "2026-10-03T12:33:42.322Z",
       "formatted_address": "Pista lateral - Estacionamento ao lado do MC Donalds - Av. John Boyd Dunlop, 131 - Lj 161A - Vila Teixeira, Campinas - SP, 13032-377, Brasil",
       "lng": -47.0930026,
       "state": "SP",
@@ -8438,21 +8438,21 @@
       "website": "https://www.soleenergias.com.br/"
     },
     {
-      "reviews_count": 1166,
+      "reviews_count": 1167,
       "raw_types": [
         "barber_shop",
         "massage_spa",
+        "spa",
         "massage",
         "hair_salon",
         "hair_care",
-        "spa",
         "bar",
         "health",
+        "service",
         "store",
         "restaurant",
-        "food",
-        "service",
         "point_of_interest",
+        "food",
         "establishment"
       ],
       "lat": -22.8989855,
@@ -8461,16 +8461,16 @@
       "formatted_address": "R. Padre Almeida, 238 - Cambuí, Campinas - SP, 13025-250, Brasil",
       "id": "ChIJk8Ard0_PyJQRiTHsZ-Hva2w",
       "name": "Confraria da Barba | Cambuí - Campinas SP",
-      "created_at": "2026-09-26T23:32:19.791Z",
+      "created_at": "2026-10-03T12:33:42.156Z",
       "place_id": "ChIJk8Ard0_PyJQRiTHsZ-Hva2w",
-      "last_fetched_at": "2026-09-26T23:32:19.791Z",
+      "last_fetched_at": "2026-10-03T12:33:42.156Z",
       "business_status": "OPERATIONAL",
       "lng": -47.0493351,
       "city": "Campinas",
       "website": "https://www.confrariadabarba.com.br/cambui/",
       "website_status": "website_found",
       "postal_code": "13025-250",
-      "updated_at": "2026-09-26T23:32:19.791Z",
+      "updated_at": "2026-10-03T12:33:42.156Z",
       "rating": 4.9,
       "state": "SP"
     },
@@ -10642,7 +10642,7 @@
       "website": "http://www.angsolar.com.br/"
     },
     {
-      "created_at": "2026-09-26T23:32:19.791Z",
+      "created_at": "2026-10-03T12:33:42.131Z",
       "place_id": "ChIJxyH1nTXPyJQRbaM3fC0ftls",
       "postal_code": "13015-311",
       "phone": "(19) 98125-2644",
@@ -10650,7 +10650,7 @@
       "id": "ChIJxyH1nTXPyJQRbaM3fC0ftls",
       "lat": -22.9089426,
       "rating": 4.9,
-      "updated_at": "2026-09-26T23:32:19.791Z",
+      "updated_at": "2026-10-03T12:33:42.131Z",
       "name": "Duque Barbearia",
       "website": "http://www.duquebarbearia.com/",
       "raw_types": [
@@ -10665,7 +10665,7 @@
       "formatted_address": "Rua Duque de Caxias, 576 - Centro, Campinas - SP, 13015-311, Brasil",
       "state": "SP",
       "city": "Campinas",
-      "last_fetched_at": "2026-09-26T23:32:19.791Z",
+      "last_fetched_at": "2026-10-03T12:33:42.131Z",
       "lng": -47.0557668,
       "business_status": "OPERATIONAL",
       "maps_url": "https://maps.google.com/?cid=6608503783430792045&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
@@ -11576,13 +11576,13 @@
       "raw_types": [
         "gym",
         "sports_activity_location",
-        "point_of_interest",
         "health",
+        "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:35.920Z",
-      "updated_at": "2026-09-27T22:41:35.920Z",
-      "last_fetched_at": "2026-09-27T22:41:35.920Z"
+      "created_at": "2026-10-03T12:32:50.571Z",
+      "updated_at": "2026-10-03T12:32:50.572Z",
+      "last_fetched_at": "2026-10-03T12:32:50.571Z"
     },
     {
       "id": "ChIJV2HPIwT3zpQRmXyzSRi1pDM",
@@ -11604,18 +11604,16 @@
       "raw_types": [
         "fitness_center",
         "gym",
-        "sports_complex",
-        "sports_school",
         "sports_club",
         "sports_activity_location",
-        "point_of_interest",
-        "health",
         "association_or_organization",
+        "health",
+        "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:35.925Z",
-      "updated_at": "2026-09-27T22:41:35.925Z",
-      "last_fetched_at": "2026-09-27T22:41:35.925Z"
+      "created_at": "2026-10-03T12:32:50.587Z",
+      "updated_at": "2026-10-03T12:32:50.587Z",
+      "last_fetched_at": "2026-10-03T12:32:50.587Z"
     },
     {
       "id": "ChIJS7Z1Awr2zpQRRFSgOsUboIo",
@@ -11637,13 +11635,13 @@
         "fitness_center",
         "gym",
         "sports_activity_location",
-        "point_of_interest",
         "health",
+        "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:35.930Z",
-      "updated_at": "2026-09-27T22:41:35.930Z",
-      "last_fetched_at": "2026-09-27T22:41:35.930Z"
+      "created_at": "2026-10-03T12:32:50.563Z",
+      "updated_at": "2026-10-03T12:32:50.563Z",
+      "last_fetched_at": "2026-10-03T12:32:50.563Z"
     },
     {
       "id": "ChIJgWygy-TcvZQRiywigESvi9I",
@@ -11663,13 +11661,13 @@
       "raw_types": [
         "gym",
         "sports_activity_location",
-        "point_of_interest",
         "health",
+        "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:35.942Z",
-      "updated_at": "2026-09-27T22:41:35.942Z",
-      "last_fetched_at": "2026-09-27T22:41:35.942Z"
+      "created_at": "2026-10-03T12:32:50.579Z",
+      "updated_at": "2026-10-03T12:32:50.579Z",
+      "last_fetched_at": "2026-10-03T12:32:50.579Z"
     },
     {
       "id": "ChIJWaMDTRI3yJQRQ1aKk5DRfC4",
@@ -11696,21 +11694,21 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.842Z",
-      "updated_at": "2026-09-27T22:41:36.842Z",
-      "last_fetched_at": "2026-09-27T22:41:36.842Z"
+      "created_at": "2026-10-03T12:32:51.673Z",
+      "updated_at": "2026-10-03T12:32:51.673Z",
+      "last_fetched_at": "2026-10-03T12:32:51.673Z"
     },
     {
       "id": "ChIJ27v0Un83yJQRJqrTwCBwSY8",
       "place_id": "ChIJ27v0Un83yJQRJqrTwCBwSY8",
-      "name": "Dynamic Academia",
+      "name": "MOV+ DYNAMIC",
       "formatted_address": "R. XV de Novembro, 1326 - Centro, Aguaí - SP, 13860-000, Brasil",
       "city": "Aguaí",
       "state": "SP",
       "postal_code": "13860-000",
       "lat": -22.057981899999998,
       "lng": -46.9705131,
-      "website_status": "no_website",
+      "website_status": "website_found",
       "rating": 4.8,
       "reviews_count": 90,
       "maps_url": "https://maps.google.com/?cid=10324906906699934246&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
@@ -11722,9 +11720,11 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.847Z",
-      "updated_at": "2026-09-27T22:41:36.847Z",
-      "last_fetched_at": "2026-09-27T22:41:36.847Z"
+      "created_at": "2026-10-03T12:32:51.645Z",
+      "updated_at": "2026-10-03T12:32:51.646Z",
+      "last_fetched_at": "2026-10-03T12:32:51.645Z",
+      "phone": "(19) 98980-7869",
+      "website": "https://evo-totem.w12app.com.br/movmaisacademias/8/site/xG63XJ2jRN4esIm%5BPLUS%5DagPelg%5BEQUAL%5D%5BEQUAL%5D?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAZXh0bgNhZW0CMTEAcGRvZgJzcnRjBmFwcF9pZA85MzY2MTk3NDMzOTI0NTkAAacoCc0QufnXWynj-0r6tZVwR5i3Z7f0h3eNJdMcSZpELFlZLN4JT4zfdvbB3A_aem_HVjmH8-FSvCN7-5m0abyzQ&utm_id=97760_v0_s00_e0_tv3"
     },
     {
       "id": "ChIJrSk0RMU3yJQRNSFLU5MQ0ac",
@@ -11749,9 +11749,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.853Z",
-      "updated_at": "2026-09-27T22:41:36.853Z",
-      "last_fetched_at": "2026-09-27T22:41:36.853Z"
+      "created_at": "2026-10-03T12:32:51.653Z",
+      "updated_at": "2026-10-03T12:32:51.653Z",
+      "last_fetched_at": "2026-10-03T12:32:51.653Z"
     },
     {
       "id": "ChIJWdrNU4A3yJQRafIv-erXjTs",
@@ -11775,9 +11775,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.867Z",
-      "updated_at": "2026-09-27T22:41:36.867Z",
-      "last_fetched_at": "2026-09-27T22:41:36.867Z"
+      "created_at": "2026-10-03T12:32:51.659Z",
+      "updated_at": "2026-10-03T12:32:51.660Z",
+      "last_fetched_at": "2026-10-03T12:32:51.659Z"
     },
     {
       "id": "ChIJeRqDUYA3yJQRwC1hUiJy1Fk",
@@ -11803,9 +11803,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.872Z",
-      "updated_at": "2026-09-27T22:41:36.872Z",
-      "last_fetched_at": "2026-09-27T22:41:36.872Z"
+      "created_at": "2026-10-03T12:32:51.666Z",
+      "updated_at": "2026-10-03T12:32:51.666Z",
+      "last_fetched_at": "2026-10-03T12:32:51.666Z"
     },
     {
       "id": "ChIJ77GlMZE3yJQR-_2n2LJztz4",
@@ -11828,9 +11828,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.882Z",
-      "updated_at": "2026-09-27T22:41:36.882Z",
-      "last_fetched_at": "2026-09-27T22:41:36.882Z"
+      "created_at": "2026-10-03T12:32:51.700Z",
+      "updated_at": "2026-10-03T12:32:51.700Z",
+      "last_fetched_at": "2026-10-03T12:32:51.700Z"
     },
     {
       "id": "ChIJ-z-_5985yJQRiTbuyBB0jL0",
@@ -11855,9 +11855,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.888Z",
-      "updated_at": "2026-09-27T22:41:36.888Z",
-      "last_fetched_at": "2026-09-27T22:41:36.888Z"
+      "created_at": "2026-10-03T12:32:51.716Z",
+      "updated_at": "2026-10-03T12:32:51.716Z",
+      "last_fetched_at": "2026-10-03T12:32:51.716Z"
     },
     {
       "id": "ChIJAU6c3Dg3yJQRH42FMx-3TBo",
@@ -11883,9 +11883,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.902Z",
-      "updated_at": "2026-09-27T22:41:36.902Z",
-      "last_fetched_at": "2026-09-27T22:41:36.902Z"
+      "created_at": "2026-10-03T12:32:51.693Z",
+      "updated_at": "2026-10-03T12:32:51.693Z",
+      "last_fetched_at": "2026-10-03T12:32:51.693Z"
     },
     {
       "id": "ChIJ8wCOspE3yJQRcUHa5PgKJpQ",
@@ -11910,9 +11910,9 @@
         "service",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.908Z",
-      "updated_at": "2026-09-27T22:41:36.908Z",
-      "last_fetched_at": "2026-09-27T22:41:36.908Z"
+      "created_at": "2026-10-03T12:32:51.722Z",
+      "updated_at": "2026-10-03T12:32:51.722Z",
+      "last_fetched_at": "2026-10-03T12:32:51.722Z"
     },
     {
       "id": "ChIJv0Ievog3yJQRLg-fvsD6oQ8",
@@ -11937,9 +11937,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.913Z",
-      "updated_at": "2026-09-27T22:41:36.913Z",
-      "last_fetched_at": "2026-09-27T22:41:36.913Z"
+      "created_at": "2026-10-03T12:32:51.680Z",
+      "updated_at": "2026-10-03T12:32:51.680Z",
+      "last_fetched_at": "2026-10-03T12:32:51.680Z"
     },
     {
       "id": "ChIJn_pURUA3yJQRJ14Zbf7FLtk",
@@ -11965,9 +11965,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.917Z",
-      "updated_at": "2026-09-27T22:41:36.917Z",
-      "last_fetched_at": "2026-09-27T22:41:36.917Z"
+      "created_at": "2026-10-03T12:32:51.687Z",
+      "updated_at": "2026-10-03T12:32:51.687Z",
+      "last_fetched_at": "2026-10-03T12:32:51.687Z"
     },
     {
       "id": "ChIJJ8MiB7k5yJQRMh2pd7rJrcA",
@@ -11993,9 +11993,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.922Z",
-      "updated_at": "2026-09-27T22:41:36.922Z",
-      "last_fetched_at": "2026-09-27T22:41:36.922Z"
+      "created_at": "2026-10-03T12:32:51.709Z",
+      "updated_at": "2026-10-03T12:32:51.709Z",
+      "last_fetched_at": "2026-10-03T12:32:51.709Z"
     },
     {
       "id": "ChIJr4cqMNw3yJQREunDpIOlpFA",
@@ -12014,17 +12014,13 @@
       "maps_url": "https://maps.google.com/?cid=5810951404038383890&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
-        "gym",
-        "sports_complex",
-        "sports_school",
-        "sports_activity_location",
         "health",
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.927Z",
-      "updated_at": "2026-09-27T22:41:36.927Z",
-      "last_fetched_at": "2026-09-27T22:41:36.927Z"
+      "created_at": "2026-10-03T12:32:51.758Z",
+      "updated_at": "2026-10-03T12:32:51.758Z",
+      "last_fetched_at": "2026-10-03T12:32:51.758Z"
     },
     {
       "id": "ChIJ_TpJRHk3yJQRXkucr6eemFg",
@@ -12043,17 +12039,13 @@
       "maps_url": "https://maps.google.com/?cid=6384026914840660830&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
-        "gym",
-        "sports_complex",
-        "sports_school",
-        "sports_activity_location",
         "health",
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.932Z",
-      "updated_at": "2026-09-27T22:41:36.932Z",
-      "last_fetched_at": "2026-09-27T22:41:36.932Z"
+      "created_at": "2026-10-03T12:32:51.736Z",
+      "updated_at": "2026-10-03T12:32:51.736Z",
+      "last_fetched_at": "2026-10-03T12:32:51.736Z"
     },
     {
       "id": "ChIJTbek8oI3yJQRm8hn0RGnhXM",
@@ -12069,7 +12061,7 @@
       "website": "https://aguai.sp.gov.br/home/esportes-e-lazer/",
       "website_status": "website_found",
       "rating": 4.5,
-      "reviews_count": 168,
+      "reviews_count": 169,
       "maps_url": "https://maps.google.com/?cid=8324243181233752219&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
@@ -12078,9 +12070,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.936Z",
-      "updated_at": "2026-09-27T22:41:36.936Z",
-      "last_fetched_at": "2026-09-27T22:41:36.936Z"
+      "created_at": "2026-10-03T12:32:51.751Z",
+      "updated_at": "2026-10-03T12:32:51.751Z",
+      "last_fetched_at": "2026-10-03T12:32:51.751Z"
     },
     {
       "id": "ChIJwWzNDQA3yJQR3fx9eBiC4p4",
@@ -12104,9 +12096,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:36.941Z",
-      "updated_at": "2026-09-27T22:41:36.941Z",
-      "last_fetched_at": "2026-09-27T22:41:36.941Z"
+      "created_at": "2026-10-03T12:32:51.765Z",
+      "updated_at": "2026-10-03T12:32:51.765Z",
+      "last_fetched_at": "2026-10-03T12:32:51.765Z"
     },
     {
       "id": "ChIJA4xDLGHJyZQRcu0M3tXqavo",
@@ -12132,9 +12124,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:37.813Z",
-      "updated_at": "2026-09-27T22:41:37.813Z",
-      "last_fetched_at": "2026-09-27T22:41:37.813Z"
+      "created_at": "2026-10-03T12:32:52.680Z",
+      "updated_at": "2026-10-03T12:32:52.680Z",
+      "last_fetched_at": "2026-10-03T12:32:52.680Z"
     },
     {
       "id": "ChIJV3WPFS7JyZQRos51AjSdWwE",
@@ -12159,9 +12151,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:37.819Z",
-      "updated_at": "2026-09-27T22:41:37.819Z",
-      "last_fetched_at": "2026-09-27T22:41:37.819Z"
+      "created_at": "2026-10-03T12:32:52.673Z",
+      "updated_at": "2026-10-03T12:32:52.673Z",
+      "last_fetched_at": "2026-10-03T12:32:52.673Z"
     },
     {
       "id": "ChIJUXOLdADJyZQRsi1jYC6w_HU",
@@ -12185,9 +12177,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:37.825Z",
-      "updated_at": "2026-09-27T22:41:37.825Z",
-      "last_fetched_at": "2026-09-27T22:41:37.825Z"
+      "created_at": "2026-10-03T12:32:52.687Z",
+      "updated_at": "2026-10-03T12:32:52.687Z",
+      "last_fetched_at": "2026-10-03T12:32:52.687Z"
     },
     {
       "id": "ChIJi5gspy_JyZQRZK1Tjf6kdk0",
@@ -12212,9 +12204,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:37.831Z",
-      "updated_at": "2026-09-27T22:41:37.831Z",
-      "last_fetched_at": "2026-09-27T22:41:37.831Z"
+      "created_at": "2026-10-03T12:32:52.701Z",
+      "updated_at": "2026-10-03T12:32:52.701Z",
+      "last_fetched_at": "2026-10-03T12:32:52.701Z"
     },
     {
       "id": "ChIJN9lfRwDRyZQREm71OxM43JU",
@@ -12239,9 +12231,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:37.837Z",
-      "updated_at": "2026-09-27T22:41:37.837Z",
-      "last_fetched_at": "2026-09-27T22:41:37.837Z"
+      "created_at": "2026-10-03T12:32:52.707Z",
+      "updated_at": "2026-10-03T12:32:52.708Z",
+      "last_fetched_at": "2026-10-03T12:32:52.707Z"
     },
     {
       "id": "ChIJL_tpSwD_zpQRxOVmxFVcN10",
@@ -12266,9 +12258,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:37.843Z",
-      "updated_at": "2026-09-27T22:41:37.843Z",
-      "last_fetched_at": "2026-09-27T22:41:37.843Z"
+      "created_at": "2026-10-03T12:32:52.694Z",
+      "updated_at": "2026-10-03T12:32:52.694Z",
+      "last_fetched_at": "2026-10-03T12:32:52.694Z"
     },
     {
       "id": "ChIJu0g-0pbJyZQRbT80hiOvxfs",
@@ -12294,9 +12286,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:37.849Z",
-      "updated_at": "2026-09-27T22:41:37.849Z",
-      "last_fetched_at": "2026-09-27T22:41:37.849Z"
+      "created_at": "2026-10-03T12:32:52.714Z",
+      "updated_at": "2026-10-03T12:32:52.714Z",
+      "last_fetched_at": "2026-10-03T12:32:52.714Z"
     },
     {
       "id": "ChIJ5bxHJBwRyZQRZt7VGhUcEAM",
@@ -12322,9 +12314,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.754Z",
-      "updated_at": "2026-09-27T22:41:38.754Z",
-      "last_fetched_at": "2026-09-27T22:41:38.754Z"
+      "created_at": "2026-10-03T12:32:53.691Z",
+      "updated_at": "2026-10-03T12:32:53.691Z",
+      "last_fetched_at": "2026-10-03T12:32:53.691Z"
     },
     {
       "id": "ChIJSe-Fo50TyZQRF-URn337ot4",
@@ -12349,9 +12341,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.760Z",
-      "updated_at": "2026-09-27T22:41:38.760Z",
-      "last_fetched_at": "2026-09-27T22:41:38.760Z"
+      "created_at": "2026-10-03T12:32:53.720Z",
+      "updated_at": "2026-10-03T12:32:53.720Z",
+      "last_fetched_at": "2026-10-03T12:32:53.720Z"
     },
     {
       "id": "ChIJUVCX_-cRyZQRl9HvAZPkjGk",
@@ -12376,9 +12368,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.766Z",
-      "updated_at": "2026-09-27T22:41:38.766Z",
-      "last_fetched_at": "2026-09-27T22:41:38.766Z"
+      "created_at": "2026-10-03T12:32:53.699Z",
+      "updated_at": "2026-10-03T12:32:53.699Z",
+      "last_fetched_at": "2026-10-03T12:32:53.699Z"
     },
     {
       "id": "ChIJhTODrDMRyZQRfRkASodk4Dk",
@@ -12394,7 +12386,7 @@
       "website": "https://ritmoacademia.com.br/",
       "website_status": "website_found",
       "rating": 4.4,
-      "reviews_count": 7,
+      "reviews_count": 8,
       "maps_url": "https://maps.google.com/?cid=4170443787169962365&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
@@ -12404,9 +12396,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.777Z",
-      "updated_at": "2026-09-27T22:41:38.777Z",
-      "last_fetched_at": "2026-09-27T22:41:38.777Z"
+      "created_at": "2026-10-03T12:32:53.706Z",
+      "updated_at": "2026-10-03T12:32:53.706Z",
+      "last_fetched_at": "2026-10-03T12:32:53.706Z"
     },
     {
       "id": "ChIJvdWepR0RyZQRPnr6WFgaWpM",
@@ -12432,9 +12424,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.783Z",
-      "updated_at": "2026-09-27T22:41:38.783Z",
-      "last_fetched_at": "2026-09-27T22:41:38.783Z"
+      "created_at": "2026-10-03T12:32:53.726Z",
+      "updated_at": "2026-10-03T12:32:53.727Z",
+      "last_fetched_at": "2026-10-03T12:32:53.726Z"
     },
     {
       "id": "ChIJA5PBngERyZQR6t3tVVXrZZg",
@@ -12450,7 +12442,7 @@
       "website": "https://app.tecnofit.com.br/site/?anchor=corpoeacaofc",
       "website_status": "website_found",
       "rating": 5,
-      "reviews_count": 61,
+      "reviews_count": 62,
       "maps_url": "https://maps.google.com/?cid=10981442018159222250&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
@@ -12461,9 +12453,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.789Z",
-      "updated_at": "2026-09-27T22:41:38.789Z",
-      "last_fetched_at": "2026-09-27T22:41:38.789Z"
+      "created_at": "2026-10-03T12:32:53.713Z",
+      "updated_at": "2026-10-03T12:32:53.713Z",
+      "last_fetched_at": "2026-10-03T12:32:53.713Z"
     },
     {
       "id": "ChIJLdAVSwARyZQRRuALg6XM1RA",
@@ -12488,9 +12480,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.796Z",
-      "updated_at": "2026-09-27T22:41:38.796Z",
-      "last_fetched_at": "2026-09-27T22:41:38.796Z"
+      "created_at": "2026-10-03T12:32:53.749Z",
+      "updated_at": "2026-10-03T12:32:53.749Z",
+      "last_fetched_at": "2026-10-03T12:32:53.749Z"
     },
     {
       "id": "ChIJPTfGxcsQyZQRuEKFyBBGTIE",
@@ -12515,9 +12507,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.809Z",
-      "updated_at": "2026-09-27T22:41:38.809Z",
-      "last_fetched_at": "2026-09-27T22:41:38.809Z"
+      "created_at": "2026-10-03T12:32:53.735Z",
+      "updated_at": "2026-10-03T12:32:53.735Z",
+      "last_fetched_at": "2026-10-03T12:32:53.735Z"
     },
     {
       "id": "ChIJlTBuAcsQyZQR4zrAJwpwTs0",
@@ -12532,7 +12524,7 @@
       "phone": "(19) 99926-3970",
       "website_status": "no_website",
       "rating": 4.9,
-      "reviews_count": 100,
+      "reviews_count": 101,
       "maps_url": "https://maps.google.com/?cid=14793885014877551331&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
@@ -12541,9 +12533,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.822Z",
-      "updated_at": "2026-09-27T22:41:38.822Z",
-      "last_fetched_at": "2026-09-27T22:41:38.822Z"
+      "created_at": "2026-10-03T12:32:53.742Z",
+      "updated_at": "2026-10-03T12:32:53.742Z",
+      "last_fetched_at": "2026-10-03T12:32:53.742Z"
     },
     {
       "id": "ChIJ86B3-sQRyZQRlMLCjqgK04U",
@@ -12568,9 +12560,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.834Z",
-      "updated_at": "2026-09-27T22:41:38.834Z",
-      "last_fetched_at": "2026-09-27T22:41:38.834Z"
+      "created_at": "2026-10-03T12:32:53.762Z",
+      "updated_at": "2026-10-03T12:32:53.762Z",
+      "last_fetched_at": "2026-10-03T12:32:53.762Z"
     },
     {
       "id": "ChIJ4Znu_lMQyZQR556ZBjdD6X8",
@@ -12595,9 +12587,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.840Z",
-      "updated_at": "2026-09-27T22:41:38.840Z",
-      "last_fetched_at": "2026-09-27T22:41:38.840Z"
+      "created_at": "2026-10-03T12:32:53.755Z",
+      "updated_at": "2026-10-03T12:32:53.755Z",
+      "last_fetched_at": "2026-10-03T12:32:53.755Z"
     },
     {
       "id": "ChIJr1ST-GERyZQRPsVejM945Ws",
@@ -12621,9 +12613,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.850Z",
-      "updated_at": "2026-09-27T22:41:38.850Z",
-      "last_fetched_at": "2026-09-27T22:41:38.850Z"
+      "created_at": "2026-10-03T12:32:53.789Z",
+      "updated_at": "2026-10-03T12:32:53.789Z",
+      "last_fetched_at": "2026-10-03T12:32:53.789Z"
     },
     {
       "id": "ChIJkQhfHzoXyZQRBHZi_atZbDw",
@@ -12647,9 +12639,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.855Z",
-      "updated_at": "2026-09-27T22:41:38.855Z",
-      "last_fetched_at": "2026-09-27T22:41:38.855Z"
+      "created_at": "2026-10-03T12:32:53.775Z",
+      "updated_at": "2026-10-03T12:32:53.775Z",
+      "last_fetched_at": "2026-10-03T12:32:53.775Z"
     },
     {
       "id": "ChIJo43SaGARyZQR3zUmpQ5Axck",
@@ -12675,9 +12667,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.860Z",
-      "updated_at": "2026-09-27T22:41:38.860Z",
-      "last_fetched_at": "2026-09-27T22:41:38.860Z"
+      "created_at": "2026-10-03T12:32:53.795Z",
+      "updated_at": "2026-10-03T12:32:53.796Z",
+      "last_fetched_at": "2026-10-03T12:32:53.795Z"
     },
     {
       "id": "ChIJHfY7mJgXyZQRwEKpHmLVivI",
@@ -12702,9 +12694,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.865Z",
-      "updated_at": "2026-09-27T22:41:38.865Z",
-      "last_fetched_at": "2026-09-27T22:41:38.865Z"
+      "created_at": "2026-10-03T12:32:53.769Z",
+      "updated_at": "2026-10-03T12:32:53.769Z",
+      "last_fetched_at": "2026-10-03T12:32:53.769Z"
     },
     {
       "id": "ChIJn4y_-ioRyZQROHeXcPu2YlA",
@@ -12730,9 +12722,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.875Z",
-      "updated_at": "2026-09-27T22:41:38.875Z",
-      "last_fetched_at": "2026-09-27T22:41:38.875Z"
+      "created_at": "2026-10-03T12:32:53.804Z",
+      "updated_at": "2026-10-03T12:32:53.804Z",
+      "last_fetched_at": "2026-10-03T12:32:53.804Z"
     },
     {
       "id": "ChIJLV7BvdcRyZQRgdYrQl2uz5I",
@@ -12757,9 +12749,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.881Z",
-      "updated_at": "2026-09-27T22:41:38.881Z",
-      "last_fetched_at": "2026-09-27T22:41:38.881Z"
+      "created_at": "2026-10-03T12:32:53.810Z",
+      "updated_at": "2026-10-03T12:32:53.810Z",
+      "last_fetched_at": "2026-10-03T12:32:53.810Z"
     },
     {
       "id": "ChIJ319FbVERyZQRgRTwI4Kj7oU",
@@ -12836,9 +12828,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:38.906Z",
-      "updated_at": "2026-09-27T22:41:38.906Z",
-      "last_fetched_at": "2026-09-27T22:41:38.906Z"
+      "created_at": "2026-10-03T12:32:53.817Z",
+      "updated_at": "2026-10-03T12:32:53.817Z",
+      "last_fetched_at": "2026-10-03T12:32:53.817Z"
     },
     {
       "id": "ChIJE5JzVf_zwJQRNVSkIFRVJjY",
@@ -12863,9 +12855,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.843Z",
-      "updated_at": "2026-09-27T22:41:39.843Z",
-      "last_fetched_at": "2026-09-27T22:41:39.843Z"
+      "created_at": "2026-10-03T12:32:54.758Z",
+      "updated_at": "2026-10-03T12:32:54.758Z",
+      "last_fetched_at": "2026-10-03T12:32:54.758Z"
     },
     {
       "id": "ChIJQS8JwVLzwJQRdR3lD1ZFgcE",
@@ -12891,9 +12883,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.854Z",
-      "updated_at": "2026-09-27T22:41:39.854Z",
-      "last_fetched_at": "2026-09-27T22:41:39.854Z"
+      "created_at": "2026-10-03T12:32:54.751Z",
+      "updated_at": "2026-10-03T12:32:54.751Z",
+      "last_fetched_at": "2026-10-03T12:32:54.751Z"
     },
     {
       "id": "ChIJqQ-17YPzwJQRRr6XCB01DXc",
@@ -12918,9 +12910,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.867Z",
-      "updated_at": "2026-09-27T22:41:39.867Z",
-      "last_fetched_at": "2026-09-27T22:41:39.867Z"
+      "created_at": "2026-10-03T12:32:54.767Z",
+      "updated_at": "2026-10-03T12:32:54.767Z",
+      "last_fetched_at": "2026-10-03T12:32:54.767Z"
     },
     {
       "id": "ChIJo29tLE2byJQRl7aCiF3CSoc",
@@ -12946,9 +12938,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.877Z",
-      "updated_at": "2026-09-27T22:41:39.877Z",
-      "last_fetched_at": "2026-09-27T22:41:39.877Z"
+      "created_at": "2026-10-03T12:32:54.774Z",
+      "updated_at": "2026-10-03T12:32:54.774Z",
+      "last_fetched_at": "2026-10-03T12:32:54.774Z"
     },
     {
       "id": "ChIJi-2l0WzzwJQRN7S66YMV390",
@@ -12974,9 +12966,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.882Z",
-      "updated_at": "2026-09-27T22:41:39.882Z",
-      "last_fetched_at": "2026-09-27T22:41:39.882Z"
+      "created_at": "2026-10-03T12:32:54.787Z",
+      "updated_at": "2026-10-03T12:32:54.787Z",
+      "last_fetched_at": "2026-10-03T12:32:54.787Z"
     },
     {
       "id": "ChIJoxLQUOvzwJQRwm3JG3boXT0",
@@ -13003,9 +12995,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.887Z",
-      "updated_at": "2026-09-27T22:41:39.887Z",
-      "last_fetched_at": "2026-09-27T22:41:39.887Z"
+      "created_at": "2026-10-03T12:32:54.808Z",
+      "updated_at": "2026-10-03T12:32:54.808Z",
+      "last_fetched_at": "2026-10-03T12:32:54.808Z"
     },
     {
       "id": "ChIJqZhNyTPywJQRemmxQ5smA9g",
@@ -13029,9 +13021,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.894Z",
-      "updated_at": "2026-09-27T22:41:39.894Z",
-      "last_fetched_at": "2026-09-27T22:41:39.894Z"
+      "created_at": "2026-10-03T12:32:54.795Z",
+      "updated_at": "2026-10-03T12:32:54.795Z",
+      "last_fetched_at": "2026-10-03T12:32:54.795Z"
     },
     {
       "id": "ChIJaenCrW2LwJQRp6ybt7EpTZA",
@@ -13053,9 +13045,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.899Z",
-      "updated_at": "2026-09-27T22:41:39.899Z",
-      "last_fetched_at": "2026-09-27T22:41:39.899Z"
+      "created_at": "2026-10-03T12:32:54.852Z",
+      "updated_at": "2026-10-03T12:32:54.852Z",
+      "last_fetched_at": "2026-10-03T12:32:54.852Z"
     },
     {
       "id": "ChIJWUwMiSOLwJQRftsvRB_oVa0",
@@ -13079,9 +13071,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.905Z",
-      "updated_at": "2026-09-27T22:41:39.905Z",
-      "last_fetched_at": "2026-09-27T22:41:39.905Z"
+      "created_at": "2026-10-03T12:32:54.845Z",
+      "updated_at": "2026-10-03T12:32:54.845Z",
+      "last_fetched_at": "2026-10-03T12:32:54.845Z"
     },
     {
       "id": "ChIJG_bI74ubyJQRxqjzpKaSicg",
@@ -13106,9 +13098,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.910Z",
-      "updated_at": "2026-09-27T22:41:39.910Z",
-      "last_fetched_at": "2026-09-27T22:41:39.910Z"
+      "created_at": "2026-10-03T12:32:54.801Z",
+      "updated_at": "2026-10-03T12:32:54.801Z",
+      "last_fetched_at": "2026-10-03T12:32:54.801Z"
     },
     {
       "id": "ChIJ4zq72cmdyJQR8Ahht6H3w-U",
@@ -13134,9 +13126,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.921Z",
-      "updated_at": "2026-09-27T22:41:39.921Z",
-      "last_fetched_at": "2026-09-27T22:41:39.921Z"
+      "created_at": "2026-10-03T12:32:54.866Z",
+      "updated_at": "2026-10-03T12:32:54.866Z",
+      "last_fetched_at": "2026-10-03T12:32:54.866Z"
     },
     {
       "id": "ChIJAb9l2jPywJQRjmb9W9Qrxu8",
@@ -13159,9 +13151,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.933Z",
-      "updated_at": "2026-09-27T22:41:39.933Z",
-      "last_fetched_at": "2026-09-27T22:41:39.933Z"
+      "created_at": "2026-10-03T12:32:54.830Z",
+      "updated_at": "2026-10-03T12:32:54.830Z",
+      "last_fetched_at": "2026-10-03T12:32:54.830Z"
     },
     {
       "id": "ChIJi5H8TBCbyJQRQlMz0tDQA2E",
@@ -13187,9 +13179,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.943Z",
-      "updated_at": "2026-09-27T22:41:39.943Z",
-      "last_fetched_at": "2026-09-27T22:41:39.943Z"
+      "created_at": "2026-10-03T12:32:54.886Z",
+      "updated_at": "2026-10-03T12:32:54.886Z",
+      "last_fetched_at": "2026-10-03T12:32:54.886Z"
     },
     {
       "id": "ChIJnYoGPyOLwJQRE3wGjR8MMl8",
@@ -13208,17 +13200,13 @@
       "maps_url": "https://maps.google.com/?cid=6859558512088218643&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
-        "sports_school",
-        "sports_complex",
-        "gym",
-        "sports_activity_location",
         "health",
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.948Z",
-      "updated_at": "2026-09-27T22:41:39.948Z",
-      "last_fetched_at": "2026-09-27T22:41:39.948Z"
+      "created_at": "2026-10-03T12:32:54.822Z",
+      "updated_at": "2026-10-03T12:32:54.822Z",
+      "last_fetched_at": "2026-10-03T12:32:54.822Z"
     },
     {
       "id": "ChIJFRnlOD1pzpQR4OmeSyoR1gI",
@@ -13261,7 +13249,7 @@
       "website": "https://www.momentum.com.br/empreendimento/santa-barbara-resort-residence/comodidades",
       "website_status": "website_found",
       "rating": 4.7,
-      "reviews_count": 833,
+      "reviews_count": 832,
       "maps_url": "https://maps.google.com/?cid=13828479036330898027&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
@@ -13269,9 +13257,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.958Z",
-      "updated_at": "2026-09-27T22:41:39.958Z",
-      "last_fetched_at": "2026-09-27T22:41:39.958Z"
+      "created_at": "2026-10-03T12:32:54.816Z",
+      "updated_at": "2026-10-03T12:32:54.816Z",
+      "last_fetched_at": "2026-10-03T12:32:54.816Z"
     },
     {
       "id": "ChIJ3YqzbnGcyJQRoHdUq9V3zUU",
@@ -13297,9 +13285,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.964Z",
-      "updated_at": "2026-09-27T22:41:39.964Z",
-      "last_fetched_at": "2026-09-27T22:41:39.964Z"
+      "created_at": "2026-10-03T12:32:54.859Z",
+      "updated_at": "2026-10-03T12:32:54.859Z",
+      "last_fetched_at": "2026-10-03T12:32:54.859Z"
     },
     {
       "id": "ChIJl1kPPy_ywJQRiqvVrAUVGYo",
@@ -13323,9 +13311,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:39.969Z",
-      "updated_at": "2026-09-27T22:41:39.969Z",
-      "last_fetched_at": "2026-09-27T22:41:39.969Z"
+      "created_at": "2026-10-03T12:32:54.781Z",
+      "updated_at": "2026-10-03T12:32:54.781Z",
+      "last_fetched_at": "2026-10-03T12:32:54.781Z"
     },
     {
       "id": "ChIJQb26JyKxx5QRBbXJ5CFeZvA",
@@ -13339,20 +13327,20 @@
       "lng": -47.8720911,
       "phone": "(19) 99650-7711",
       "website_status": "no_website",
-      "rating": 4.8,
-      "reviews_count": 22,
+      "rating": 4.7,
+      "reviews_count": 23,
       "maps_url": "https://maps.google.com/?cid=17322636516392547589&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
         "gym",
-        "health",
         "sports_activity_location",
+        "health",
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.023Z",
-      "updated_at": "2026-09-27T22:41:41.023Z",
-      "last_fetched_at": "2026-09-27T22:41:41.023Z"
+      "created_at": "2026-10-03T12:32:55.840Z",
+      "updated_at": "2026-10-03T12:32:55.840Z",
+      "last_fetched_at": "2026-10-03T12:32:55.840Z"
     },
     {
       "id": "ChIJbe1S7oGxx5QRvsIzPwKXYI4",
@@ -13373,14 +13361,14 @@
       "business_status": "OPERATIONAL",
       "raw_types": [
         "gym",
-        "health",
         "sports_activity_location",
+        "health",
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.035Z",
-      "updated_at": "2026-09-27T22:41:41.035Z",
-      "last_fetched_at": "2026-09-27T22:41:41.035Z"
+      "created_at": "2026-10-03T12:32:55.848Z",
+      "updated_at": "2026-10-03T12:32:55.848Z",
+      "last_fetched_at": "2026-10-03T12:32:55.848Z"
     },
     {
       "id": "ChIJO5gKOwChwJQRM5Mljf8ZTek",
@@ -13394,7 +13382,7 @@
       "lng": -48.9895449,
       "website_status": "no_website",
       "rating": 5,
-      "reviews_count": 5,
+      "reviews_count": 6,
       "maps_url": "https://maps.google.com/?cid=16811121569419334451&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
@@ -13404,9 +13392,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.921Z",
-      "updated_at": "2026-09-27T22:41:41.921Z",
-      "last_fetched_at": "2026-09-27T22:41:41.921Z"
+      "created_at": "2026-10-03T12:32:56.725Z",
+      "updated_at": "2026-10-03T12:32:56.726Z",
+      "last_fetched_at": "2026-10-03T12:32:56.725Z"
     },
     {
       "id": "ChIJU-bdGOSgwJQRZR1mDsugq-c",
@@ -13422,7 +13410,7 @@
       "website": "https://www.facebook.com/lifegymoficial/",
       "website_status": "website_found",
       "rating": 4.8,
-      "reviews_count": 101,
+      "reviews_count": 102,
       "maps_url": "https://maps.google.com/?cid=16693613237759253861&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
@@ -13433,9 +13421,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.927Z",
-      "updated_at": "2026-09-27T22:41:41.927Z",
-      "last_fetched_at": "2026-09-27T22:41:41.927Z"
+      "created_at": "2026-10-03T12:32:56.734Z",
+      "updated_at": "2026-10-03T12:32:56.734Z",
+      "last_fetched_at": "2026-10-03T12:32:56.734Z"
     },
     {
       "id": "ChIJ4Yjxl5WhwJQRA8qpDM1BLy8",
@@ -13460,9 +13448,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.935Z",
-      "updated_at": "2026-09-27T22:41:41.935Z",
-      "last_fetched_at": "2026-09-27T22:41:41.935Z"
+      "created_at": "2026-10-03T12:32:56.741Z",
+      "updated_at": "2026-10-03T12:32:56.741Z",
+      "last_fetched_at": "2026-10-03T12:32:56.741Z"
     },
     {
       "id": "ChIJ3QWmurmhwJQRT-pvZav4umY",
@@ -13488,9 +13476,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.940Z",
-      "updated_at": "2026-09-27T22:41:41.940Z",
-      "last_fetched_at": "2026-09-27T22:41:41.940Z"
+      "created_at": "2026-10-03T12:32:56.748Z",
+      "updated_at": "2026-10-03T12:32:56.748Z",
+      "last_fetched_at": "2026-10-03T12:32:56.748Z"
     },
     {
       "id": "ChIJlyuomTahwJQRxP-gUT_ws4I",
@@ -13514,17 +13502,16 @@
         "fitness_center",
         "adventure_sports_center",
         "sports_complex",
-        "sports_school",
         "sports_activity_location",
         "store",
         "health",
-        "point_of_interest",
         "service",
+        "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.947Z",
-      "updated_at": "2026-09-27T22:41:41.947Z",
-      "last_fetched_at": "2026-09-27T22:41:41.947Z"
+      "created_at": "2026-10-03T12:32:56.755Z",
+      "updated_at": "2026-10-03T12:32:56.755Z",
+      "last_fetched_at": "2026-10-03T12:32:56.755Z"
     },
     {
       "id": "ChIJw07itfygwJQRD9I_kFNOzmE",
@@ -13549,9 +13536,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.953Z",
-      "updated_at": "2026-09-27T22:41:41.953Z",
-      "last_fetched_at": "2026-09-27T22:41:41.953Z"
+      "created_at": "2026-10-03T12:32:56.769Z",
+      "updated_at": "2026-10-03T12:32:56.769Z",
+      "last_fetched_at": "2026-10-03T12:32:56.769Z"
     },
     {
       "id": "ChIJg13P0QehwJQRgL5WK8cep2s",
@@ -13571,17 +13558,15 @@
       "business_status": "OPERATIONAL",
       "raw_types": [
         "gym",
-        "sports_complex",
-        "sports_school",
         "sports_activity_location",
         "health",
-        "point_of_interest",
         "service",
+        "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.963Z",
-      "updated_at": "2026-09-27T22:41:41.963Z",
-      "last_fetched_at": "2026-09-27T22:41:41.963Z"
+      "created_at": "2026-10-03T12:32:56.799Z",
+      "updated_at": "2026-10-03T12:32:56.799Z",
+      "last_fetched_at": "2026-10-03T12:32:56.799Z"
     },
     {
       "id": "ChIJe2_5MQ6hwJQRBsBQwtjfdls",
@@ -13606,9 +13591,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.975Z",
-      "updated_at": "2026-09-27T22:41:41.975Z",
-      "last_fetched_at": "2026-09-27T22:41:41.975Z"
+      "created_at": "2026-10-03T12:32:56.783Z",
+      "updated_at": "2026-10-03T12:32:56.783Z",
+      "last_fetched_at": "2026-10-03T12:32:56.783Z"
     },
     {
       "id": "ChIJI8p8YBuhwJQRbNeNRsiSs4o",
@@ -13633,9 +13618,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:41.986Z",
-      "updated_at": "2026-09-27T22:41:41.986Z",
-      "last_fetched_at": "2026-09-27T22:41:41.986Z"
+      "created_at": "2026-10-03T12:32:56.790Z",
+      "updated_at": "2026-10-03T12:32:56.790Z",
+      "last_fetched_at": "2026-10-03T12:32:56.790Z"
     },
     {
       "id": "ChIJQVVPKryhwJQRArIhTtgnG-w",
@@ -13650,8 +13635,8 @@
       "phone": "(14) 99646-8591",
       "website": "https://www.qgfitness.com.br/",
       "website_status": "website_found",
-      "rating": 0,
-      "reviews_count": 0,
+      "rating": 5,
+      "reviews_count": 3,
       "maps_url": "https://maps.google.com/?cid=17013235827299430914&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "business_status": "OPERATIONAL",
       "raw_types": [
@@ -13661,9 +13646,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:42.001Z",
-      "updated_at": "2026-09-27T22:41:42.001Z",
-      "last_fetched_at": "2026-09-27T22:41:42.001Z"
+      "created_at": "2026-10-03T12:32:56.762Z",
+      "updated_at": "2026-10-03T12:32:56.762Z",
+      "last_fetched_at": "2026-10-03T12:32:56.762Z"
     },
     {
       "id": "ChIJNxNRCmyhwJQRGToOUMDWM6c",
@@ -13689,9 +13674,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:42.007Z",
-      "updated_at": "2026-09-27T22:41:42.007Z",
-      "last_fetched_at": "2026-09-27T22:41:42.007Z"
+      "created_at": "2026-10-03T12:32:56.776Z",
+      "updated_at": "2026-10-03T12:32:56.776Z",
+      "last_fetched_at": "2026-10-03T12:32:56.776Z"
     },
     {
       "id": "ChIJI8hAdeyhwJQRp6Hl2rEfDLI",
@@ -13716,9 +13701,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:42.014Z",
-      "updated_at": "2026-09-27T22:41:42.014Z",
-      "last_fetched_at": "2026-09-27T22:41:42.014Z"
+      "created_at": "2026-10-03T12:32:56.826Z",
+      "updated_at": "2026-10-03T12:32:56.826Z",
+      "last_fetched_at": "2026-10-03T12:32:56.826Z"
     },
     {
       "id": "ChIJsYCjNBqhwJQRj2d6YGBDEBo",
@@ -13743,9 +13728,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:42.020Z",
-      "updated_at": "2026-09-27T22:41:42.020Z",
-      "last_fetched_at": "2026-09-27T22:41:42.020Z"
+      "created_at": "2026-10-03T12:32:56.847Z",
+      "updated_at": "2026-10-03T12:32:56.847Z",
+      "last_fetched_at": "2026-10-03T12:32:56.847Z"
     },
     {
       "id": "ChIJodZKL36hwJQRJoNNg8VIaCI",
@@ -13770,9 +13755,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:42.025Z",
-      "updated_at": "2026-09-27T22:41:42.025Z",
-      "last_fetched_at": "2026-09-27T22:41:42.025Z"
+      "created_at": "2026-10-03T12:32:56.833Z",
+      "updated_at": "2026-10-03T12:32:56.833Z",
+      "last_fetched_at": "2026-10-03T12:32:56.833Z"
     },
     {
       "id": "ChIJ44mn6yehwJQRsqfuRDq6L3M",
@@ -13798,9 +13783,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:42.031Z",
-      "updated_at": "2026-09-27T22:41:42.031Z",
-      "last_fetched_at": "2026-09-27T22:41:42.031Z"
+      "created_at": "2026-10-03T12:32:56.840Z",
+      "updated_at": "2026-10-03T12:32:56.840Z",
+      "last_fetched_at": "2026-10-03T12:32:56.840Z"
     },
     {
       "id": "ChIJ2xgKrBChwJQRUKmnweazC6c",
@@ -13822,16 +13807,15 @@
         "fitness_center",
         "physiotherapist",
         "gym",
-        "sports_complex",
         "sports_school",
         "sports_activity_location",
         "health",
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:42.036Z",
-      "updated_at": "2026-09-27T22:41:42.036Z",
-      "last_fetched_at": "2026-09-27T22:41:42.036Z"
+      "created_at": "2026-10-03T12:32:56.805Z",
+      "updated_at": "2026-10-03T12:32:56.806Z",
+      "last_fetched_at": "2026-10-03T12:32:56.805Z"
     },
     {
       "id": "ChIJ2XTAgEmhwJQRrGG84wHFQ7g",
@@ -13851,13 +13835,13 @@
       "business_status": "OPERATIONAL",
       "raw_types": [
         "health",
-        "point_of_interest",
         "service",
+        "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:42.042Z",
-      "updated_at": "2026-09-27T22:41:42.042Z",
-      "last_fetched_at": "2026-09-27T22:41:42.042Z"
+      "created_at": "2026-10-03T12:32:56.812Z",
+      "updated_at": "2026-10-03T12:32:56.812Z",
+      "last_fetched_at": "2026-10-03T12:32:56.812Z"
     },
     {
       "id": "ChIJY2M36-SgwJQRBPTnPBpdazU",
@@ -13882,9 +13866,9 @@
         "point_of_interest",
         "establishment"
       ],
-      "created_at": "2026-09-27T22:41:42.047Z",
-      "updated_at": "2026-09-27T22:41:42.047Z",
-      "last_fetched_at": "2026-09-27T22:41:42.047Z"
+      "created_at": "2026-10-03T12:32:56.819Z",
+      "updated_at": "2026-10-03T12:32:56.819Z",
+      "last_fetched_at": "2026-10-03T12:32:56.819Z"
     },
     {
       "id": "ChIJn5vyIGShwJQRmAQsRHT4nWE",
@@ -13943,9 +13927,2484 @@
       "created_at": "2026-09-27T22:41:42.066Z",
       "updated_at": "2026-09-27T22:41:42.066Z",
       "last_fetched_at": "2026-09-27T22:41:42.066Z"
+    },
+    {
+      "id": "ChIJawTqi6f-zpQRhkaq7-vaVOM",
+      "place_id": "ChIJawTqi6f-zpQRhkaq7-vaVOM",
+      "name": "Brothers Fit",
+      "formatted_address": "R. Adolfo Eber, 32 - Nova Esperança, São Paulo - SP, 05162-180, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "05162-180",
+      "lat": -23.4764482,
+      "lng": -46.7587974,
+      "phone": "(11) 3901-6090",
+      "website_status": "no_website",
+      "rating": 4.5,
+      "reviews_count": 19,
+      "maps_url": "https://maps.google.com/?cid=16380958451526420102&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "car_repair",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.594Z",
+      "updated_at": "2026-10-03T12:32:50.594Z",
+      "last_fetched_at": "2026-10-03T12:32:50.594Z"
+    },
+    {
+      "id": "ChIJl5Sb-Qz2zpQR390MlnZyyTY",
+      "place_id": "ChIJl5Sb-Qz2zpQR390MlnZyyTY",
+      "name": "Academia Absolut",
+      "formatted_address": "Rua Major Dantas Cortez, 92 - Vila Gustavo, São Paulo - SP, 02206-000, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "02206-000",
+      "lat": -23.481385,
+      "lng": -46.6000994,
+      "phone": "(11) 97420-3849",
+      "website": "http://www.academiaabsolut.com.br/",
+      "website_status": "website_found",
+      "rating": 4.6,
+      "reviews_count": 244,
+      "maps_url": "https://maps.google.com/?cid=3947812402016083423&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.602Z",
+      "updated_at": "2026-10-03T12:32:50.602Z",
+      "last_fetched_at": "2026-10-03T12:32:50.602Z"
+    },
+    {
+      "id": "ChIJz3fxTADnogARyj1G0DEgRL4",
+      "place_id": "ChIJz3fxTADnogARyj1G0DEgRL4",
+      "name": "Top Center Fitness Academia",
+      "formatted_address": "Av. Olintho Almada, 360 - Astolfo Dutra, MG, 36780-000, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "36780-000",
+      "lat": -21.315911099999997,
+      "lng": -42.8653013,
+      "phone": "(32) 99942-3153",
+      "website": "https://topcenterfitness.mssg.me/",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 4,
+      "maps_url": "https://maps.google.com/?cid=13710118563942383050&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.610Z",
+      "updated_at": "2026-10-03T12:32:50.610Z",
+      "last_fetched_at": "2026-10-03T12:32:50.610Z"
+    },
+    {
+      "id": "ChIJp-RqeADnogARcMi59_dczCA",
+      "place_id": "ChIJp-RqeADnogARcMi59_dczCA",
+      "name": "OFIC7 ACADEMIA",
+      "formatted_address": "Av. Olintho Almada, 290 - Astolfo Dutra, MG, 36780-000, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "36780-000",
+      "lat": -21.3148162,
+      "lng": -42.864681,
+      "phone": "(32) 99967-3032",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 5,
+      "maps_url": "https://maps.google.com/?cid=2363366124545493104&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.637Z",
+      "updated_at": "2026-10-03T12:32:50.637Z",
+      "last_fetched_at": "2026-10-03T12:32:50.637Z"
+    },
+    {
+      "id": "ChIJvdPt1W9ZzpQRGP2Eor3iPLg",
+      "place_id": "ChIJvdPt1W9ZzpQRGP2Eor3iPLg",
+      "name": "Academia Smart Fit - Barra Funda",
+      "formatted_address": "Av. Dr. Adolpho Pinto, 56 - Barra Funda, São Paulo - SP, 01156-050, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "01156-050",
+      "lat": -23.5300655,
+      "lng": -46.6659244,
+      "website": "https://www.smartfit.com.br/academias/barra-funda/?utm_source=google&utm_medium=maps&utm_campaign=fbiz-SBRSPCBRF03",
+      "website_status": "website_found",
+      "rating": 4.3,
+      "reviews_count": 2007,
+      "maps_url": "https://maps.google.com/?cid=13275735105684700440&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "fitness_center",
+        "wellness_center",
+        "dance_hall",
+        "event_venue",
+        "sports_school",
+        "sports_club",
+        "sports_activity_location",
+        "association_or_organization",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.647Z",
+      "updated_at": "2026-10-03T12:32:50.647Z",
+      "last_fetched_at": "2026-10-03T12:32:50.647Z"
+    },
+    {
+      "id": "ChIJh30OkifBzpQRWHeW0s90vvg",
+      "place_id": "ChIJh30OkifBzpQRWHeW0s90vvg",
+      "name": "Centro de Treinamento Iron Union",
+      "formatted_address": "R. Adolfo André, 529 - Centro, Atibaia - SP, 12940-260, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "12940-260",
+      "lat": -23.1128098,
+      "lng": -46.555415599999996,
+      "phone": "(11) 96190-8580",
+      "website_status": "no_website",
+      "rating": 4.8,
+      "reviews_count": 51,
+      "maps_url": "https://maps.google.com/?cid=17923892002921281368&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.655Z",
+      "updated_at": "2026-10-03T12:32:50.655Z",
+      "last_fetched_at": "2026-10-03T12:32:50.655Z"
+    },
+    {
+      "id": "ChIJa3ImAOL1zpQRTdqePHbcjLA",
+      "place_id": "ChIJa3ImAOL1zpQRTdqePHbcjLA",
+      "name": "Rodrigo Ferreira",
+      "formatted_address": "Box 32 - Av. Gustavo Adolfo, 644 - Vila Gustavo, São Paulo - SP, 02209-000, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "02209-000",
+      "lat": -23.481602499999997,
+      "lng": -46.5932762,
+      "phone": "(11) 98108-1345",
+      "website_status": "no_website",
+      "rating": 4.8,
+      "reviews_count": 4,
+      "maps_url": "https://maps.google.com/?cid=12721785447796103757&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.668Z",
+      "updated_at": "2026-10-03T12:32:50.668Z",
+      "last_fetched_at": "2026-10-03T12:32:50.668Z"
+    },
+    {
+      "id": "ChIJp5yjQRxlzpQRTwm4xPjVWDA",
+      "place_id": "ChIJp5yjQRxlzpQRTwm4xPjVWDA",
+      "name": "FORCE STRONG",
+      "formatted_address": "Rua Margaret Ober, 04 - Jardim Bonifacio, São Paulo - SP, 08260-230, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "08260-230",
+      "lat": -23.5770721,
+      "lng": -46.441598899999995,
+      "phone": "(11) 99553-3308",
+      "website_status": "no_website",
+      "rating": 4.8,
+      "reviews_count": 42,
+      "maps_url": "https://maps.google.com/?cid=3483769576200079695&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.675Z",
+      "updated_at": "2026-10-03T12:32:50.675Z",
+      "last_fetched_at": "2026-10-03T12:32:50.675Z"
+    },
+    {
+      "id": "ChIJnarAwCtpzpQRnN6ZmvoxFqs",
+      "place_id": "ChIJnarAwCtpzpQRnN6ZmvoxFqs",
+      "name": "Bufalo Gym Club",
+      "formatted_address": "Av. Rodolfo Pirani, 142 - Jardim Rodolfo Pirani, São Paulo - SP, 08310-258, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "08310-258",
+      "lat": -23.6261328,
+      "lng": -46.462527699999995,
+      "phone": "(11) 95399-7948",
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=12328095982378671772&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.689Z",
+      "updated_at": "2026-10-03T12:32:50.689Z",
+      "last_fetched_at": "2026-10-03T12:32:50.689Z"
+    },
+    {
+      "id": "ChIJdxuHm2pQzpQR3OekgvvvBek",
+      "place_id": "ChIJdxuHm2pQzpQR3OekgvvvBek",
+      "name": "Templo SA Human Performance",
+      "formatted_address": "Av. Washington Luís, 1019 - Jardim Marajoara, São Paulo - SP, 04662-002, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "04662-002",
+      "lat": -23.6567889,
+      "lng": -46.69548830000001,
+      "phone": "(11) 5685-7338",
+      "website": "https://www.templosacross.com.br/",
+      "website_status": "website_found",
+      "rating": 4.8,
+      "reviews_count": 37,
+      "maps_url": "https://maps.google.com/?cid=16791090649228437468&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.695Z",
+      "updated_at": "2026-10-03T12:32:50.695Z",
+      "last_fetched_at": "2026-10-03T12:32:50.695Z"
+    },
+    {
+      "id": "ChIJd2Ukt_FpzpQR2f7k7_2TjlQ",
+      "place_id": "ChIJd2Ukt_FpzpQR2f7k7_2TjlQ",
+      "name": "Academia SPARTA FIT",
+      "formatted_address": "Av. Sapopemba, 15035 - Vila Ester, São Paulo - SP, 03989-010, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "03989-010",
+      "lat": -23.6200589,
+      "lng": -46.4669813,
+      "phone": "(11) 95201-1014",
+      "website_status": "no_website",
+      "rating": 4.8,
+      "reviews_count": 36,
+      "maps_url": "https://maps.google.com/?cid=6092970064739630809&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.703Z",
+      "updated_at": "2026-10-03T12:32:50.703Z",
+      "last_fetched_at": "2026-10-03T12:32:50.703Z"
+    },
+    {
+      "id": "ChIJHRhEjSv3zpQRpkgWLFIJVTI",
+      "place_id": "ChIJHRhEjSv3zpQRpkgWLFIJVTI",
+      "name": "Bollacha Jiu Jitsu Matriz",
+      "formatted_address": "Av. Gustavo Adolfo, 588 - Vila Gustavo, São Paulo - SP, 02209-000, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "02209-000",
+      "lat": -23.481795299999998,
+      "lng": -46.5938544,
+      "phone": "(11) 97295-9231",
+      "website": "https://www.instagram.com/bollachajiujitsu/",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 145,
+      "maps_url": "https://maps.google.com/?cid=3626815323448428710&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "sports_school",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.724Z",
+      "updated_at": "2026-10-03T12:32:50.724Z",
+      "last_fetched_at": "2026-10-03T12:32:50.724Z"
+    },
+    {
+      "id": "ChIJT43_7e_cvZQR7WuhnwBVn7Y",
+      "place_id": "ChIJT43_7e_cvZQR7WuhnwBVn7Y",
+      "name": "Hotel e Restaurante Adolfo",
+      "formatted_address": "R. Gonçalves Dias, 678, Adolfo - SP, 15230-000, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "15230-000",
+      "lat": -21.2335742,
+      "lng": -49.6404462,
+      "phone": "(17) 3814-1140",
+      "website": "https://www.instagram.com/hotelirmaosrussa",
+      "website_status": "website_found",
+      "rating": 4.5,
+      "reviews_count": 301,
+      "maps_url": "https://maps.google.com/?cid=13159330097366395885&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "hotel",
+        "guest_house",
+        "rest_stop",
+        "meal_takeaway",
+        "lodging",
+        "restaurant",
+        "food",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.732Z",
+      "updated_at": "2026-10-03T12:32:50.732Z",
+      "last_fetched_at": "2026-10-03T12:32:50.732Z"
+    },
+    {
+      "id": "ChIJXZuHaVZQzpQRaLmS46vo4EY",
+      "place_id": "ChIJXZuHaVZQzpQRaLmS46vo4EY",
+      "name": "Physical Solutions",
+      "formatted_address": "Av. Adolfo Pinheiro, 384 - Santo Amaro, São Paulo - SP, 04734-000, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "04734-000",
+      "lat": -23.6497665,
+      "lng": -46.7032582,
+      "phone": "(11) 98565-9525",
+      "website": "https://physicalsolutions.vercel.app/#contato",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 2,
+      "maps_url": "https://maps.google.com/?cid=5107337802393237864&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "fitness_center",
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.740Z",
+      "updated_at": "2026-10-03T12:32:50.740Z",
+      "last_fetched_at": "2026-10-03T12:32:50.740Z"
+    },
+    {
+      "id": "ChIJGV0J0PL1zpQRvreMhqm-ctA",
+      "place_id": "ChIJGV0J0PL1zpQRvreMhqm-ctA",
+      "name": "Academia Up Fitness",
+      "formatted_address": "Av. Edgar Ruzzant, 615 - Jardim Brasil (Zona Norte), São Paulo - SP, 02225-010, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "02225-010",
+      "lat": -23.4816605,
+      "lng": -46.57457,
+      "phone": "(11) 2209-2529",
+      "website_status": "no_website",
+      "rating": 4.5,
+      "reviews_count": 212,
+      "maps_url": "https://maps.google.com/?cid=15020277342550144958&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "health",
+        "point_of_interest",
+        "service",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.747Z",
+      "updated_at": "2026-10-03T12:32:50.747Z",
+      "last_fetched_at": "2026-10-03T12:32:50.747Z"
+    },
+    {
+      "id": "ChIJtXFQ8PFQzpQRZZMDB3SAXq0",
+      "place_id": "ChIJtXFQ8PFQzpQRZZMDB3SAXq0",
+      "name": "inVicio Fitness Santo Amaro",
+      "formatted_address": "R. Américo Brasiliense, 945 - Santo Amaro, São Paulo - SP, 04715-003, Brasil",
+      "city": "Adolfo",
+      "state": "SP",
+      "postal_code": "04715-003",
+      "lat": -23.6348915,
+      "lng": -46.696526999999996,
+      "phone": "(11) 97650-0164",
+      "website": "http://www.inviciocrossfit.com.br/",
+      "website_status": "website_found",
+      "rating": 4.6,
+      "reviews_count": 107,
+      "maps_url": "https://maps.google.com/?cid=12492563652194571109&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "fitness_center",
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:50.762Z",
+      "updated_at": "2026-10-03T12:32:50.762Z",
+      "last_fetched_at": "2026-10-03T12:32:50.762Z"
+    },
+    {
+      "id": "ChIJl3oBjndbzpQRLAdycsfP_EQ",
+      "place_id": "ChIJl3oBjndbzpQRLAdycsfP_EQ",
+      "name": "Água Academia",
+      "formatted_address": "R. Elba, 876 - Vila Moinho Velho, São Paulo - SP, 04285-001, Brasil",
+      "city": "Aguaí",
+      "state": "SP",
+      "postal_code": "04285-001",
+      "lat": -23.6150332,
+      "lng": -46.603655499999995,
+      "phone": "(11) 2061-8947",
+      "website": "http://www.aguaacademia.com.br/",
+      "website_status": "website_found",
+      "rating": 3.9,
+      "reviews_count": 57,
+      "maps_url": "https://maps.google.com/?cid=4971076544235702060&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "fitness_center",
+        "gym",
+        "sports_school",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:51.729Z",
+      "updated_at": "2026-10-03T12:32:51.729Z",
+      "last_fetched_at": "2026-10-03T12:32:51.729Z"
+    },
+    {
+      "id": "ChIJSYKFw6y5yJQREviQaW5YLv4",
+      "place_id": "ChIJSYKFw6y5yJQREviQaW5YLv4",
+      "name": "Aguaí Fitness Academia Ltda",
+      "formatted_address": "R. Leonir Dutra Pereira, 274 - Parque Bandeirantes I (Nova Veneza), Sumaré - SP, 13181-712, Brasil",
+      "city": "Aguaí",
+      "state": "SP",
+      "postal_code": "13181-712",
+      "lat": -22.8569292,
+      "lng": -47.184604799999995,
+      "phone": "(19) 99605-2674",
+      "website_status": "no_website",
+      "rating": 4.7,
+      "reviews_count": 12,
+      "maps_url": "https://maps.google.com/?cid=18315673965803141138&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "sports_school",
+        "sports_activity_location",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:51.744Z",
+      "updated_at": "2026-10-03T12:32:51.744Z",
+      "last_fetched_at": "2026-10-03T12:32:51.744Z"
+    },
+    {
+      "id": "ChIJ0eOACGoRyZQRVH3Mm2Ovog0",
+      "place_id": "ChIJ0eOACGoRyZQRVH3Mm2Ovog0",
+      "name": "MAX LIFE STUDIOS",
+      "formatted_address": "R. Marília, 40 - Bela vista, Águas de Lindóia - SP, 13942-158, Brasil",
+      "city": "Águas de Lindóia",
+      "state": "SP",
+      "postal_code": "13942-158",
+      "lat": -22.472725399999998,
+      "lng": -46.6148993,
+      "phone": "(19) 99667-2059",
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=982540511070682452&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:53.782Z",
+      "updated_at": "2026-10-03T12:32:53.782Z",
+      "last_fetched_at": "2026-10-03T12:32:53.782Z"
+    },
+    {
+      "id": "ChIJeUJWvawRyZQRXg4xypin_N0",
+      "place_id": "ChIJeUJWvawRyZQRXg4xypin_N0",
+      "name": "HM Studio Personal - Hélen Mazarin",
+      "formatted_address": "Av. das Nações Unidas,570 (piso superior - Centro, Águas de Lindóia - SP, 13940-000, Brasil",
+      "city": "Águas de Lindóia",
+      "state": "SP",
+      "postal_code": "13940-000",
+      "lat": -22.474645,
+      "lng": -46.6336497,
+      "phone": "(35) 98457-6889",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 2,
+      "maps_url": "https://maps.google.com/?cid=15995844251182239326&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:53.824Z",
+      "updated_at": "2026-10-03T12:32:53.824Z",
+      "last_fetched_at": "2026-10-03T12:32:53.824Z"
+    },
+    {
+      "id": "ChIJPa9jmPedyJQR6K70fb4EWHA",
+      "place_id": "ChIJPa9jmPedyJQR6K70fb4EWHA",
+      "name": "Academia Ph.D Sports Santa Bárbara",
+      "formatted_address": "R. do Algodão, 1280 - Cidade Nova, Santa Bárbara d'Oeste - SP, 13454-422, Brasil",
+      "city": "Águas de Santa Bárbara",
+      "state": "SP",
+      "postal_code": "13454-422",
+      "lat": -22.7380653,
+      "lng": -47.377195699999994,
+      "phone": "(19) 99990-6831",
+      "website": "https://academiaphdsports.com.br/",
+      "website_status": "website_found",
+      "rating": 4.9,
+      "reviews_count": 35,
+      "maps_url": "https://maps.google.com/?cid=8095225546401951464&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:54.838Z",
+      "updated_at": "2026-10-03T12:32:54.838Z",
+      "last_fetched_at": "2026-10-03T12:32:54.838Z"
+    },
+    {
+      "id": "ChIJu88nLG-cyJQRnGm5KLFxE20",
+      "place_id": "ChIJu88nLG-cyJQRnGm5KLFxE20",
+      "name": "Academia H2O",
+      "formatted_address": "R. Belo Horizonte, 1573 - Lot. Planalto do Sol, Santa Bárbara d'Oeste - SP, 13454-330, Brasil",
+      "city": "Águas de Santa Bárbara",
+      "state": "SP",
+      "postal_code": "13454-330",
+      "lat": -22.741328799999998,
+      "lng": -47.3865962,
+      "phone": "(19) 3457-4520",
+      "website_status": "no_website",
+      "rating": 4.6,
+      "reviews_count": 189,
+      "maps_url": "https://maps.google.com/?cid=7859750780398037404&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:54.872Z",
+      "updated_at": "2026-10-03T12:32:54.872Z",
+      "last_fetched_at": "2026-10-03T12:32:54.872Z"
+    },
+    {
+      "id": "ChIJDYSC5IubyJQRbABUA5r0-Wk",
+      "place_id": "ChIJDYSC5IubyJQRbABUA5r0-Wk",
+      "name": "Top Fit Academia Feminina",
+      "formatted_address": "Av. São Paulo, 811 - Cidade Nova 2, Santa Bárbara d'Oeste - SP, 13454-065, Brasil",
+      "city": "Águas de Santa Bárbara",
+      "state": "SP",
+      "postal_code": "13454-065",
+      "lat": -22.737894999999998,
+      "lng": -47.366495,
+      "phone": "(19) 99292-2303",
+      "website_status": "no_website",
+      "rating": 4.6,
+      "reviews_count": 119,
+      "maps_url": "https://maps.google.com/?cid=7636403585501364332&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:54.893Z",
+      "updated_at": "2026-10-03T12:32:54.893Z",
+      "last_fetched_at": "2026-10-03T12:32:54.893Z"
+    },
+    {
+      "id": "ChIJU9jdz_r-zpQRArwyGxvK9xw",
+      "place_id": "ChIJU9jdz_r-zpQRArwyGxvK9xw",
+      "name": "CPN Academia Osasco",
+      "formatted_address": "R. Agudos, 400 - Rochdale, Osasco - SP, 06223-140, Brasil",
+      "city": "Agudos",
+      "state": "SP",
+      "postal_code": "06223-140",
+      "lat": -23.513405400000003,
+      "lng": -46.777381899999995,
+      "phone": "(11) 96349-5061",
+      "website_status": "no_website",
+      "rating": 4.6,
+      "reviews_count": 488,
+      "maps_url": "https://maps.google.com/?cid=2087359170078751746&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:56.853Z",
+      "updated_at": "2026-10-03T12:32:56.853Z",
+      "last_fetched_at": "2026-10-03T12:32:56.853Z"
+    },
+    {
+      "id": "ChIJo9xyOIShwJQR5O5QwU_beAE",
+      "place_id": "ChIJo9xyOIShwJQR5O5QwU_beAE",
+      "name": "kickboxing_Agudos",
+      "formatted_address": "R. Srg. Andiras, 203 - Centro, Agudos - SP, 17120-000, Brasil",
+      "city": "Agudos",
+      "state": "SP",
+      "postal_code": "17120-000",
+      "lat": -22.4749064,
+      "lng": -48.989586499999994,
+      "phone": "(14) 99736-5369",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 6,
+      "maps_url": "https://maps.google.com/?cid=106075726835412708&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "sports_club",
+        "association_or_organization",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:56.869Z",
+      "updated_at": "2026-10-03T12:32:56.869Z",
+      "last_fetched_at": "2026-10-03T12:32:56.869Z"
+    },
+    {
+      "id": "ChIJc8RFmTXFxZQRwCHdAJMcsCY",
+      "place_id": "ChIJc8RFmTXFxZQRwCHdAJMcsCY",
+      "name": "Academia Ró Queiroz",
+      "formatted_address": "R. Padre Guilherme White, 96 - Perímetro Urbano, Alambari - SP, 18220-000, Brasil",
+      "city": "Alambari",
+      "state": "SP",
+      "postal_code": "18220-000",
+      "lat": -23.5509629,
+      "lng": -47.8961744,
+      "phone": "(15) 99715-5869",
+      "website_status": "no_website",
+      "rating": 4.9,
+      "reviews_count": 16,
+      "maps_url": "https://maps.google.com/?cid=2787759587042599360&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:57.740Z",
+      "updated_at": "2026-10-03T12:32:57.740Z",
+      "last_fetched_at": "2026-10-03T12:32:57.740Z"
+    },
+    {
+      "id": "ChIJGRl2gR5_ngAR1OQ7enmtLjU",
+      "place_id": "ChIJGRl2gR5_ngAR1OQ7enmtLjU",
+      "name": "AMMON FITNESS",
+      "formatted_address": "R. João Ourique Ferreira, 57 - Alambari, Resende - RJ, 27534-120, Brasil",
+      "city": "Alambari",
+      "state": "SP",
+      "postal_code": "27534-120",
+      "lat": -22.4587045,
+      "lng": -44.4421129,
+      "phone": "(24) 97400-0220",
+      "website_status": "no_website",
+      "rating": 4.9,
+      "reviews_count": 12,
+      "maps_url": "https://maps.google.com/?cid=3832191070192264404&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:57.748Z",
+      "updated_at": "2026-10-03T12:32:57.748Z",
+      "last_fetched_at": "2026-10-03T12:32:57.748Z"
+    },
+    {
+      "id": "ChIJdXu_56rHxZQR8KqpOCFgZig",
+      "place_id": "ChIJdXu_56rHxZQR8KqpOCFgZig",
+      "name": "Academia tatetu",
+      "formatted_address": "R. Iguape - Tatetu, Alambari - SP, 18220-000, Brasil",
+      "city": "Alambari",
+      "state": "SP",
+      "postal_code": "18220-000",
+      "lat": -23.5656918,
+      "lng": -47.8820993,
+      "phone": "(15) 99177-5641",
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=2911119904942435056&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:57.755Z",
+      "updated_at": "2026-10-03T12:32:57.755Z",
+      "last_fetched_at": "2026-10-03T12:32:57.755Z"
+    },
+    {
+      "id": "ChIJeddTb4n5k5QRIfopEsi_8xo",
+      "place_id": "ChIJeddTb4n5k5QRIfopEsi_8xo",
+      "name": "Ginásio 18",
+      "formatted_address": "R. Trombeta, 82 - Centro, Alfredo Marcondes - SP, 19180-000, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "19180-000",
+      "lat": -21.9515325,
+      "lng": -51.4178316,
+      "phone": "(18) 99136-6015",
+      "website": "https://www.facebook.com/ginasio18/",
+      "website_status": "website_found",
+      "rating": 4.9,
+      "reviews_count": 24,
+      "maps_url": "https://maps.google.com/?cid=1942106730345921057&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "fitness_center",
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.638Z",
+      "updated_at": "2026-10-03T12:32:58.638Z",
+      "last_fetched_at": "2026-10-03T12:32:58.638Z"
+    },
+    {
+      "id": "ChIJ1Z4El0j5k5QRCRBtLGD2Yww",
+      "place_id": "ChIJ1Z4El0j5k5QRCRBtLGD2Yww",
+      "name": "BE HAPPY GYM",
+      "formatted_address": "R. das Américas, 496 - Centro, Alfredo Marcondes - SP, 19180-000, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "19180-000",
+      "lat": -21.9532715,
+      "lng": -51.4136824,
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=892828044072128521&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.645Z",
+      "updated_at": "2026-10-03T12:32:58.645Z",
+      "last_fetched_at": "2026-10-03T12:32:58.645Z"
+    },
+    {
+      "id": "ChIJe6g7cXb5k5QRBEg1lOoROiY",
+      "place_id": "ChIJe6g7cXb5k5QRBEg1lOoROiY",
+      "name": "Be Happy Gym unidade Marcondes",
+      "formatted_address": "R. Modesto Bonfim - Centro, Alfredo Marcondes - SP, 19180-000, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "19180-000",
+      "lat": -21.9537209,
+      "lng": -51.416225,
+      "phone": "(18) 99712-7858",
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=2754533821297018884&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "school",
+        "educational_institution",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.652Z",
+      "updated_at": "2026-10-03T12:32:58.652Z",
+      "last_fetched_at": "2026-10-03T12:32:58.652Z"
+    },
+    {
+      "id": "ChIJleoqHsv5k5QRGNyU9vvvOZ8",
+      "place_id": "ChIJleoqHsv5k5QRGNyU9vvvOZ8",
+      "name": "CT BLACK BOX",
+      "formatted_address": "R. Virgílio Noris, 134 - Jardim Santa Monica, Alfredo Marcondes - SP, 19180-000, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "19180-000",
+      "lat": -21.953437299999997,
+      "lng": -51.4174435,
+      "phone": "(18) 99740-7213",
+      "website": "https://www.instagram.com/ctblackbox?igsh=YmRyOTg1Ym9xZzJ6",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 1,
+      "maps_url": "https://maps.google.com/?cid=11473465391155829784&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.660Z",
+      "updated_at": "2026-10-03T12:32:58.660Z",
+      "last_fetched_at": "2026-10-03T12:32:58.660Z"
+    },
+    {
+      "id": "ChIJu8BEECv5k5QRdQ_YyhmEymg",
+      "place_id": "ChIJu8BEECv5k5QRdQ_YyhmEymg",
+      "name": "CT Jagunço BJJ",
+      "formatted_address": "Rua Santos Pereira da Rocha, 167 - Centro, Alfredo Marcondes - SP, 19180-000, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "19180-000",
+      "lat": -21.954512299999998,
+      "lng": -51.4127837,
+      "phone": "(18) 99700-1272",
+      "website": "https://www.instagram.com/du.arantes?igsh=OHJsdTh1ODloaGhs",
+      "website_status": "website_found",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=7550992971552264053&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "sports_school",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.667Z",
+      "updated_at": "2026-10-03T12:32:58.667Z",
+      "last_fetched_at": "2026-10-03T12:32:58.667Z"
+    },
+    {
+      "id": "ChIJn_qvabH5k5QRHWlPFzrIzh0",
+      "place_id": "ChIJn_qvabH5k5QRHWlPFzrIzh0",
+      "name": "Estúdio M Pilates",
+      "formatted_address": "R. José Araújo da Silva, 83 - Jardim Santa Monica, Alfredo Marcondes - SP, 19180-000, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "19180-000",
+      "lat": -21.9545811,
+      "lng": -51.418795499999995,
+      "phone": "(18) 99771-5822",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 1,
+      "maps_url": "https://maps.google.com/?cid=2147874224127043869&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.674Z",
+      "updated_at": "2026-10-03T12:32:58.674Z",
+      "last_fetched_at": "2026-10-03T12:32:58.674Z"
+    },
+    {
+      "id": "ChIJsezaTADlk5QRlj18YKLoVWk",
+      "place_id": "ChIJsezaTADlk5QRlj18YKLoVWk",
+      "name": "Be Happy Academia",
+      "formatted_address": "Pres. Bernardes, SP, 19300-000, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "19300-000",
+      "lat": -22.0100665,
+      "lng": -51.5544899,
+      "phone": "(18) 99688-3200",
+      "website_status": "no_website",
+      "rating": 4.6,
+      "reviews_count": 8,
+      "maps_url": "https://maps.google.com/?cid=7590228531103939990&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.681Z",
+      "updated_at": "2026-10-03T12:32:58.681Z",
+      "last_fetched_at": "2026-10-03T12:32:58.681Z"
+    },
+    {
+      "id": "ChIJY2Ta7xCynZMRkjAKJluSEvI",
+      "place_id": "ChIJY2Ta7xCynZMRkjAKJluSEvI",
+      "name": "Academia Marcondes",
+      "formatted_address": "Av. Miguel Sutil, 14046 - Cidade Alta, Cuiabá - MT, 78030-485, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "78030-485",
+      "lat": -15.610170499999999,
+      "lng": -56.128564499999996,
+      "phone": "(65) 98471-2512",
+      "website": "https://linktr.ee/academiamarcondes",
+      "website_status": "website_found",
+      "rating": 4.8,
+      "reviews_count": 282,
+      "maps_url": "https://maps.google.com/?cid=17443165226937233554&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.688Z",
+      "updated_at": "2026-10-03T12:32:58.688Z",
+      "last_fetched_at": "2026-10-03T12:32:58.688Z"
+    },
+    {
+      "id": "ChIJN1xHVwBZzpQRnzsbHmG7jVY",
+      "place_id": "ChIJN1xHVwBZzpQRnzsbHmG7jVY",
+      "name": "Academia Great - Funcional, Musculação e Treino Híbrido",
+      "formatted_address": "R. João Lourenço, 442 - Vila Nova Conceição, São Paulo - SP, 04508-030, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "04508-030",
+      "lat": -23.5901444,
+      "lng": -46.668585799999995,
+      "phone": "(11) 97410-0302",
+      "website": "http://www.academiagreat.com.br/",
+      "website_status": "website_found",
+      "rating": 4.9,
+      "reviews_count": 48,
+      "maps_url": "https://maps.google.com/?cid=6236847084769328031&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.699Z",
+      "updated_at": "2026-10-03T12:32:58.699Z",
+      "last_fetched_at": "2026-10-03T12:32:58.699Z"
+    },
+    {
+      "id": "ChIJ0ypUkTP3k5QRS488UtsG1aE",
+      "place_id": "ChIJ0ypUkTP3k5QRS488UtsG1aE",
+      "name": "Be Happy Gym",
+      "formatted_address": "Av. Juscelino Kubitschek de Oliveira Pres., 7979 - Parque Jabaquara, Pres. Prudente - SP, 19033-390, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "19033-390",
+      "lat": -22.0986618,
+      "lng": -51.3876607,
+      "phone": "(18) 99712-7858",
+      "website_status": "no_website",
+      "rating": 4.8,
+      "reviews_count": 33,
+      "maps_url": "https://maps.google.com/?cid=11661234349193072459&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "fitness_center",
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.706Z",
+      "updated_at": "2026-10-03T12:32:58.706Z",
+      "last_fetched_at": "2026-10-03T12:32:58.706Z"
+    },
+    {
+      "id": "ChIJGXLxQuDxzJQRKcyKSuh86YI",
+      "place_id": "ChIJGXLxQuDxzJQRKcyKSuh86YI",
+      "name": "XTRACK Academia Pindamonhangaba",
+      "formatted_address": "R. Luiza Marcondes de Oliveira, 1870 - Lot. Alfredo Abilio Flores, Pindamonhangaba - SP, 12420-360, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "12420-360",
+      "lat": -22.9419903,
+      "lng": -45.462319099999995,
+      "phone": "0800 590 0692",
+      "website": "https://xtrackacademias.com.br/pindamonhangaba/",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 3,
+      "maps_url": "https://maps.google.com/?cid=9433208231629081641&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.720Z",
+      "updated_at": "2026-10-03T12:32:58.720Z",
+      "last_fetched_at": "2026-10-03T12:32:58.720Z"
+    },
+    {
+      "id": "ChIJl5eE4lD5zpQRJQ4zYNAkQZY",
+      "place_id": "ChIJl5eE4lD5zpQRJQ4zYNAkQZY",
+      "name": "Academia Gaviões 24h - Marginal",
+      "formatted_address": "Av. Thomas Edison, 1340 - Barra Funda, São Paulo - SP, 01140-001, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "01140-001",
+      "lat": -23.5160917,
+      "lng": -46.671008099999995,
+      "phone": "(11) 94074-7584",
+      "website": "https://www.academiagavioes.com.br/",
+      "website_status": "website_found",
+      "rating": 4.4,
+      "reviews_count": 262,
+      "maps_url": "https://maps.google.com/?cid=10826975456561139237&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.727Z",
+      "updated_at": "2026-10-03T12:32:58.727Z",
+      "last_fetched_at": "2026-10-03T12:32:58.727Z"
+    },
+    {
+      "id": "ChIJHex8CU_5k5QR8dw5ZHjU9QY",
+      "place_id": "ChIJHex8CU_5k5QR8dw5ZHjU9QY",
+      "name": "Igreja Internacional da Graça de Deus",
+      "formatted_address": "R. Virgílio Noris, 148 - Jardim Santa Monica, Alfredo Marcondes - SP, 19180-000, Brasil",
+      "city": "Alfredo Marcondes",
+      "state": "SP",
+      "postal_code": "19180-000",
+      "lat": -21.953437299999997,
+      "lng": -51.4174435,
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=501540547064356081&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:58.734Z",
+      "updated_at": "2026-10-03T12:32:58.734Z",
+      "last_fetched_at": "2026-10-03T12:32:58.734Z"
+    },
+    {
+      "id": "ChIJdwvwZ2r1vJQRcxHsPwAu9jI",
+      "place_id": "ChIJdwvwZ2r1vJQRcxHsPwAu9jI",
+      "name": "Elba Fitness",
+      "formatted_address": "Av. Três - Centro, Altair - SP, 15430-000, Brasil",
+      "city": "Altair",
+      "state": "SP",
+      "postal_code": "15430-000",
+      "lat": -20.5240237,
+      "lng": -49.058085,
+      "phone": "(17) 99739-5907",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 1,
+      "maps_url": "https://maps.google.com/?cid=3672173124774531443&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:59.591Z",
+      "updated_at": "2026-10-03T12:32:59.591Z",
+      "last_fetched_at": "2026-10-03T12:32:59.591Z"
+    },
+    {
+      "id": "ChIJQaByhd30vJQRsb9OYGcjnI4",
+      "place_id": "ChIJQaByhd30vJQRsb9OYGcjnI4",
+      "name": "Champions Fitness",
+      "formatted_address": "Av. José Ronaldo Tomás da Silva, 229 - Altair, SP, 15430-000, Brasil",
+      "city": "Altair",
+      "state": "SP",
+      "postal_code": "15430-000",
+      "lat": -20.5256427,
+      "lng": -49.0609579,
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 1,
+      "maps_url": "https://maps.google.com/?cid=10276127376657006513&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:59.599Z",
+      "updated_at": "2026-10-03T12:32:59.599Z",
+      "last_fetched_at": "2026-10-03T12:32:59.599Z"
+    },
+    {
+      "id": "ChIJ_1oAOgBPzpQR33GmPSbIzv0",
+      "place_id": "ChIJ_1oAOgBPzpQR33GmPSbIzv0",
+      "name": "Panobianco Jequirituba",
+      "formatted_address": "R. Jequirituba, 1354 - Jardim Malia II, São Paulo - SP, 04822-000, Brasil",
+      "city": "Altair",
+      "state": "SP",
+      "postal_code": "04822-000",
+      "lat": -23.7330218,
+      "lng": -46.6887867,
+      "website_status": "no_website",
+      "rating": 4.3,
+      "reviews_count": 84,
+      "maps_url": "https://maps.google.com/?cid=18288775203366793695&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:59.606Z",
+      "updated_at": "2026-10-03T12:32:59.606Z",
+      "last_fetched_at": "2026-10-03T12:32:59.606Z"
+    },
+    {
+      "id": "ChIJKVW7srNpzpQRh6SVvkt_ztc",
+      "place_id": "ChIJKVW7srNpzpQRh6SVvkt_ztc",
+      "name": "Darks Gym Queirós Filho",
+      "formatted_address": "Av. Queirós Filho, 215 - Vila Industrial, Santo André - SP, 09110-260, Brasil",
+      "city": "Altair",
+      "state": "SP",
+      "postal_code": "09110-260",
+      "lat": -23.6661488,
+      "lng": -46.507988399999995,
+      "phone": "(11) 96442-4444",
+      "website": "http://darksgym.com.br/",
+      "website_status": "website_found",
+      "rating": 4.8,
+      "reviews_count": 271,
+      "maps_url": "https://maps.google.com/?cid=15550506526653654151&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:59.613Z",
+      "updated_at": "2026-10-03T12:32:59.613Z",
+      "last_fetched_at": "2026-10-03T12:32:59.613Z"
+    },
+    {
+      "id": "ChIJ4-4zHYpBzpQR-2slb74e4Gk",
+      "place_id": "ChIJ4-4zHYpBzpQR-2slb74e4Gk",
+      "name": "Attack Fit Academia 24h - Sbc Marechal",
+      "formatted_address": "R. Mal. Deodoro, 2633 - Centro, São Bernardo do Campo - SP, 09710-193, Brasil",
+      "city": "Altair",
+      "state": "SP",
+      "postal_code": "09710-193",
+      "lat": -23.721201,
+      "lng": -46.5492291,
+      "phone": "(11) 98918-9916",
+      "website": "https://attackfit.com.br/#matricula",
+      "website_status": "website_found",
+      "rating": 4.4,
+      "reviews_count": 91,
+      "maps_url": "https://maps.google.com/?cid=7629131572022963195&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_school",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:59.620Z",
+      "updated_at": "2026-10-03T12:32:59.620Z",
+      "last_fetched_at": "2026-10-03T12:32:59.620Z"
+    },
+    {
+      "id": "ChIJS1fDfHRFzpQR9NtbhUXBmTI",
+      "place_id": "ChIJS1fDfHRFzpQR9NtbhUXBmTI",
+      "name": "Attack Fit Academia 24h - Campanário",
+      "formatted_address": "Av. Brasília, 52 - Jardim Campanario, Diadema - SP, 09931-400, Brasil",
+      "city": "Altair",
+      "state": "SP",
+      "postal_code": "09931-400",
+      "lat": -23.6700831,
+      "lng": -46.6182556,
+      "phone": "(11) 99321-3423",
+      "website": "https://attackfit.com.br/#matricula",
+      "website_status": "website_found",
+      "rating": 3.6,
+      "reviews_count": 90,
+      "maps_url": "https://maps.google.com/?cid=3646157877667421172&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_school",
+        "sports_coaching",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:59.627Z",
+      "updated_at": "2026-10-03T12:32:59.627Z",
+      "last_fetched_at": "2026-10-03T12:32:59.627Z"
+    },
+    {
+      "id": "ChIJD9Ca_9z0vJQRxYbXcWzgB5k",
+      "place_id": "ChIJD9Ca_9z0vJQRxYbXcWzgB5k",
+      "name": "Academia Sansara Fitness",
+      "formatted_address": "R. Dois, 263 - Altair, SP, 15430-000, Brasil",
+      "city": "Altair",
+      "state": "SP",
+      "postal_code": "15430-000",
+      "lat": -20.5244942,
+      "lng": -49.058857599999996,
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=11027028969010988741&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:32:59.634Z",
+      "updated_at": "2026-10-03T12:32:59.634Z",
+      "last_fetched_at": "2026-10-03T12:32:59.634Z"
+    },
+    {
+      "id": "ChIJtYJHDn1nt5QR5OFGwWgMdGI",
+      "place_id": "ChIJtYJHDn1nt5QR5OFGwWgMdGI",
+      "name": "Hércules Gym",
+      "formatted_address": "R. Dr. Édson Dutra Barroso, 905 - Jardim Esplanada, Altinópolis - SP, 14350-000, Brasil",
+      "city": "Altinópolis",
+      "state": "SP",
+      "postal_code": "14350-000",
+      "lat": -21.0196957,
+      "lng": -47.3706624,
+      "phone": "(16) 99735-4568",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 85,
+      "maps_url": "https://maps.google.com/?cid=7094308957074153956&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "fitness_center",
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:00.486Z",
+      "updated_at": "2026-10-03T12:33:00.486Z",
+      "last_fetched_at": "2026-10-03T12:33:00.486Z"
+    },
+    {
+      "id": "ChIJMe9SVD_2zpQRX7ZRQT1rg7w",
+      "place_id": "ChIJMe9SVD_2zpQRX7ZRQT1rg7w",
+      "name": "AcquaGym Academia",
+      "formatted_address": "R. Altinópolis, 110 - Água Fria, São Paulo - SP, 02334-000, Brasil",
+      "city": "Altinópolis",
+      "state": "SP",
+      "postal_code": "02334-000",
+      "lat": -23.485243099999998,
+      "lng": -46.6172913,
+      "phone": "(11) 97612-5914",
+      "website": "http://www.acquagym.com.br/",
+      "website_status": "website_found",
+      "rating": 4.3,
+      "reviews_count": 434,
+      "maps_url": "https://maps.google.com/?cid=13583818811912599135&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:00.500Z",
+      "updated_at": "2026-10-03T12:33:00.500Z",
+      "last_fetched_at": "2026-10-03T12:33:00.500Z"
+    },
+    {
+      "id": "ChIJkZ8mEsxgt5QRYILFEDng-ac",
+      "place_id": "ChIJkZ8mEsxgt5QRYILFEDng-ac",
+      "name": "Academia Movimento",
+      "formatted_address": "R. José Bonifácio, 60, Altinópolis - SP, 14350-000, Brasil",
+      "city": "Altinópolis",
+      "state": "SP",
+      "postal_code": "14350-000",
+      "lat": -21.023229399999998,
+      "lng": -47.3750267,
+      "phone": "(16) 99155-5568",
+      "website": "https://www.facebook.com/Academia-Movimento-1634511539953937/",
+      "website_status": "website_found",
+      "rating": 4.9,
+      "reviews_count": 53,
+      "maps_url": "https://maps.google.com/?cid=12103952009234055776&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:00.508Z",
+      "updated_at": "2026-10-03T12:33:00.508Z",
+      "last_fetched_at": "2026-10-03T12:33:00.508Z"
+    },
+    {
+      "id": "ChIJgWki97n3zpQRawOCR0cNLFQ",
+      "place_id": "ChIJgWki97n3zpQRawOCR0cNLFQ",
+      "name": "Ultra Academia Santana",
+      "formatted_address": "R. Altinópolis, 147 - Santana, São Paulo - SP, 02334-000, Brasil",
+      "city": "Altinópolis",
+      "state": "SP",
+      "postal_code": "02334-000",
+      "lat": -23.4851606,
+      "lng": -46.6177085,
+      "phone": "(11) 94594-4731",
+      "website": "https://ultraacademia.com.br/index.php?AC=Produtos&a1=A8",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 1,
+      "maps_url": "https://maps.google.com/?cid=6065237397954757483&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:00.514Z",
+      "updated_at": "2026-10-03T12:33:00.514Z",
+      "last_fetched_at": "2026-10-03T12:33:00.514Z"
+    },
+    {
+      "id": "ChIJSw_zVqBht5QRmSqfar5C0bA",
+      "place_id": "ChIJSw_zVqBht5QRmSqfar5C0bA",
+      "name": "Centro de Treinamento Diego Prado",
+      "formatted_address": "R. Cap. José Esteves Jr, 970, Altinópolis - SP, 14350-000, Brasil",
+      "city": "Altinópolis",
+      "state": "SP",
+      "postal_code": "14350-000",
+      "lat": -21.0202627,
+      "lng": -47.369896499999996,
+      "phone": "(16) 99214-7661",
+      "website": "https://www.instagram.com/ct_diegoprado/",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 6,
+      "maps_url": "https://maps.google.com/?cid=12741038206407879321&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:00.522Z",
+      "updated_at": "2026-10-03T12:33:00.522Z",
+      "last_fetched_at": "2026-10-03T12:33:00.522Z"
+    },
+    {
+      "id": "ChIJPxPsm_VXzpQRh-CQNmRS9RA",
+      "place_id": "ChIJPxPsm_VXzpQRh-CQNmRS9RA",
+      "name": "Meta Fittt Academia",
+      "formatted_address": "R. Monte Alegre, n.1086 - Perdizes, São Paulo - SP, 05014-001, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "05014-001",
+      "lat": -23.5390859,
+      "lng": -46.6714385,
+      "phone": "(11) 98211-3398",
+      "website_status": "no_website",
+      "rating": 4.1,
+      "reviews_count": 84,
+      "maps_url": "https://maps.google.com/?cid=1221973464266629255&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.392Z",
+      "updated_at": "2026-10-03T12:33:01.392Z",
+      "last_fetched_at": "2026-10-03T12:33:01.392Z"
+    },
+    {
+      "id": "ChIJ2_LUdgJRuZQRXlCZBnLr0D0",
+      "place_id": "ChIJ2_LUdgJRuZQRXlCZBnLr0D0",
+      "name": "Academia Iron Body II",
+      "formatted_address": "R. Dr. Aurélio Caetano da Silva, 467 - Centro, Vista Alegre do Alto - SP, 15920-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "15920-000",
+      "lat": -21.173028799999997,
+      "lng": -48.6330819,
+      "phone": "(16) 99725-7598",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 13,
+      "maps_url": "https://maps.google.com/?cid=4454318906438930526&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.407Z",
+      "updated_at": "2026-10-03T12:33:01.407Z",
+      "last_fetched_at": "2026-10-03T12:33:01.407Z"
+    },
+    {
+      "id": "ChIJXSqDBAD9lZQRGYx7jaP8SiU",
+      "place_id": "ChIJXSqDBAD9lZQRGYx7jaP8SiU",
+      "name": "Academia",
+      "formatted_address": "Av. Dr. Acyr Alves Leite, 622 - Alto Alegre, SP, 16310-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "16310-000",
+      "lat": -21.5833278,
+      "lng": -50.1676492,
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=2687237907063475225&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.414Z",
+      "updated_at": "2026-10-03T12:33:01.414Z",
+      "last_fetched_at": "2026-10-03T12:33:01.414Z"
+    },
+    {
+      "id": "ChIJT7X4xTdRuZQRwEt_YXbmh9Q",
+      "place_id": "ChIJT7X4xTdRuZQRwEt_YXbmh9Q",
+      "name": "Mega Sports - Vista Alegre",
+      "formatted_address": "R. Herculano do Livramento - JD DOS IPES, Vista Alegre do Alto - SP, 15920-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "15920-000",
+      "lat": -21.1761451,
+      "lng": -48.6278322,
+      "phone": "(16) 99704-2168",
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=15314462454012922816&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.422Z",
+      "updated_at": "2026-10-03T12:33:01.422Z",
+      "last_fetched_at": "2026-10-03T12:33:01.422Z"
+    },
+    {
+      "id": "ChIJbQxvMaT8lZQR-VbqF-206pM",
+      "place_id": "ChIJbQxvMaT8lZQR-VbqF-206pM",
+      "name": "Treinamento Functional Fitness. Nutrition. Mindset",
+      "formatted_address": "R. Joaquim Pereira de Souza - Alto Alegre, SP, 16310-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "16310-000",
+      "lat": -21.5887974,
+      "lng": -50.1700173,
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=10658530398527182585&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.429Z",
+      "updated_at": "2026-10-03T12:33:01.429Z",
+      "last_fetched_at": "2026-10-03T12:33:01.429Z"
+    },
+    {
+      "id": "ChIJg9THMfZXzpQRConxBmuKdyI",
+      "place_id": "ChIJg9THMfZXzpQRConxBmuKdyI",
+      "name": "Full Time Academia",
+      "formatted_address": "R. Dr. Homem de Melo, 706 - Perdizes, São Paulo - SP, 05007-002, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "05007-002",
+      "lat": -23.5351599,
+      "lng": -46.6708897,
+      "phone": "(11) 97248-3637",
+      "website": "https://www.fulltimeacademia.com.br/",
+      "website_status": "website_found",
+      "rating": 4.5,
+      "reviews_count": 141,
+      "maps_url": "https://maps.google.com/?cid=2483605911800744202&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.437Z",
+      "updated_at": "2026-10-03T12:33:01.437Z",
+      "last_fetched_at": "2026-10-03T12:33:01.437Z"
+    },
+    {
+      "id": "ChIJ7VNOyO9bzpQR3sk28JR0ChY",
+      "place_id": "ChIJ7VNOyO9bzpQR3sk28JR0ChY",
+      "name": "Academia Training Up",
+      "formatted_address": "R. Agostinho Gomes, 1928 - Ipiranga, São Paulo - SP, 04206-001, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "04206-001",
+      "lat": -23.587412,
+      "lng": -46.604161999999995,
+      "phone": "(11) 96352-0145",
+      "website_status": "no_website",
+      "rating": 4.4,
+      "reviews_count": 545,
+      "maps_url": "https://maps.google.com/?cid=1588210001635625438&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.445Z",
+      "updated_at": "2026-10-03T12:33:01.445Z",
+      "last_fetched_at": "2026-10-03T12:33:01.445Z"
+    },
+    {
+      "id": "ChIJLSFikhxYzpQRducTKxelKNw",
+      "place_id": "ChIJLSFikhxYzpQRducTKxelKNw",
+      "name": "Viva Leve Saúde e Bem Estar",
+      "formatted_address": "R. Monte Alegre, 550 - Perdizes, São Paulo - SP, 05014-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "05014-000",
+      "lat": -23.5349424,
+      "lng": -46.668259600000006,
+      "phone": "(11) 96308-7924",
+      "website": "http://www.vivalevepilates.com.br/",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 232,
+      "maps_url": "https://maps.google.com/?cid=15864111206338127734&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "medical_clinic",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.459Z",
+      "updated_at": "2026-10-03T12:33:01.459Z",
+      "last_fetched_at": "2026-10-03T12:33:01.459Z"
+    },
+    {
+      "id": "ChIJp8uE-SRZzpQRZ4IjK6kmZ4A",
+      "place_id": "ChIJp8uE-SRZzpQRZ4IjK6kmZ4A",
+      "name": "Studio Mormaii Perdizes",
+      "formatted_address": "R. Monte Alegre, 635 - Perdizes, São Paulo - SP, 05014-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "05014-000",
+      "lat": -23.535913100000002,
+      "lng": -46.6685562,
+      "phone": "(11) 91204-2001",
+      "website": "https://studiomormaii.com.br/unidades/perdizes/",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 60,
+      "maps_url": "https://maps.google.com/?cid=9252406467471049319&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "fitness_center",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.466Z",
+      "updated_at": "2026-10-03T12:33:01.466Z",
+      "last_fetched_at": "2026-10-03T12:33:01.466Z"
+    },
+    {
+      "id": "ChIJ-5KuUYxbzpQR3fX77qVEQSs",
+      "place_id": "ChIJ-5KuUYxbzpQR3fX77qVEQSs",
+      "name": "Academia Smart Fit - Alto do Ipiranga",
+      "formatted_address": "R. Salvador Simões, 956 - Ipiranga, São Paulo - SP, 04276-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "04276-000",
+      "lat": -23.602173699999998,
+      "lng": -46.6141708,
+      "website": "https://www.smartfit.com.br/academias/alto-do-ipiranga?utm_source=google&utm_medium=maps&utm_campaign=fbiz-SBRSPCIPI05",
+      "website_status": "website_found",
+      "rating": 3.8,
+      "reviews_count": 374,
+      "maps_url": "https://maps.google.com/?cid=3116847896586876381&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "fitness_center",
+        "wellness_center",
+        "dance_hall",
+        "event_venue",
+        "sports_school",
+        "sports_club",
+        "sports_activity_location",
+        "association_or_organization",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.474Z",
+      "updated_at": "2026-10-03T12:33:01.474Z",
+      "last_fetched_at": "2026-10-03T12:33:01.474Z"
+    },
+    {
+      "id": "ChIJWVwO_qVezpQRn-YnCX-556c",
+      "place_id": "ChIJWVwO_qVezpQRn-YnCX-556c",
+      "name": "Academia All Day Training",
+      "formatted_address": "R. Teresina, 478 - Vila Bertioga, São Paulo - SP, 03185-902, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "03185-902",
+      "lat": -23.5638115,
+      "lng": -46.583425899999995,
+      "phone": "(11) 2373-2403",
+      "website": "https://www.instagram.com/allday.academia/",
+      "website_status": "website_found",
+      "rating": 4.5,
+      "reviews_count": 207,
+      "maps_url": "https://maps.google.com/?cid=12098842879219721887&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "fitness_center",
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.481Z",
+      "updated_at": "2026-10-03T12:33:01.481Z",
+      "last_fetched_at": "2026-10-03T12:33:01.481Z"
+    },
+    {
+      "id": "ChIJt8-GN0ZbzpQRfUDtwLu9mZk",
+      "place_id": "ChIJt8-GN0ZbzpQRfUDtwLu9mZk",
+      "name": "Up Academia",
+      "formatted_address": "R. Dr. Diogo de Faria, 1099 - Vila Clementino, São Paulo - SP, 04037-003, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "04037-003",
+      "lat": -23.5955235,
+      "lng": -46.6475272,
+      "phone": "(11) 2894-7654",
+      "website_status": "no_website",
+      "rating": 4.8,
+      "reviews_count": 146,
+      "maps_url": "https://maps.google.com/?cid=11068086173333012605&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.488Z",
+      "updated_at": "2026-10-03T12:33:01.488Z",
+      "last_fetched_at": "2026-10-03T12:33:01.488Z"
+    },
+    {
+      "id": "ChIJk49vBFFZzpQRlStyoOh1hYE",
+      "place_id": "ChIJk49vBFFZzpQRlStyoOh1hYE",
+      "name": "ACELERA FITNESS ACADEMIA",
+      "formatted_address": "Av. Brigadeiro Luís Antônio, 306 - Bela Vista, São Paulo - SP, 01318-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "01318-000",
+      "lat": -23.5530401,
+      "lng": -46.6382836,
+      "phone": "(11) 98328-7943",
+      "website": "https://www.facebook.com/acelerafitnessacademia/",
+      "website_status": "website_found",
+      "rating": 4.9,
+      "reviews_count": 148,
+      "maps_url": "https://maps.google.com/?cid=9332995444779920277&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.503Z",
+      "updated_at": "2026-10-03T12:33:01.503Z",
+      "last_fetched_at": "2026-10-03T12:33:01.503Z"
+    },
+    {
+      "id": "ChIJ_c8vHso1k40RQZ4avOG2SAY",
+      "place_id": "ChIJ_c8vHso1k40RQZ4avOG2SAY",
+      "name": "Espaço Fitness Academia",
+      "formatted_address": "Alto Alegre - RR, 69350-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "69350-000",
+      "lat": 2.9904644,
+      "lng": -61.311074299999994,
+      "phone": "(95) 98406-9544",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 1,
+      "maps_url": "https://maps.google.com/?cid=452812843190492737&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.511Z",
+      "updated_at": "2026-10-03T12:33:01.511Z",
+      "last_fetched_at": "2026-10-03T12:33:01.511Z"
+    },
+    {
+      "id": "ChIJMQyDWZ5TigcRrKTaXHWEQ04",
+      "place_id": "ChIJMQyDWZ5TigcRrKTaXHWEQ04",
+      "name": "Academia Master Fitness",
+      "formatted_address": "Av. Rodoviária, n°203 - Centro, Alto Alegre do Maranhão - MA, 65413-000, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "65413-000",
+      "lat": -4.2091448,
+      "lng": -44.452210099999995,
+      "phone": "(99) 98856-9347",
+      "website_status": "no_website",
+      "rating": 4.7,
+      "reviews_count": 28,
+      "maps_url": "https://maps.google.com/?cid=5639496798001865900&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.529Z",
+      "updated_at": "2026-10-03T12:33:01.529Z",
+      "last_fetched_at": "2026-10-03T12:33:01.529Z"
+    },
+    {
+      "id": "ChIJfe_E0Yr9lZQRAEa7WC6_gvU",
+      "place_id": "ChIJfe_E0Yr9lZQRAEa7WC6_gvU",
+      "name": "fisiofelix",
+      "formatted_address": "asia 2098 - Alto Alegre, SP, 13326-080, Brasil",
+      "city": "Alto Alegre",
+      "state": "SP",
+      "postal_code": "13326-080",
+      "lat": -21.5818552,
+      "lng": -50.1656985,
+      "phone": "(11) 94302-1450",
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=17690912492042798592&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:01.544Z",
+      "updated_at": "2026-10-03T12:33:01.544Z",
+      "last_fetched_at": "2026-10-03T12:33:01.544Z"
+    },
+    {
+      "id": "ChIJxUg4i3Vvz5QRQKYtEro7JGk",
+      "place_id": "ChIJxUg4i3Vvz5QRQKYtEro7JGk",
+      "name": "Academia Elite Fitness",
+      "formatted_address": "R. Pôrto Seguro, 145 - Paraíso, Alumínio - SP, 18125-000, Brasil",
+      "city": "Alumínio",
+      "state": "SP",
+      "postal_code": "18125-000",
+      "lat": -23.5241661,
+      "lng": -47.252649899999994,
+      "phone": "(11) 99775-5670",
+      "website_status": "no_website",
+      "rating": 4.7,
+      "reviews_count": 70,
+      "maps_url": "https://maps.google.com/?cid=7576246143498954304&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:02.403Z",
+      "updated_at": "2026-10-03T12:33:02.403Z",
+      "last_fetched_at": "2026-10-03T12:33:02.403Z"
+    },
+    {
+      "id": "ChIJF4kmcflvz5QRVrD62awL9C0",
+      "place_id": "ChIJF4kmcflvz5QRVrD62awL9C0",
+      "name": "Academia Lima Fit",
+      "formatted_address": "Av. Eng. Antonio De Castro Figueroa, 192 - Vila Santa Luzia, Alumínio - SP, 18126-209, Brasil",
+      "city": "Alumínio",
+      "state": "SP",
+      "postal_code": "18126-209",
+      "lat": -23.530272999999998,
+      "lng": -47.2536493,
+      "phone": "(11) 97176-3176",
+      "website": "https://www.instagram.com/academia_limafit/",
+      "website_status": "website_found",
+      "rating": 4.9,
+      "reviews_count": 18,
+      "maps_url": "https://maps.google.com/?cid=3311284463043522646&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:02.421Z",
+      "updated_at": "2026-10-03T12:33:02.421Z",
+      "last_fetched_at": "2026-10-03T12:33:02.421Z"
+    },
+    {
+      "id": "ChIJlXdAAxxvz5QRCpeemf1-lmk",
+      "place_id": "ChIJlXdAAxxvz5QRCpeemf1-lmk",
+      "name": "Bioequilíbrio Musculação e Saúde",
+      "formatted_address": "R. Floriano Viêira, 444 - Jardim Progresso, Alumínio - SP, 18125-000, Brasil",
+      "city": "Alumínio",
+      "state": "SP",
+      "postal_code": "18125-000",
+      "lat": -23.517674,
+      "lng": -47.257644,
+      "phone": "(11) 99506-9097",
+      "website_status": "no_website",
+      "rating": 4.7,
+      "reviews_count": 43,
+      "maps_url": "https://maps.google.com/?cid=7608408248158164746&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:02.428Z",
+      "updated_at": "2026-10-03T12:33:02.428Z",
+      "last_fetched_at": "2026-10-03T12:33:02.428Z"
+    },
+    {
+      "id": "ChIJgbreVHVvz5QRoLmqJQRGdcI",
+      "place_id": "ChIJgbreVHVvz5QRoLmqJQRGdcI",
+      "name": "Academia BioX Evolution",
+      "formatted_address": "R. Eduardo Grillo, 73 - Vila Pedagio, Alumínio - SP, 18126-080, Brasil",
+      "city": "Alumínio",
+      "state": "SP",
+      "postal_code": "18126-080",
+      "lat": -23.5188123,
+      "lng": -47.2572552,
+      "phone": "(11) 94541-5219",
+      "website_status": "no_website",
+      "rating": 0,
+      "reviews_count": 0,
+      "maps_url": "https://maps.google.com/?cid=14012182799258925472&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:02.444Z",
+      "updated_at": "2026-10-03T12:33:02.444Z",
+      "last_fetched_at": "2026-10-03T12:33:02.444Z"
+    },
+    {
+      "id": "ChIJpR_vZQ3xk5QRdSmFAVB5VUU",
+      "place_id": "ChIJpR_vZQ3xk5QRdSmFAVB5VUU",
+      "name": "Academia Pegasus - Unidade Álvares Machado",
+      "formatted_address": "R. Fernando Costa, 547 - Álvares Machado, SP, 19160-037, Brasil",
+      "city": "Álvares Florence",
+      "state": "SP",
+      "postal_code": "19160-037",
+      "lat": -22.0745887,
+      "lng": -51.475986,
+      "phone": "(18) 99600-0105",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 10,
+      "maps_url": "https://maps.google.com/?cid=4996032746167282037&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "gym",
+        "sports_activity_location",
+        "health",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:03.317Z",
+      "updated_at": "2026-10-03T12:33:03.317Z",
+      "last_fetched_at": "2026-10-03T12:33:03.317Z"
+    },
+    {
+      "id": "ChIJXSh5yvHJyJQRvhm-ZDBs7uQ",
+      "place_id": "ChIJXSh5yvHJyJQRvhm-ZDBs7uQ",
+      "name": "Dom Gel Barbearia Campinas",
+      "formatted_address": "R. Saldanha Marinho, 309 - Centro, Campinas - SP, 13013-080, Brasil",
+      "city": "Campinas",
+      "state": "SP",
+      "postal_code": "13013-080",
+      "lat": -22.907113199999998,
+      "lng": -47.0653894,
+      "phone": "(19) 97404-5115",
+      "website": "https://www.instagram.com/domgelbarbearia/",
+      "website_status": "website_found",
+      "rating": 5,
+      "reviews_count": 123,
+      "maps_url": "https://maps.google.com/?cid=16496241440209115582&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "barber_shop",
+        "hair_care",
+        "health",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:42.266Z",
+      "updated_at": "2026-10-03T12:33:42.266Z",
+      "last_fetched_at": "2026-10-03T12:33:42.266Z"
+    },
+    {
+      "id": "ChIJuX4-q7XIyJQRwrZhk494CzA",
+      "place_id": "ChIJuX4-q7XIyJQRwrZhk494CzA",
+      "name": "Leo top hair Barbearia",
+      "formatted_address": "R. Ferreira Penteado, 438 - Centro, Campinas - SP, 13010-040, Brasil",
+      "city": "Campinas",
+      "state": "SP",
+      "postal_code": "13010-040",
+      "lat": -22.9073061,
+      "lng": -47.060872499999995,
+      "phone": "(19) 97113-1748",
+      "website": "https://www.trinks.com/salao-e-barbearia-top-hair-",
+      "website_status": "website_found",
+      "rating": 4.8,
+      "reviews_count": 161,
+      "maps_url": "https://maps.google.com/?cid=3461993296612669122&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "barber_shop",
+        "hair_salon",
+        "hair_care",
+        "health",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:42.282Z",
+      "updated_at": "2026-10-03T12:33:42.282Z",
+      "last_fetched_at": "2026-10-03T12:33:42.282Z"
+    },
+    {
+      "id": "ChIJG7Zs8P-5yJQRwqL20A8aJ9k",
+      "place_id": "ChIJG7Zs8P-5yJQRwqL20A8aJ9k",
+      "name": "Barbearia Higor Amaral",
+      "formatted_address": "R. Luzitana, 1212 - Centro, Campinas - SP, 13015-122, Brasil",
+      "city": "Campinas",
+      "state": "SP",
+      "postal_code": "13015-122",
+      "lat": -22.9032306,
+      "lng": -47.058517599999995,
+      "phone": "(19) 99459-6296",
+      "website_status": "no_website",
+      "rating": 5,
+      "reviews_count": 52,
+      "maps_url": "https://maps.google.com/?cid=15647504085554733762&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "business_status": "OPERATIONAL",
+      "raw_types": [
+        "barber_shop",
+        "hair_care",
+        "health",
+        "service",
+        "point_of_interest",
+        "establishment"
+      ],
+      "created_at": "2026-10-03T12:33:42.306Z",
+      "updated_at": "2026-10-03T12:33:42.306Z",
+      "last_fetched_at": "2026-10-03T12:33:42.306Z"
     }
   ],
   "leads": [
+    {
+      "id": "lead_ChIJG7Zs8P-5yJQRwqL20A8aJ9k",
+      "user_id": "default_user_1",
+      "place_id": "ChIJG7Zs8P-5yJQRwqL20A8aJ9k",
+      "name": "Barbearia Higor Amaral",
+      "niche": "Barbearia",
+      "state": "SP",
+      "city": "Campinas",
+      "address": "R. Luzitana, 1212 - Centro, Campinas - SP, 13015-122, Brasil",
+      "phone": "(19) 99459-6296",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=15647504085554733762&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 5,
+      "reviews_count": 52,
+      "lead_score": 85,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:42.314Z",
+      "updated_at": "2026-10-03T12:33:42.314Z"
+    },
+    {
+      "id": "lead_ChIJuX4-q7XIyJQRwrZhk494CzA",
+      "user_id": "default_user_1",
+      "place_id": "ChIJuX4-q7XIyJQRwrZhk494CzA",
+      "name": "Leo top hair Barbearia",
+      "niche": "Barbearia",
+      "state": "SP",
+      "city": "Campinas",
+      "address": "R. Ferreira Penteado, 438 - Centro, Campinas - SP, 13010-040, Brasil",
+      "phone": "(19) 97113-1748",
+      "website": "https://www.trinks.com/salao-e-barbearia-top-hair-",
+      "website_status": "website_found",
+      "maps_url": "https://maps.google.com/?cid=3461993296612669122&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.8,
+      "reviews_count": 161,
+      "lead_score": 55,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:42.290Z",
+      "updated_at": "2026-10-03T12:33:42.290Z"
+    },
+    {
+      "id": "lead_ChIJXSh5yvHJyJQRvhm-ZDBs7uQ",
+      "user_id": "default_user_1",
+      "place_id": "ChIJXSh5yvHJyJQRvhm-ZDBs7uQ",
+      "name": "Dom Gel Barbearia Campinas",
+      "niche": "Barbearia",
+      "state": "SP",
+      "city": "Campinas",
+      "address": "R. Saldanha Marinho, 309 - Centro, Campinas - SP, 13013-080, Brasil",
+      "phone": "(19) 97404-5115",
+      "website": "https://www.instagram.com/domgelbarbearia/",
+      "website_status": "website_found",
+      "maps_url": "https://maps.google.com/?cid=16496241440209115582&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 5,
+      "reviews_count": 123,
+      "lead_score": 55,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:42.274Z",
+      "updated_at": "2026-10-03T12:33:42.274Z"
+    },
+    {
+      "id": "lead_ChIJlXdAAxxvz5QRCpeemf1-lmk",
+      "user_id": "default_user_1",
+      "place_id": "ChIJlXdAAxxvz5QRCpeemf1-lmk",
+      "name": "Bioequilíbrio Musculação e Saúde",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Alumínio",
+      "address": "R. Floriano Viêira, 444 - Jardim Progresso, Alumínio - SP, 18125-000, Brasil",
+      "phone": "(11) 99506-9097",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=7608408248158164746&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.7,
+      "reviews_count": 43,
+      "lead_score": 70,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:02.436Z",
+      "updated_at": "2026-10-03T12:33:02.436Z"
+    },
+    {
+      "id": "lead_ChIJxUg4i3Vvz5QRQKYtEro7JGk",
+      "user_id": "default_user_1",
+      "place_id": "ChIJxUg4i3Vvz5QRQKYtEro7JGk",
+      "name": "Academia Elite Fitness",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Alumínio",
+      "address": "R. Pôrto Seguro, 145 - Paraíso, Alumínio - SP, 18125-000, Brasil",
+      "phone": "(11) 99775-5670",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=7576246143498954304&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.7,
+      "reviews_count": 70,
+      "lead_score": 85,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:02.413Z",
+      "updated_at": "2026-10-03T12:33:02.413Z"
+    },
+    {
+      "id": "lead_ChIJMQyDWZ5TigcRrKTaXHWEQ04",
+      "user_id": "default_user_1",
+      "place_id": "ChIJMQyDWZ5TigcRrKTaXHWEQ04",
+      "name": "Academia Master Fitness",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Alto Alegre",
+      "address": "Av. Rodoviária, n°203 - Centro, Alto Alegre do Maranhão - MA, 65413-000, Brasil",
+      "phone": "(99) 98856-9347",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=5639496798001865900&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.7,
+      "reviews_count": 28,
+      "lead_score": 70,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:01.537Z",
+      "updated_at": "2026-10-03T12:33:01.537Z"
+    },
+    {
+      "id": "lead_ChIJt8-GN0ZbzpQRfUDtwLu9mZk",
+      "user_id": "default_user_1",
+      "place_id": "ChIJt8-GN0ZbzpQRfUDtwLu9mZk",
+      "name": "Up Academia",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Alto Alegre",
+      "address": "R. Dr. Diogo de Faria, 1099 - Vila Clementino, São Paulo - SP, 04037-003, Brasil",
+      "phone": "(11) 2894-7654",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=11068086173333012605&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.8,
+      "reviews_count": 146,
+      "lead_score": 85,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:01.496Z",
+      "updated_at": "2026-10-03T12:33:01.496Z"
+    },
+    {
+      "id": "lead_ChIJ7VNOyO9bzpQR3sk28JR0ChY",
+      "user_id": "default_user_1",
+      "place_id": "ChIJ7VNOyO9bzpQR3sk28JR0ChY",
+      "name": "Academia Training Up",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Alto Alegre",
+      "address": "R. Agostinho Gomes, 1928 - Ipiranga, São Paulo - SP, 04206-001, Brasil",
+      "phone": "(11) 96352-0145",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=1588210001635625438&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.4,
+      "reviews_count": 545,
+      "lead_score": 90,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:01.452Z",
+      "updated_at": "2026-10-03T12:33:01.452Z"
+    },
+    {
+      "id": "lead_ChIJPxPsm_VXzpQRh-CQNmRS9RA",
+      "user_id": "default_user_1",
+      "place_id": "ChIJPxPsm_VXzpQRh-CQNmRS9RA",
+      "name": "Meta Fittt Academia",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Alto Alegre",
+      "address": "R. Monte Alegre, n.1086 - Perdizes, São Paulo - SP, 05014-001, Brasil",
+      "phone": "(11) 98211-3398",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=1221973464266629255&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.1,
+      "reviews_count": 84,
+      "lead_score": 75,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:01.400Z",
+      "updated_at": "2026-10-03T12:33:01.400Z"
+    },
+    {
+      "id": "lead_ChIJtYJHDn1nt5QR5OFGwWgMdGI",
+      "user_id": "default_user_1",
+      "place_id": "ChIJtYJHDn1nt5QR5OFGwWgMdGI",
+      "name": "Hércules Gym",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Altinópolis",
+      "address": "R. Dr. Édson Dutra Barroso, 905 - Jardim Esplanada, Altinópolis - SP, 14350-000, Brasil",
+      "phone": "(16) 99735-4568",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=7094308957074153956&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 5,
+      "reviews_count": 85,
+      "lead_score": 85,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:33:00.493Z",
+      "updated_at": "2026-10-03T12:33:00.493Z"
+    },
+    {
+      "id": "lead_ChIJ0ypUkTP3k5QRS488UtsG1aE",
+      "user_id": "default_user_1",
+      "place_id": "ChIJ0ypUkTP3k5QRS488UtsG1aE",
+      "name": "Be Happy Gym",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Alfredo Marcondes",
+      "address": "Av. Juscelino Kubitschek de Oliveira Pres., 7979 - Parque Jabaquara, Pres. Prudente - SP, 19033-390, Brasil",
+      "phone": "(18) 99712-7858",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=11661234349193072459&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.8,
+      "reviews_count": 33,
+      "lead_score": 70,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:32:58.713Z",
+      "updated_at": "2026-10-03T12:32:58.713Z"
+    },
+    {
+      "id": "lead_ChIJU9jdz_r-zpQRArwyGxvK9xw",
+      "user_id": "default_user_1",
+      "place_id": "ChIJU9jdz_r-zpQRArwyGxvK9xw",
+      "name": "CPN Academia Osasco",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Agudos",
+      "address": "R. Agudos, 400 - Rochdale, Osasco - SP, 06223-140, Brasil",
+      "phone": "(11) 96349-5061",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=2087359170078751746&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.6,
+      "reviews_count": 488,
+      "lead_score": 100,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:32:56.860Z",
+      "updated_at": "2026-10-03T12:32:56.860Z"
+    },
+    {
+      "id": "lead_ChIJDYSC5IubyJQRbABUA5r0-Wk",
+      "user_id": "default_user_1",
+      "place_id": "ChIJDYSC5IubyJQRbABUA5r0-Wk",
+      "name": "Top Fit Academia Feminina",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Águas de Santa Bárbara",
+      "address": "Av. São Paulo, 811 - Cidade Nova 2, Santa Bárbara d'Oeste - SP, 13454-065, Brasil",
+      "phone": "(19) 99292-2303",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=7636403585501364332&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.6,
+      "reviews_count": 119,
+      "lead_score": 85,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:32:54.900Z",
+      "updated_at": "2026-10-03T12:32:54.900Z"
+    },
+    {
+      "id": "lead_ChIJu88nLG-cyJQRnGm5KLFxE20",
+      "user_id": "default_user_1",
+      "place_id": "ChIJu88nLG-cyJQRnGm5KLFxE20",
+      "name": "Academia H2O",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Águas de Santa Bárbara",
+      "address": "R. Belo Horizonte, 1573 - Lot. Planalto do Sol, Santa Bárbara d'Oeste - SP, 13454-330, Brasil",
+      "phone": "(19) 3457-4520",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=7859750780398037404&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.6,
+      "reviews_count": 189,
+      "lead_score": 85,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:32:54.879Z",
+      "updated_at": "2026-10-03T12:32:54.879Z"
+    },
+    {
+      "id": "lead_ChIJGV0J0PL1zpQRvreMhqm-ctA",
+      "user_id": "default_user_1",
+      "place_id": "ChIJGV0J0PL1zpQRvreMhqm-ctA",
+      "name": "Academia Up Fitness",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Adolfo",
+      "address": "Av. Edgar Ruzzant, 615 - Jardim Brasil (Zona Norte), São Paulo - SP, 02225-010, Brasil",
+      "phone": "(11) 2209-2529",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=15020277342550144958&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.5,
+      "reviews_count": 212,
+      "lead_score": 100,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:32:50.755Z",
+      "updated_at": "2026-10-03T12:32:50.755Z"
+    },
+    {
+      "id": "lead_ChIJd2Ukt_FpzpQR2f7k7_2TjlQ",
+      "user_id": "default_user_1",
+      "place_id": "ChIJd2Ukt_FpzpQR2f7k7_2TjlQ",
+      "name": "Academia SPARTA FIT",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Adolfo",
+      "address": "Av. Sapopemba, 15035 - Vila Ester, São Paulo - SP, 03989-010, Brasil",
+      "phone": "(11) 95201-1014",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=6092970064739630809&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.8,
+      "reviews_count": 36,
+      "lead_score": 70,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:32:50.717Z",
+      "updated_at": "2026-10-03T12:32:50.717Z"
+    },
+    {
+      "id": "lead_ChIJp5yjQRxlzpQRTwm4xPjVWDA",
+      "user_id": "default_user_1",
+      "place_id": "ChIJp5yjQRxlzpQRTwm4xPjVWDA",
+      "name": "FORCE STRONG",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Adolfo",
+      "address": "Rua Margaret Ober, 04 - Jardim Bonifacio, São Paulo - SP, 08260-230, Brasil",
+      "phone": "(11) 99553-3308",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=3483769576200079695&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.8,
+      "reviews_count": 42,
+      "lead_score": 70,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:32:50.682Z",
+      "updated_at": "2026-10-03T12:32:50.682Z"
+    },
+    {
+      "id": "lead_ChIJh30OkifBzpQRWHeW0s90vvg",
+      "user_id": "default_user_1",
+      "place_id": "ChIJh30OkifBzpQRWHeW0s90vvg",
+      "name": "Centro de Treinamento Iron Union",
+      "niche": "Academia",
+      "state": "SP",
+      "city": "Adolfo",
+      "address": "R. Adolfo André, 529 - Centro, Atibaia - SP, 12940-260, Brasil",
+      "phone": "(11) 96190-8580",
+      "website_status": "no_website",
+      "maps_url": "https://maps.google.com/?cid=17923892002921281368&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "rating": 4.8,
+      "reviews_count": 51,
+      "lead_score": 85,
+      "pipeline_status": "NOVO",
+      "created_at": "2026-10-03T12:32:50.661Z",
+      "updated_at": "2026-10-03T12:32:50.661Z"
+    },
     {
       "id": "lead_ChIJX2oVkiWhwJQRy8I1U-cc8TA",
       "user_id": "default_user_1",
@@ -18871,12 +21330,37 @@
   "lead_notes": [],
   "search_jobs": [
     {
+      "id": "job_1791030821541_0iisbn",
+      "user_id": "default_user_1",
+      "state": "SP",
+      "city": "Campinas",
+      "niche": "Barbearia",
+      "status": "completed",
+      "filters": {
+        "onlyWithoutWebsite": false,
+        "onlyWithPhone": false,
+        "minRating": 0,
+        "minReviews": 0
+      },
+      "total_cities": 1,
+      "processed_cities": 1,
+      "total_search_areas": 1,
+      "processed_search_areas": 1,
+      "places_found": 3,
+      "places_without_website": 3,
+      "leads_created": 3,
+      "created_at": "2026-10-03T12:33:41.541Z",
+      "updated_at": "2026-10-03T12:33:42.947Z",
+      "started_at": "2026-10-03T12:33:41.566Z",
+      "finished_at": "2026-10-03T12:33:42.947Z"
+    },
+    {
       "id": "job_1790554246494_m98k5",
       "user_id": "default_user_1",
       "state": "SP",
       "city": "all",
       "niche": "Academia",
-      "status": "running",
+      "status": "completed",
       "filters": {
         "onlyWithoutWebsite": true,
         "onlyWithPhone": true,
@@ -18884,15 +21368,16 @@
         "minReviews": 20
       },
       "total_cities": 15,
-      "processed_cities": 0,
+      "processed_cities": 14,
       "total_search_areas": 15,
-      "processed_search_areas": 0,
-      "places_found": 0,
-      "places_without_website": 0,
-      "leads_created": 0,
+      "processed_search_areas": 14,
+      "places_found": 74,
+      "places_without_website": 98,
+      "leads_created": 15,
       "created_at": "2026-09-28T00:10:46.494Z",
-      "updated_at": "2026-09-28T00:10:46.517Z",
-      "started_at": "2026-09-28T00:10:46.517Z"
+      "updated_at": "2026-10-03T12:33:03.940Z",
+      "started_at": "2026-09-28T00:10:46.517Z",
+      "finished_at": "2026-10-03T12:33:03.940Z"
     },
     {
       "id": "job_1790550605077_2uxcii",
@@ -20104,9 +22589,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 20,
+      "processed_at": "2026-10-03T12:32:50.770Z"
     },
     {
       "id": "area_1790554246494_ivh5q",
@@ -20116,9 +22602,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 18,
+      "processed_at": "2026-10-03T12:32:51.772Z"
     },
     {
       "id": "area_1790554246494_zk1g1k",
@@ -20128,9 +22615,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 7,
+      "processed_at": "2026-10-03T12:32:52.722Z"
     },
     {
       "id": "area_1790554246494_0f764a",
@@ -20140,9 +22628,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 20,
+      "processed_at": "2026-10-03T12:32:53.831Z"
     },
     {
       "id": "area_1790554246494_atln787",
@@ -20152,9 +22641,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 20,
+      "processed_at": "2026-10-03T12:32:54.909Z"
     },
     {
       "id": "area_1790554246494_2924sr",
@@ -20164,9 +22654,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 2,
+      "processed_at": "2026-10-03T12:32:55.855Z"
     },
     {
       "id": "area_1790554246494_ckkipg",
@@ -20176,9 +22667,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 20,
+      "processed_at": "2026-10-03T12:32:56.876Z"
     },
     {
       "id": "area_1790554246494_uek67",
@@ -20188,9 +22680,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 3,
+      "processed_at": "2026-10-03T12:32:57.763Z"
     },
     {
       "id": "area_1790554246494_adqwo",
@@ -20200,9 +22693,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 13,
+      "processed_at": "2026-10-03T12:32:58.741Z"
     },
     {
       "id": "area_1790554246494_hg35f",
@@ -20212,9 +22706,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 7,
+      "processed_at": "2026-10-03T12:32:59.641Z"
     },
     {
       "id": "area_1790554246494_0vsez",
@@ -20224,9 +22719,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 5,
+      "processed_at": "2026-10-03T12:33:00.529Z"
     },
     {
       "id": "area_1790554246494_6z65f",
@@ -20236,9 +22732,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 16,
+      "processed_at": "2026-10-03T12:33:01.551Z"
     },
     {
       "id": "area_1790554246494_ajaw1o",
@@ -20248,9 +22745,10 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 4,
+      "processed_at": "2026-10-03T12:33:02.453Z"
     },
     {
       "id": "area_1790554246494_7hh2ak",
@@ -20260,12 +22758,176 @@
       "lat": -23.5505,
       "lng": -46.6333,
       "radius": 8000,
-      "status": "pending",
-      "attempts": 0,
-      "places_found": 0
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 1,
+      "processed_at": "2026-10-03T12:33:03.324Z"
+    },
+    {
+      "id": "area_1791030821541_tf42ls",
+      "search_job_id": "job_1791030821541_0iisbn",
+      "city": "Campinas",
+      "state": "SP",
+      "lat": -22.9056,
+      "lng": -47.0608,
+      "radius": 8000,
+      "status": "completed",
+      "attempts": 1,
+      "places_found": 20,
+      "processed_at": "2026-10-03T12:33:42.331Z"
     }
   ],
   "search_queries": [
+    {
+      "id": "query_1791030822112_vqnpao",
+      "search_job_id": "job_1791030821541_0iisbn",
+      "search_area_id": "area_1791030821541_tf42ls",
+      "query": "Barbearia em Campinas SP",
+      "status": "success",
+      "results_count": 20,
+      "duration_ms": 531,
+      "created_at": "2026-10-03T12:33:42.112Z"
+    },
+    {
+      "id": "query_1791030783308_d9kjaf",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_7hh2ak",
+      "query": "Academia em Álvares Florence SP",
+      "status": "success",
+      "results_count": 1,
+      "duration_ms": 223,
+      "created_at": "2026-10-03T12:33:03.308Z"
+    },
+    {
+      "id": "query_1791030782395_3ddx4",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_ajaw1o",
+      "query": "Academia em Alumínio SP",
+      "status": "success",
+      "results_count": 4,
+      "duration_ms": 219,
+      "created_at": "2026-10-03T12:33:02.395Z"
+    },
+    {
+      "id": "query_1791030781385_9qwotd",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_6z65f",
+      "query": "Academia em Alto Alegre SP",
+      "status": "success",
+      "results_count": 16,
+      "duration_ms": 232,
+      "created_at": "2026-10-03T12:33:01.385Z"
+    },
+    {
+      "id": "query_1791030780478_n04hhx",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_0vsez",
+      "query": "Academia em Altinópolis SP",
+      "status": "success",
+      "results_count": 5,
+      "duration_ms": 213,
+      "created_at": "2026-10-03T12:33:00.478Z"
+    },
+    {
+      "id": "query_1791030779582_4v6k2u",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_hg35f",
+      "query": "Academia em Altair SP",
+      "status": "success",
+      "results_count": 7,
+      "duration_ms": 217,
+      "created_at": "2026-10-03T12:32:59.582Z"
+    },
+    {
+      "id": "query_1791030778631_vid3jj",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_adqwo",
+      "query": "Academia em Alfredo Marcondes SP",
+      "status": "success",
+      "results_count": 13,
+      "duration_ms": 245,
+      "created_at": "2026-10-03T12:32:58.631Z"
+    },
+    {
+      "id": "query_1791030777733_6u7qk",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_uek67",
+      "query": "Academia em Alambari SP",
+      "status": "success",
+      "results_count": 3,
+      "duration_ms": 235,
+      "created_at": "2026-10-03T12:32:57.733Z"
+    },
+    {
+      "id": "query_1791030776716_6n1hg9",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_ckkipg",
+      "query": "Academia em Agudos SP",
+      "status": "success",
+      "results_count": 20,
+      "duration_ms": 240,
+      "created_at": "2026-10-03T12:32:56.716Z"
+    },
+    {
+      "id": "query_1791030775833_rojz24",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_2924sr",
+      "query": "Academia em Águas de São Pedro SP",
+      "status": "success",
+      "results_count": 2,
+      "duration_ms": 301,
+      "created_at": "2026-10-03T12:32:55.833Z"
+    },
+    {
+      "id": "query_1791030774743_ppbddd",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_atln787",
+      "query": "Academia em Águas de Santa Bárbara SP",
+      "status": "success",
+      "results_count": 20,
+      "duration_ms": 291,
+      "created_at": "2026-10-03T12:32:54.743Z"
+    },
+    {
+      "id": "query_1791030773684_2bhc6j",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_0f764a",
+      "query": "Academia em Águas de Lindóia SP",
+      "status": "success",
+      "results_count": 20,
+      "duration_ms": 341,
+      "created_at": "2026-10-03T12:32:53.684Z"
+    },
+    {
+      "id": "query_1791030772666_mdqyzl",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_zk1g1k",
+      "query": "Academia em Águas da Prata SP",
+      "status": "success",
+      "results_count": 7,
+      "duration_ms": 271,
+      "created_at": "2026-10-03T12:32:52.666Z"
+    },
+    {
+      "id": "query_1791030771638_zqag0b",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_ivh5q",
+      "query": "Academia em Aguaí SP",
+      "status": "success",
+      "results_count": 18,
+      "duration_ms": 244,
+      "created_at": "2026-10-03T12:32:51.638Z"
+    },
+    {
+      "id": "query_1791030770555_jpaazl",
+      "search_job_id": "job_1790554246494_m98k5",
+      "search_area_id": "area_1790554246494_64r48",
+      "query": "Academia em Adolfo SP",
+      "status": "success",
+      "results_count": 20,
+      "duration_ms": 574,
+      "created_at": "2026-10-03T12:32:50.555Z"
+    },
     {
       "id": "query_1790548901915_haddf7",
       "search_job_id": "job_1790548894353_xhdt15",

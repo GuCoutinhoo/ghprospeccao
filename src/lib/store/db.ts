@@ -20,6 +20,15 @@ import {
   syncSettingsToFirestore,
 } from '../firebase/sync';
 
+function normalizeStr(str?: string | null): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 interface DbSchema {
   places: Place[];
   leads: Lead[];
@@ -145,26 +154,62 @@ class Database {
     try {
       const remote = await fetchAllFromFirestore();
       if (remote) {
-        if (remote.leads && remote.leads.length > 0) {
-          this.data.leads = remote.leads;
-        } else if (this.data.leads && this.data.leads.length > 0) {
-          // Se nuvem estiver vazia, sincroniza dados locais para o Firestore
-          for (const l of this.data.leads) {
+        // MERGE LEADS de forma segura (sem sobrescrever leads recém-criados localmente)
+        const leadMap = new Map<string, Lead>();
+        for (const l of remote.leads || []) {
+          if (l && l.id) leadMap.set(l.id, l);
+        }
+        for (const l of this.data.leads || []) {
+          if (!l || !l.id) continue;
+          const existing = leadMap.get(l.id);
+          if (!existing) {
+            leadMap.set(l.id, l);
             syncLeadToFirestore(l).catch(() => {});
+          } else {
+            const localTime = new Date(l.updated_at || l.created_at || 0).getTime();
+            const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
+            if (localTime >= remoteTime) {
+              leadMap.set(l.id, l);
+            }
           }
         }
+        this.data.leads = Array.from(leadMap.values());
 
-        if (remote.places && remote.places.length > 0) {
-          this.data.places = remote.places;
-        } else if (this.data.places && this.data.places.length > 0) {
-          for (const p of this.data.places) {
+        // MERGE PLACES
+        const placeMap = new Map<string, Place>();
+        for (const p of remote.places || []) {
+          if (p && p.id) placeMap.set(p.id, p);
+        }
+        for (const p of this.data.places || []) {
+          if (!p || !p.id) continue;
+          if (!placeMap.has(p.id)) {
+            placeMap.set(p.id, p);
             syncPlaceToFirestore(p).catch(() => {});
           }
         }
+        this.data.places = Array.from(placeMap.values());
 
-        if (remote.jobs && remote.jobs.length > 0) {
-          this.data.search_jobs = remote.jobs;
+        // MERGE JOBS
+        const jobMap = new Map<string, SearchJob>();
+        for (const j of remote.jobs || []) {
+          if (j && j.id) jobMap.set(j.id, j);
         }
+        for (const j of this.data.search_jobs || []) {
+          if (!j || !j.id) continue;
+          const existing = jobMap.get(j.id);
+          if (!existing) {
+            jobMap.set(j.id, j);
+            syncJobToFirestore(j).catch(() => {});
+          } else {
+            const localTime = new Date(j.updated_at || j.created_at || 0).getTime();
+            const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
+            if (localTime >= remoteTime) {
+              jobMap.set(j.id, j);
+            }
+          }
+        }
+        this.data.search_jobs = Array.from(jobMap.values());
+
         if (remote.settings) {
           this.data.settings = { ...this.data.settings, ...remote.settings };
         }
@@ -175,7 +220,7 @@ class Database {
         placesCount: this.data.places.length,
       };
     } catch (err) {
-      console.warn('[DB] Falha na sincronização inicial do Firestore:', err);
+      console.warn('[DB] Falha na sincronização do Firestore:', err);
       return {
         leadsCount: this.data.leads.length,
         placesCount: this.data.places.length,
@@ -231,12 +276,23 @@ class Database {
 
   // --- LEADS ---
   public createLead(lead: Lead): { lead: Lead; created: boolean } {
-    // Deduplicação comercial: único por user_id + place_id + niche
-    const exists = this.data.leads.some(
-      (l) => l.user_id === lead.user_id && l.place_id === lead.place_id && l.niche.toLowerCase() === lead.niche.toLowerCase()
+    // Deduplicação comercial: único por place_id + niche normalizado
+    const normNiche = normalizeStr(lead.niche);
+    const existingIndex = this.data.leads.findIndex(
+      (l) => l.place_id === lead.place_id && normalizeStr(l.niche) === normNiche
     );
-    if (exists) {
-      return { lead, created: false };
+    if (existingIndex >= 0) {
+      const prev = this.data.leads[existingIndex];
+      this.data.leads[existingIndex] = {
+        ...prev,
+        ...lead,
+        pipeline_status: prev.pipeline_status || lead.pipeline_status,
+        is_favorite: prev.is_favorite ?? lead.is_favorite,
+        updated_at: new Date().toISOString(),
+      };
+      this.save();
+      syncLeadToFirestore(this.data.leads[existingIndex]).catch(() => {});
+      return { lead: this.data.leads[existingIndex], created: false };
     }
 
     this.data.leads.unshift(lead);
@@ -280,11 +336,16 @@ class Database {
     }
 
     if (params.city && params.city !== 'ALL') {
-      filtered = filtered.filter((l) => l.city.toLowerCase() === params.city!.toLowerCase());
+      const targetCity = normalizeStr(params.city);
+      filtered = filtered.filter((l) => normalizeStr(l.city) === targetCity);
     }
 
     if (params.niche && params.niche !== 'ALL') {
-      filtered = filtered.filter((l) => l.niche.toLowerCase().includes(params.niche!.toLowerCase()));
+      const targetNiche = normalizeStr(params.niche);
+      filtered = filtered.filter((l) => {
+        const ln = normalizeStr(l.niche);
+        return ln.includes(targetNiche) || targetNiche.includes(ln);
+      });
     }
 
     if (params.status && params.status !== 'ALL') {
@@ -316,10 +377,10 @@ class Database {
     }
 
     if (params.search && params.search.trim() !== '') {
-      const q = params.search.toLowerCase().trim();
+      const q = normalizeStr(params.search);
       filtered = filtered.filter((l) =>
-        l.name.toLowerCase().includes(q) ||
-        l.city.toLowerCase().includes(q) ||
+        normalizeStr(l.name).includes(q) ||
+        normalizeStr(l.city).includes(q) ||
         (l.phone && l.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '')))
       );
     }
@@ -345,17 +406,21 @@ class Database {
   }
 
   public getNichesSummary(params?: { onlyFavorites?: boolean }): { niche: string; count: number }[] {
-    const counts: Record<string, number> = {};
+    const counts: Record<string, { display: string; count: number }> = {};
     let leads = this.data.leads;
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
     }
     for (const lead of leads) {
-      const n = lead.niche || 'Geral';
-      counts[n] = (counts[n] || 0) + 1;
+      const n = (lead.niche || 'Geral').trim();
+      const norm = normalizeStr(n);
+      if (!counts[norm]) {
+        counts[norm] = { display: n, count: 0 };
+      }
+      counts[norm].count++;
     }
-    return Object.entries(counts)
-      .map(([niche, count]) => ({ niche, count }))
+    return Object.values(counts)
+      .map(({ display, count }) => ({ niche: display, count }))
       .sort((a, b) => b.count - a.count);
   }
 
@@ -366,7 +431,11 @@ class Database {
       leads = leads.filter((l) => l.is_favorite === true);
     }
     if (params?.niche && params.niche !== 'ALL') {
-      leads = leads.filter((l) => (l.niche || '').toLowerCase().includes(params.niche!.toLowerCase()));
+      const targetNiche = normalizeStr(params.niche);
+      leads = leads.filter((l) => {
+        const ln = normalizeStr(l.niche);
+        return ln.includes(targetNiche) || targetNiche.includes(ln);
+      });
     }
     for (const lead of leads) {
       const s = (lead.state || '').toUpperCase().trim();
