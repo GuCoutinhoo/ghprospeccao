@@ -37,6 +37,17 @@ function normalizeStr(str?: string | null): string {
     .trim();
 }
 
+function slugifyFreelancerName(name?: string | null): string {
+  if (!name) return 'freelancer';
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'freelancer';
+}
+
 function generateAccessCode(): string {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   let result = '';
@@ -110,30 +121,10 @@ class Database {
         if (!this.data.freelancers) this.data.freelancers = [];
         if (!this.data.activities) this.data.activities = [];
 
-        // Modo Produção Real: remove freelancers de teste e zera simulações
-        this.data.freelancers = [];
-        this.data.activities = [];
+        // Filtra apenas freelancers inválidos/sem id se houver
+        this.data.freelancers = (this.data.freelancers || []).filter((f) => f && f.id && f.name);
+        this.data.activities = (this.data.activities || []).filter((a) => a && a.id);
 
-        for (const l of this.data.leads || []) {
-          // Remove campos simulados para refletir dados reais de produção
-          if (!l.pipeline_status || l.pipeline_status !== 'NOVO') {
-            l.pipeline_status = 'NOVO';
-          }
-          delete l.contacted_at;
-          delete l.response_at;
-          delete l.follow_up_at;
-          delete l.negotiation_at;
-          delete l.sale_date;
-          delete l.sale_value;
-          delete l.contact_attempts_count;
-          delete l.freelancer_id;
-          delete l.freelancer_name;
-        }
-        for (const j of this.data.search_jobs || []) {
-          delete j.freelancer_id;
-          delete j.freelancer_name;
-        }
-        this.save();
         this.initialized = true;
         return;
       }
@@ -785,27 +776,70 @@ class Database {
   }
 
   public getFreelancerByAccessCode(code: string): Freelancer | undefined {
-    const clean = code.trim().toUpperCase();
-    return (this.data.freelancers || []).find((f) => f.access_code.toUpperCase() === clean);
+    if (!code) return undefined;
+    const cleanRaw = code
+      .trim()
+      .replace(/^https?:\/\/[^\/]+\/f\//i, '')
+      .replace(/^\/f\//i, '')
+      .replace(/\/+$/, '');
+
+    const cleanLower = cleanRaw.toLowerCase();
+    const cleanSlug = slugifyFreelancerName(cleanRaw);
+    const cleanNorm = normalizeStr(cleanRaw).replace(/[^a-z0-9]/g, '');
+
+    return (this.data.freelancers || []).find((f) => {
+      const fCode = f.access_code || '';
+      const fCodeLower = fCode.toLowerCase().trim();
+      const fCodeSlug = slugifyFreelancerName(fCode);
+      const fNameLower = (f.name || '').toLowerCase().trim();
+      const fNameSlug = slugifyFreelancerName(f.name || '');
+      const fFirstNameSlug = slugifyFreelancerName((f.name || '').split(' ')[0]);
+      const fNameNorm = normalizeStr(f.name || '').replace(/[^a-z0-9]/g, '');
+
+      return (
+        fCodeLower === cleanLower ||
+        fCodeSlug === cleanSlug ||
+        fNameSlug === cleanSlug ||
+        fFirstNameSlug === cleanSlug ||
+        fNameLower === cleanLower ||
+        fNameNorm === cleanNorm ||
+        fCode.toUpperCase() === cleanRaw.toUpperCase() ||
+        (f.email && f.email.toLowerCase() === cleanLower)
+      );
+    });
   }
 
   public createFreelancer(data: {
     name: string;
     email: string;
+    access_code?: string;
     notes?: string;
     pin?: string;
     status?: FreelancerStatus;
   }): Freelancer {
-    let code = generateAccessCode();
-    while ((this.data.freelancers || []).some((f) => f.access_code === code)) {
-      code = generateAccessCode();
+    const rawName = data.name.trim();
+
+    // 1. Gera código de acesso amigável com base no nome cadastrado
+    let preferredCode = data.access_code?.trim()
+      ? slugifyFreelancerName(data.access_code)
+      : slugifyFreelancerName(rawName.split(' ')[0]) || slugifyFreelancerName(rawName);
+
+    if (!preferredCode) {
+      preferredCode = slugifyFreelancerName(rawName) || 'freelancer';
+    }
+
+    let code = preferredCode;
+    let counter = 2;
+    while ((this.data.freelancers || []).some((f) => f.access_code.toLowerCase() === code.toLowerCase())) {
+      code = `${preferredCode}-${counter}`;
+      counter++;
     }
 
     const id = `free_${code}`;
     const now = new Date().toISOString();
     const freelancer: Freelancer = {
       id,
-      name: data.name.trim(),
+      name: rawName,
       email: data.email.trim().toLowerCase(),
       access_code: code,
       status: data.status || 'active',
@@ -824,7 +858,7 @@ class Database {
       freelancer_id: freelancer.id,
       freelancer_name: freelancer.name,
       action_type: 'freelancer_created',
-      description: `Administrador cadastrou o freelancer "${freelancer.name}" (Link: /f/${freelancer.access_code})`,
+      description: `Administrador cadastrou o freelancer "${freelancer.name}" com link de acesso: /f/${freelancer.access_code}`,
       metadata: { freelancer_id: freelancer.id, access_code: freelancer.access_code },
     });
 
@@ -851,9 +885,12 @@ class Database {
     const f = this.getFreelancerById(id);
     if (!f) return undefined;
 
-    let newCode = generateAccessCode();
-    while ((this.data.freelancers || []).some((x) => x.access_code === newCode)) {
-      newCode = generateAccessCode();
+    const baseCode = slugifyFreelancerName(f.name.split(' ')[0]) || slugifyFreelancerName(f.name);
+    let newCode = baseCode;
+    let counter = 2;
+    while ((this.data.freelancers || []).some((x) => x.id !== f.id && x.access_code.toLowerCase() === newCode.toLowerCase())) {
+      newCode = `${baseCode}-${counter}`;
+      counter++;
     }
 
     f.access_code = newCode;
@@ -865,7 +902,7 @@ class Database {
       freelancer_id: f.id,
       freelancer_name: f.name,
       action_type: 'access_link_regenerated',
-      description: `Link de acesso de ${f.name} foi regenerado pelo administrador (Novo código: ${newCode})`,
+      description: `Link de acesso de ${f.name} foi atualizado para /f/${newCode}`,
       metadata: { new_code: newCode },
     });
 

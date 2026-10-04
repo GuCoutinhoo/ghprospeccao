@@ -40501,6 +40501,75 @@
       "reviewsOver50": 15
     }
   },
-  "freelancers": [],
-  "activities": []
+  "freelancers": [
+    {
+      "id": "free_natalia",
+      "name": "Natalia Ferreira",
+      "email": "natalia@teste.com",
+      "access_code": "natalia",
+      "status": "active",
+      "created_at": "2026-10-04T17:12:23.520Z",
+      "updated_at": "2026-10-04T17:12:23.956Z",
+      "last_access_at": "2026-10-04T17:12:23.956Z",
+      "last_activity_at": "2026-10-04T17:12:23.956Z"
+    }
+  ],
+  "activities": [
+    {
+      "freelancer_id": "free_natalia",
+      "freelancer_name": "Natalia Ferreira",
+      "action_type": "login",
+      "description": "Natalia Ferreira acessou seu workspace individual via link exclusivo.",
+      "metadata": {
+        "access_code": "natalia"
+      },
+      "id": "act_1791133943969_jm9f8u",
+      "created_at": "2026-10-04T17:12:23.969Z"
+    },
+    {
+      "freelancer_id": "free_natalia",
+      "freelancer_name": "Natalia Ferreira",
+      "action_type": "login",
+      "description": "Natalia Ferreira acessou seu workspace individual via link exclusivo.",
+      "metadata": {
+        "access_code": "natalia"
+      },
+      "id": "act_1791133943918_uoe8yg",
+      "created_at": "2026-10-04T17:12:23.918Z"
+    },
+    {
+      "freelancer_id": "free_natalia",
+      "freelancer_name": "Natalia Ferreira",
+      "action_type": "login",
+      "description": "Natalia Ferreira acessou seu workspace individual via link exclusivo.",
+      "metadata": {
+        "access_code": "natalia"
+      },
+      "id": "act_1791133943876_qqzbhm",
+      "created_at": "2026-10-04T17:12:23.876Z"
+    },
+    {
+      "freelancer_id": "free_natalia",
+      "freelancer_name": "Natalia Ferreira",
+      "action_type": "login",
+      "description": "Natalia Ferreira acessou seu workspace individual via link exclusivo.",
+      "metadata": {
+        "access_code": "natalia"
+      },
+      "id": "act_1791133943819_x9m91hc",
+      "created_at": "2026-10-04T17:12:23.819Z"
+    },
+    {
+      "freelancer_id": "free_natalia",
+      "freelancer_name": "Natalia Ferreira",
+      "action_type": "freelancer_created",
+      "description": "Administrador cadastrou o freelancer \"Natalia Ferreira\" com link de acesso: /f/natalia",
+      "metadata": {
+        "freelancer_id": "free_natalia",
+        "access_code": "natalia"
+      },
+      "id": "act_1791133943542_nou7ar",
+      "created_at": "2026-10-04T17:12:23.542Z"
+    }
+  ]
 }

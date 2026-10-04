@@ -41,6 +41,8 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
 
   const [formName, setFormName] = useState<string>('');
   const [formEmail, setFormEmail] = useState<string>('');
+  const [formAccessCode, setFormAccessCode] = useState<string>('');
+  const [isCustomCodeEdited, setIsCustomCodeEdited] = useState<boolean>(false);
   const [formNotes, setFormNotes] = useState<string>('');
   const [formPin, setFormPin] = useState<string>('');
   const [formStatus, setFormStatus] = useState<FreelancerStatus>('active');
@@ -122,10 +124,23 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
     }
   };
 
+  const slugify = (text?: string | null): string => {
+    if (!text) return '';
+    return text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
+
   const handleOpenCreateModal = () => {
     setEditingFreelancer(null);
     setFormName('');
     setFormEmail('');
+    setFormAccessCode('');
+    setIsCustomCodeEdited(false);
     setFormNotes('');
     setFormPin('');
     setFormStatus('active');
@@ -137,6 +152,8 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
     setEditingFreelancer(f);
     setFormName(f.name);
     setFormEmail(f.email);
+    setFormAccessCode(f.access_code);
+    setIsCustomCodeEdited(true);
     setFormNotes(f.notes || '');
     setFormPin(f.pin || '');
     setFormStatus(f.status);
@@ -158,6 +175,7 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
         await api.adminUpdateFreelancer(editingFreelancer.id, {
           name: formName.trim(),
           email: formEmail.trim().toLowerCase(),
+          access_code: formAccessCode.trim() || undefined,
           notes: formNotes.trim(),
           pin: formPin.trim(),
           status: formStatus,
@@ -166,6 +184,7 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
         const res = await api.adminCreateFreelancer({
           name: formName.trim(),
           email: formEmail.trim().toLowerCase(),
+          access_code: formAccessCode.trim() || undefined,
           notes: formNotes.trim(),
           pin: formPin.trim(),
           status: formStatus,
@@ -523,10 +542,45 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
                   type="text"
                   required
                   value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormName(val);
+                    if (!isCustomCodeEdited) {
+                      const first = val.trim().split(' ')[0];
+                      setFormAccessCode(slugify(first || val));
+                    }
+                  }}
                   placeholder="Ex: Natalia Ferreira"
-                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-xs focus:border-neutral-900 focus:outline-hidden"
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-xs focus:border-neutral-900 focus:outline-hidden font-medium"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-neutral-700 mb-1 flex items-center justify-between">
+                  <span>Código / Link de Acesso Exclusivo *</span>
+                  <span className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded">
+                    Baseado no nome cadastrado
+                  </span>
+                </label>
+                <div className="flex items-center">
+                  <span className="bg-neutral-100 border border-r-0 border-neutral-200 px-3 py-2 text-neutral-500 rounded-l-lg font-mono text-xs select-none">
+                    /f/
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    value={formAccessCode}
+                    onChange={(e) => {
+                      setIsCustomCodeEdited(true);
+                      setFormAccessCode(slugify(e.target.value));
+                    }}
+                    placeholder="ex: natalia"
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-r-lg text-xs font-mono font-bold text-neutral-900 focus:border-neutral-900 focus:outline-hidden"
+                  />
+                </div>
+                <span className="text-[10px] text-neutral-500 mt-1 block">
+                  O freelancer acessará diretamente pelo link: <strong>/f/{formAccessCode || 'nome'}</strong> (ou digitando seu nome <strong>"{formName.trim() || 'nome'}"</strong> na tela de acesso).
+                </span>
               </div>
 
               <div>

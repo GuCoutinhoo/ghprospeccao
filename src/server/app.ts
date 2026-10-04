@@ -399,7 +399,7 @@ app.get('/api/admin/freelancers', requireAdmin, (_req: Request, res: Response) =
 
 app.post('/api/admin/freelancers', requireAdmin, (req: Request, res: Response) => {
   try {
-    const { name, email, notes, pin, status } = req.body;
+    const { name, email, access_code, notes, pin, status } = req.body;
     if (!name || !email) {
       return res.status(400).json({ error: 'Nome e e-mail são obrigatórios para cadastrar um freelancer.' });
     }
@@ -407,6 +407,7 @@ app.post('/api/admin/freelancers', requireAdmin, (req: Request, res: Response) =
     const freelancer = db.createFreelancer({
       name,
       email,
+      access_code,
       notes,
       pin,
       status: status || 'active',

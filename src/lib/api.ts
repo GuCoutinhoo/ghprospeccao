@@ -198,6 +198,7 @@ export const api = {
   async adminCreateFreelancer(data: {
     name: string;
     email: string;
+    access_code?: string;
     notes?: string;
     pin?: string;
     status?: 'active' | 'blocked' | 'inactive';

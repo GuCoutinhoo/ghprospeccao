@@ -40,9 +40,15 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
   }, [initialCode]);
 
   const handleVerify = async (codeToUse?: string, pinToUse?: string) => {
-    const code = (codeToUse || accessCode || '').trim();
+    const raw = (codeToUse || accessCode || '').trim();
+    const code = raw
+      .replace(/^https?:\/\/[^\/]+\/f\//i, '')
+      .replace(/^\/f\//i, '')
+      .replace(/\/+$/, '')
+      .trim();
+
     if (!code) {
-      setError('Por favor, informe seu código ou link de acesso.');
+      setError('Por favor, informe seu nome ou código de acesso.');
       return;
     }
 
@@ -175,18 +181,21 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-neutral-300 mb-1">
-                Código de Acesso
+                Nome ou Código de Acesso do Freelancer
               </label>
               <div className="relative">
                 <input
                   type="text"
                   required
                   value={accessCode}
-                  onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
-                  placeholder="Ex: 8HKS82MD ou natalia-7F4K92"
+                  onChange={(e) => setAccessCode(e.target.value)}
+                  placeholder="Ex: natalia ou natalia-ferreira"
                   className="w-full px-3.5 py-2.5 bg-neutral-950 border border-neutral-700 rounded-xl text-xs text-white placeholder-neutral-500 focus:border-amber-400 focus:outline-hidden font-mono tracking-wider font-bold"
                 />
               </div>
+              <span className="text-[10px] text-neutral-400 mt-1 block">
+                Digite o nome cadastrado pelo administrador (ex: natalia) ou o link completo.
+              </span>
             </div>
 
             {requiresPin && (
