@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { ShieldCheck, ArrowRight, RotateCw, Lock, Mail, AlertCircle } from 'lucide-react';
+import { ShieldCheck, ArrowRight, RotateCw, Lock, Mail, AlertCircle, Users } from 'lucide-react';
 import { api } from '../../lib/api';
 
 interface LoginViewProps {
-  onLoginSuccess: (user: { email: string; name: string }) => void;
+  onLoginSuccess: (user: { email: string; name: string; role?: string }) => void;
+  onGoToFreelancerAccess?: () => void;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onGoToFreelancerAccess }) => {
   const [email, setEmail] = useState<string>('gustavohcsantos.mm2020@gmail.com');
   const [password, setPassword] = useState<string>('prospecta123');
   const [loading, setLoading] = useState<boolean>(false);
@@ -18,8 +19,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     setLoading(true);
 
     try {
-      const res = await api.login(email, password);
-      onLoginSuccess(res.user);
+      // Tenta login administrativo seguro
+      const res = await api.adminLogin(email, password).catch(() => api.login(email, password));
+      onLoginSuccess({
+        email: res.user.email,
+        name: res.user.name,
+        role: res.user.role || 'admin',
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMsg(msg);
@@ -47,7 +53,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             GH Prospecção
           </h1>
           <p className="text-xs text-neutral-500">
-            Inteligência comercial para prospecção de empresas locais sem website
+            Painel Administrativo & Gestão de Operação B2B
           </p>
         </div>
 
@@ -63,7 +69,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-neutral-700 mb-1">
-                E-mail corporativo
+                E-mail do Administrador
               </label>
               <div className="relative">
                 <input
@@ -71,7 +77,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu@empresa.com"
+                  placeholder="admin@ghprospeccao.com"
                   className="w-full rounded-lg border border-neutral-200 pl-9 pr-3.5 py-2 text-xs text-neutral-900 placeholder-neutral-400 shadow-2xs focus:border-neutral-900 focus:outline-hidden"
                 />
                 <Mail className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-neutral-400" />
@@ -81,7 +87,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-semibold text-neutral-700">
-                  Senha de acesso
+                  Senha do Administrador
                 </label>
               </div>
               <div className="relative">
@@ -100,7 +106,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-neutral-900 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-xs disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-neutral-900 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
                 <>
@@ -109,23 +115,30 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 </>
               ) : (
                 <>
-                  <span>Entrar no Sistema</span>
+                  <span>Entrar como Administrador</span>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </>
               )}
             </button>
           </form>
 
-          <div className="mt-4 pt-3 border-t border-neutral-100 text-center">
-            <span className="text-[11px] text-neutral-400">
-              Ambiente protegido com Supabase Auth & RLS
-            </span>
-          </div>
+          {onGoToFreelancerAccess && (
+            <div className="mt-4 pt-3 border-t border-neutral-100 text-center">
+              <button
+                type="button"
+                onClick={onGoToFreelancerAccess}
+                className="text-xs text-neutral-600 hover:text-neutral-900 font-semibold flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
+              >
+                <Users className="h-3.5 w-3.5 text-neutral-500" />
+                É um freelancer com link de acesso? Clique aqui
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Informação sobre credencial padrão */}
         <div className="rounded-lg border border-neutral-200/60 bg-neutral-100/60 p-3 text-[11px] text-neutral-500 text-center space-y-1">
-          <div>Credenciais de acesso pré-configuradas para avaliação:</div>
+          <div>Credencial do Administrador:</div>
           <div className="font-mono text-neutral-700">
             {email}
           </div>
@@ -134,3 +147,4 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     </div>
   );
 };
+

@@ -14,6 +14,12 @@ import {
   XCircle,
   ChevronRight,
   ExternalLink,
+  Target,
+  Minus,
+  Plus,
+  Infinity as InfinityIcon,
+  Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 import { IBGEState, IBGECity, SearchJob } from '../../types';
 import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from '../../lib/ibge/ibgeService';
@@ -55,6 +61,9 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
 
   const [niche, setNiche] = useState<string>('Barbearia');
   const [customNiche, setCustomNiche] = useState<string>('');
+
+  // Quantidade de leads desejada (Range de 10 a 210, pulando de 10 em 10; 210 = Sem Limite, ao lado de 200)
+  const [sliderValue, setSliderValue] = useState<number>(50);
 
   // Filtros comerciais (livres e sem limites artificiais)
   const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(false);
@@ -122,6 +131,8 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
   }
 
   const activeNiche = customNiche.trim() ? customNiche.trim() : niche;
+  const isUnlimited = sliderValue >= 210;
+  const activeTargetLeads = isUnlimited ? 0 : sliderValue;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,6 +154,7 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
           minRating,
           minReviews,
           maxReviews: maxReviews ? Number(maxReviews) : undefined,
+          targetLeads: activeTargetLeads,
         },
       });
 
@@ -157,22 +169,45 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Formulário Principal */}
-      <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-2xs">
-        <div className="pb-5 border-b border-neutral-100 mb-6">
-          <div className="flex items-center gap-2">
-            <Search className="h-5 w-5 text-neutral-800" />
-            <h2 className="text-base font-semibold text-neutral-900 tracking-tight">
-              Configurar Nova Busca de Leads
-            </h2>
+      {/* Formulário Principal com Passo a Passo Guiado */}
+      <div className="rounded-xl border border-neutral-200 bg-white p-5 sm:p-7 shadow-2xs space-y-6">
+        {/* Cabeçalho com Indicador de Passos */}
+        <div className="pb-5 border-b border-neutral-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-neutral-900 text-white flex items-center justify-center">
+                <Search className="h-4 w-4" />
+              </div>
+              <h2 className="text-base font-bold text-neutral-900 tracking-tight">
+                Nova Busca de Leads
+              </h2>
+            </div>
+            <p className="text-xs text-neutral-500 mt-1">
+              Configure em 3 etapas simples onde, o que e quantos leads você deseja minerar.
+            </p>
           </div>
-          <p className="text-xs text-neutral-500 mt-1">
-            Selecione a região brasileira e o nicho comercial. O motor percorrerá as cidades, aplicará deduplicação e calculará o Lead Score.
-          </p>
+
+          {/* Guia Visual dos 3 Passos */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-100 font-medium text-neutral-700">
+              <span className="w-4 h-4 rounded-full bg-neutral-900 text-white text-[10px] flex items-center justify-center font-bold">1</span>
+              Local
+            </span>
+            <span className="text-neutral-300">→</span>
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-100 font-medium text-neutral-700">
+              <span className="w-4 h-4 rounded-full bg-neutral-900 text-white text-[10px] flex items-center justify-center font-bold">2</span>
+              Nicho
+            </span>
+            <span className="text-neutral-300">→</span>
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-100 font-medium text-neutral-700">
+              <span className="w-4 h-4 rounded-full bg-neutral-900 text-white text-[10px] flex items-center justify-center font-bold">3</span>
+              Meta & Filtros
+            </span>
+          </div>
         </div>
 
         {errorMessage && (
-          <div className="mb-6 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
             <div>
               <span className="font-semibold">Aviso:</span> {errorMessage}
@@ -181,76 +216,107 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Seção 1: Região Geográfica (IBGE) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Estado */}
-            <div>
-              <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-2">
-                Estado (IBGE)
-              </label>
-              <div className="relative">
-                <select
-                  value={selectedState}
-                  onChange={(e) => setSelectedState(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-xs font-medium text-neutral-800 shadow-2xs focus:border-neutral-900 focus:outline-hidden"
-                >
-                  {(states && states.length > 0 ? states : BRAZILIAN_STATES).map((st) => (
-                    <option key={st.id || st.sigla} value={st.sigla}>
-                      {st.nome} ({st.sigla})
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400">
-                  <MapPin className="h-4 w-4" />
-                </div>
+          {/* Passo 1: Onde buscar? (Região e Município) */}
+          <div className="rounded-xl border border-neutral-200/80 bg-neutral-50/60 p-4 sm:p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-neutral-900 text-white text-[11px] flex items-center justify-center font-bold">
+                  1
+                </span>
+                <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
+                  Onde buscar? (Localização)
+                </h3>
               </div>
-              <p className="text-[11px] text-neutral-400 mt-1.5">
-                Base oficial do IBGE com todos os 27 estados.
-              </p>
+              <span className="text-[11px] font-mono font-medium text-neutral-600 bg-white px-2.5 py-1 rounded-md border border-neutral-200 shadow-2xs">
+                📍 {selectedCity === 'all' ? `Todas as cidades de ${selectedState}` : `${selectedCity} (${selectedState})`}
+              </span>
             </div>
 
-            {/* Cidade */}
-            <div>
-              <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-2">
-                Município
-              </label>
-              <div className="relative">
-                <select
-                  value={selectedCity}
-                  onChange={(e) => setSelectedCity(e.target.value)}
-                  disabled={loadingCities}
-                  className="w-full appearance-none rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-xs font-medium text-neutral-800 shadow-2xs focus:border-neutral-900 focus:outline-hidden disabled:bg-neutral-50"
-                >
-                  <option value="all">Todas as principais cidades do estado</option>
-                  {cities.map((city) => (
-                    <option key={city.id} value={city.nome}>
-                      {city.nome}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400">
-                  {loadingCities ? (
-                    <RotateCw className="h-4 w-4 animate-spin text-neutral-400" />
-                  ) : (
-                    <Building className="h-4 w-4" />
-                  )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Estado */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
+                  Estado Brasileiro
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedState}
+                    onChange={(e) => setSelectedState(e.target.value)}
+                    className="w-full appearance-none rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-xs font-medium text-neutral-800 shadow-2xs focus:border-neutral-900 focus:outline-hidden"
+                  >
+                    {(states && states.length > 0 ? states : BRAZILIAN_STATES).map((st) => (
+                      <option key={st.id || st.sigla} value={st.sigla}>
+                        {st.nome} ({st.sigla})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400">
+                    <MapPin className="h-4 w-4" />
+                  </div>
                 </div>
+                <p className="text-[11px] text-neutral-400 mt-1">
+                  Selecione qualquer um dos 27 estados federativos do Brasil.
+                </p>
               </div>
-              <p className="text-[11px] text-neutral-400 mt-1.5">
-                {selectedCity === 'all'
-                  ? 'A busca percorrerá os principais municípios em lotes ordenados.'
-                  : `Busca focada no município de ${selectedCity}.`}
-              </p>
+
+              {/* Cidade */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
+                  Cidade / Abrangência
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedCity}
+                    onChange={(e) => setSelectedCity(e.target.value)}
+                    disabled={loadingCities}
+                    className="w-full appearance-none rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-xs font-medium text-neutral-800 shadow-2xs focus:border-neutral-900 focus:outline-hidden disabled:bg-neutral-50"
+                  >
+                    <option value="all">Todas as principais cidades do estado (Recomendado)</option>
+                    {cities.map((city) => (
+                      <option key={city.id} value={city.nome}>
+                        {city.nome}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400">
+                    {loadingCities ? (
+                      <RotateCw className="h-4 w-4 animate-spin text-neutral-400" />
+                    ) : (
+                      <Building className="h-4 w-4" />
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] text-neutral-400 mt-1">
+                  {selectedCity === 'all'
+                    ? 'O robô percorrerá as maiores cidades do estado em lotes inteligentes.'
+                    : `Varredura concentrada exclusivamente em ${selectedCity}.`}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Seção 2: Nicho / Segmento */}
-          <div>
-            <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-2">
-              Nicho de Empresa
-            </label>
+          {/* Passo 2: O que buscar? (Nicho Comercial) */}
+          <div className="rounded-xl border border-neutral-200/80 bg-neutral-50/60 p-4 sm:p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-neutral-900 text-white text-[11px] flex items-center justify-center font-bold">
+                  2
+                </span>
+                <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
+                  Qual o nicho do seu cliente ideal?
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono font-medium text-neutral-600 bg-white px-2.5 py-1 rounded-md border border-neutral-200 shadow-2xs">
+                🏢 {activeNiche || 'Nenhum nicho informado'}
+              </span>
+            </div>
+
+            <p className="text-[11px] text-neutral-500">
+              Escolha uma categoria popular para preencher rapidamente ou digite qualquer ramo de atividade.
+            </p>
+
             <div className="space-y-3">
-              {/* Presets em segmented buttons */}
+              {/* Presets clicáveis rápidos */}
               <div className="flex flex-wrap gap-1.5">
                 {NICHE_PRESETS.map((preset) => {
                   const isSelected = !customNiche && niche === preset;
@@ -262,10 +328,10 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                         setNiche(preset);
                         setCustomNiche('');
                       }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-neutral-900 text-white shadow-2xs'
-                          : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200/80'
+                          ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs'
+                          : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100 hover:border-neutral-300'
                       }`}
                     >
                       {preset}
@@ -274,136 +340,352 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                 })}
               </div>
 
-              {/* Input manual */}
+              {/* Digitação Livre de Nicho */}
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Ou digite qualquer nicho manualmente (ex: Marmoraria, Fisioterapia, etc.)..."
-                  value={customNiche}
-                  onChange={(e) => setCustomNiche(e.target.value)}
-                  className="flex-1 rounded-lg border border-neutral-200 px-3.5 py-2 text-xs text-neutral-800 placeholder-neutral-400 shadow-2xs focus:border-neutral-900 focus:outline-hidden"
-                />
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="Ou digite outro nicho manualmente (ex: Marmoraria, Pizzaria, Fisioterapia)..."
+                    value={customNiche}
+                    onChange={(e) => setCustomNiche(e.target.value)}
+                    className="w-full rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-xs text-neutral-800 placeholder-neutral-400 shadow-2xs focus:border-neutral-900 focus:outline-hidden"
+                  />
+                </div>
                 {customNiche && (
                   <button
                     type="button"
                     onClick={() => setCustomNiche('')}
-                    className="text-xs text-neutral-400 hover:text-neutral-700 px-2 py-1"
+                    className="text-xs text-neutral-500 hover:text-neutral-900 px-3 py-2 cursor-pointer underline text-[11px]"
                   >
-                    Limpar
+                    Restaurar opções
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Seção 3: Filtros Comerciais */}
-          <div className="rounded-lg border border-neutral-200/80 bg-neutral-50/50 p-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-neutral-600" />
-              <span className="text-xs font-semibold text-neutral-800 uppercase tracking-wider">
-                Filtros Comerciais de Qualificação
+          {/* Passo 3: Quantidade & Filtros de Qualidade */}
+          <div className="rounded-xl border border-neutral-200/80 bg-neutral-50/60 p-4 sm:p-5 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-200/60">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-neutral-900 text-white text-[11px] flex items-center justify-center font-bold">
+                  3
+                </span>
+                <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
+                  Quantidade de Leads & Critérios
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono font-medium text-neutral-600 bg-white px-2.5 py-1 rounded-md border border-neutral-200 shadow-2xs">
+                🎯 {activeTargetLeads === 0 ? 'Sem limite' : `${activeTargetLeads} leads`}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
-              {/* Sem site */}
-              <label className="flex items-start gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={onlyWithoutWebsite}
-                  onChange={(e) => setOnlyWithoutWebsite(e.target.checked)}
-                  className="mt-0.5 rounded-sm border-neutral-300 text-neutral-900 focus:ring-neutral-900"
-                />
+            {/* Controle da Meta de Leads (10 a 200 + Sem Limite na direita) */}
+            <div className="rounded-xl border border-neutral-200 bg-white p-4 space-y-3.5 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
-                  <span className="text-xs font-semibold text-neutral-800 block">
-                    Apenas sem site
+                  <span className="text-xs font-bold text-neutral-900 block">
+                    Quantos leads você quer encontrar?
                   </span>
-                  <span className="text-[11px] text-neutral-500 leading-tight">
-                    Filtra empresas que não cadastraram websiteUri no Google Places.
+                  <span className="text-[11px] text-neutral-500">
+                    Arraste o controle ou clique em um atalho. A busca encerra automaticamente ao atingir.
                   </span>
                 </div>
-              </label>
 
-              {/* Com telefone */}
-              <label className="flex items-start gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={onlyWithPhone}
-                  onChange={(e) => setOnlyWithPhone(e.target.checked)}
-                  className="mt-0.5 rounded-sm border-neutral-300 text-neutral-900 focus:ring-neutral-900"
-                />
-                <div>
-                  <span className="text-xs font-semibold text-neutral-800 block">
-                    Apenas com telefone
-                  </span>
-                  <span className="text-[11px] text-neutral-500 leading-tight">
-                    Garante número disponível para contato imediato no WhatsApp.
-                  </span>
+                <div className="flex items-center gap-2">
+                  {/* Stepper Compacto (-10 / +10) */}
+                  <div className="flex items-center bg-neutral-50 border border-neutral-200 rounded-lg p-0.5 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setSliderValue((prev) => Math.max(10, prev <= 200 ? prev - 10 : 200))}
+                      disabled={sliderValue <= 10}
+                      className="w-7 h-7 flex items-center justify-center text-neutral-500 hover:text-neutral-900 disabled:opacity-30 rounded cursor-pointer transition-colors"
+                      title="Diminuir 10 leads"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+
+                    <div className="px-2.5 min-w-28 text-center">
+                      {sliderValue >= 210 ? (
+                        <span className="font-mono font-bold text-xs text-emerald-700 flex items-center justify-center gap-1">
+                          <InfinityIcon className="w-3.5 h-3.5" /> Sem limite
+                        </span>
+                      ) : (
+                        <span className="font-mono font-bold text-xs text-neutral-900">
+                          {sliderValue} <span className="font-normal text-[11px] text-neutral-500 font-sans">leads</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSliderValue((prev) => Math.min(210, prev + 10))}
+                      disabled={sliderValue >= 210}
+                      className="w-7 h-7 flex items-center justify-center text-neutral-500 hover:text-neutral-900 disabled:opacity-30 rounded cursor-pointer transition-colors"
+                      title="Aumentar 10 leads"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Botão Sem limite */}
+                  <button
+                    type="button"
+                    onClick={() => setSliderValue(sliderValue >= 210 ? 50 : 210)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                      sliderValue >= 210
+                        ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs'
+                        : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50 hover:text-neutral-900'
+                    }`}
+                  >
+                    <InfinityIcon className="w-3.5 h-3.5" />
+                    <span>Sem limite</span>
+                  </button>
                 </div>
-              </label>
-
-              {/* Nota mínima */}
-              <div>
-                <label className="block text-[11px] font-medium text-neutral-600 mb-1">
-                  Nota mínima (estrelas)
-                </label>
-                <select
-                  value={minRating}
-                  onChange={(e) => setMinRating(Number(e.target.value))}
-                  className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
-                >
-                  <option value={0}>Qualquer nota</option>
-                  <option value={3.5}>3.5 ou mais</option>
-                  <option value={4.0}>4.0 ou mais (Recomendado)</option>
-                  <option value={4.5}>4.5 ou mais (Alto padrão)</option>
-                </select>
               </div>
 
-              {/* Avaliações mínimas */}
-              <div>
-                <label className="block text-[11px] font-medium text-neutral-600 mb-1">
-                  Mínimo de avaliações
+              {/* Slider de 10 a 200 + Sem Limite na direita */}
+              <div className="space-y-1 pt-1">
+                <input
+                  type="range"
+                  min="10"
+                  max="210"
+                  step="10"
+                  value={sliderValue}
+                  onChange={(e) => setSliderValue(Number(e.target.value))}
+                  style={{
+                    background: `linear-gradient(to right, #171717 0%, #171717 ${((sliderValue - 10) / 200) * 100}%, #e5e7eb ${((sliderValue - 10) / 200) * 100}%, #e5e7eb 100%)`,
+                  }}
+                  className="w-full h-2 rounded-full cursor-pointer transition-all"
+                />
+
+                {/* Marcadores Clicáveis */}
+                <div className="relative w-full h-4 text-[10px] font-mono select-none">
+                  {[
+                    { val: 10, label: '10' },
+                    { val: 50, label: '50' },
+                    { val: 100, label: '100' },
+                    { val: 150, label: '150' },
+                    { val: 200, label: '200' },
+                    { val: 210, label: 'Sem limite (∞)' },
+                  ].map((tick) => {
+                    const pct = ((tick.val - 10) / 200) * 100;
+                    const isActive =
+                      (tick.val >= 210 && sliderValue >= 210) ||
+                      (sliderValue < 210 && sliderValue === tick.val);
+
+                    return (
+                      <button
+                        key={tick.val}
+                        type="button"
+                        onClick={() => setSliderValue(tick.val)}
+                        style={{
+                          left: `${pct}%`,
+                          transform:
+                            tick.val === 10
+                              ? 'translateX(0%)'
+                              : tick.val === 210
+                              ? 'translateX(-100%)'
+                              : 'translateX(-50%)',
+                        }}
+                        className={`absolute top-0 transition-colors cursor-pointer hover:text-neutral-900 ${
+                          isActive
+                            ? 'text-neutral-900 font-bold underline'
+                            : 'text-neutral-400 font-normal'
+                        }`}
+                      >
+                        {tick.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Botões de Atalhos Rápidos */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100 text-xs text-neutral-500">
+                <span className="text-[11px]">
+                  {sliderValue >= 210
+                    ? 'A varredura percorrerá todas as regiões sem parar por meta de quantidade.'
+                    : `A busca parará automaticamente assim que qualificar ${sliderValue} leads.`}
+                </span>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-neutral-400 font-medium">Atalhos:</span>
+                  {[
+                    { label: '20', val: 20 },
+                    { label: '50 (Padrão)', val: 50 },
+                    { label: '100', val: 100 },
+                    { label: '200', val: 200 },
+                    { label: 'Sem limite', val: 210 },
+                  ].map((preset) => {
+                    const isPresetActive =
+                      (preset.val >= 210 && sliderValue >= 210) ||
+                      (sliderValue < 210 && sliderValue === preset.val);
+
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setSliderValue(preset.val)}
+                        className={`px-2.5 py-1 text-[11px] rounded-lg border transition-all cursor-pointer ${
+                          isPresetActive
+                            ? 'bg-neutral-900 text-white border-neutral-900 font-semibold shadow-2xs'
+                            : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100 hover:text-neutral-900'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Filtros Comerciais Opcionais */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-neutral-600" />
+                <span className="text-xs font-semibold text-neutral-800 uppercase tracking-wider">
+                  Filtros de Qualificação Comercial (Opcional)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+                {/* Com telefone */}
+                <label className="flex items-start gap-2.5 cursor-pointer bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs hover:border-neutral-300 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={onlyWithPhone}
+                    onChange={(e) => setOnlyWithPhone(e.target.checked)}
+                    className="mt-0.5 rounded-sm border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-neutral-800 block">
+                      Apenas com Telefone
+                    </span>
+                    <span className="text-[11px] text-neutral-500 leading-tight">
+                      Garante número para contato imediato no WhatsApp.
+                    </span>
+                  </div>
                 </label>
-                <select
-                  value={minReviews}
-                  onChange={(e) => setMinReviews(Number(e.target.value))}
-                  className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
-                >
-                  <option value={0}>Qualquer quantidade</option>
-                  <option value={10}>Pelo menos 10 avaliações</option>
-                  <option value={20}>Pelo menos 20 avaliações (Ativo)</option>
-                  <option value={50}>Pelo menos 50 avaliações (Autoridade)</option>
-                </select>
+
+                {/* Sem site */}
+                <label className="flex items-start gap-2.5 cursor-pointer bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs hover:border-neutral-300 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={onlyWithoutWebsite}
+                    onChange={(e) => setOnlyWithoutWebsite(e.target.checked)}
+                    className="mt-0.5 rounded-sm border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-neutral-800 block">
+                      Apenas sem Site
+                    </span>
+                    <span className="text-[11px] text-neutral-500 leading-tight">
+                      Excelente para vender desenvolvimento web ou tráfego.
+                    </span>
+                  </div>
+                </label>
+
+                {/* Nota mínima */}
+                <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs">
+                  <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                    Nota mínima no Google
+                  </label>
+                  <select
+                    value={minRating}
+                    onChange={(e) => setMinRating(Number(e.target.value))}
+                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
+                  >
+                    <option value={0}>Qualquer nota</option>
+                    <option value={3.5}>3.5 ou mais</option>
+                    <option value={4.0}>4.0 ou mais (Recomendado)</option>
+                    <option value={4.5}>4.5 ou mais (Alto padrão)</option>
+                  </select>
+                </div>
+
+                {/* Avaliações mínimas */}
+                <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs">
+                  <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                    Mínimo de avaliações
+                  </label>
+                  <select
+                    value={minReviews}
+                    onChange={(e) => setMinReviews(Number(e.target.value))}
+                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
+                  >
+                    <option value={0}>Qualquer quantidade</option>
+                    <option value={10}>Pelo menos 10 avaliações</option>
+                    <option value={20}>Pelo menos 20 avaliações</option>
+                    <option value={50}>Pelo menos 50 avaliações</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Botão de Submissão */}
-          <div className="flex items-center justify-between pt-2 border-t border-neutral-100">
-            <div className="text-xs text-neutral-500">
-              Alvo: <span className="font-semibold text-neutral-900">{activeNiche}</span> em{' '}
-              <span className="font-semibold text-neutral-900">
-                {selectedCity === 'all' ? `Todas as cidades de ${selectedState}` : `${selectedCity} - ${selectedState}`}
+          {/* PAINEL DE CONFIRMAÇÃO & INÍCIO EM TEMPO REAL */}
+          <div className="rounded-xl border border-neutral-900/15 bg-neutral-900/5 p-4 sm:p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-neutral-900" />
+                Resumo da Busca (Confirmação antes de iniciar)
+              </span>
+              <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Tudo pronto
               </span>
             </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex items-center gap-2 rounded-lg bg-neutral-900 px-5 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
-            >
-              {isSubmitting ? (
-                <>
-                  <RotateCw className="h-4 w-4 animate-spin text-white" />
-                  <span>INICIANDO BUSCA...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 fill-white" />
-                  <span>INICIAR BUSCA DE LEADS</span>
-                </>
-              )}
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs space-y-1">
+                <span className="text-[10px] uppercase font-bold text-neutral-400">1. Onde</span>
+                <p className="font-semibold text-xs text-neutral-900 truncate">
+                  {selectedCity === 'all' ? `Todas as cidades de ${selectedState}` : `${selectedCity} (${selectedState})`}
+                </p>
+              </div>
+
+              <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs space-y-1">
+                <span className="text-[10px] uppercase font-bold text-neutral-400">2. O Que</span>
+                <p className="font-semibold text-xs text-neutral-900 truncate">
+                  {activeNiche || 'Informe um nicho acima'}
+                </p>
+              </div>
+
+              <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs space-y-1">
+                <span className="text-[10px] uppercase font-bold text-neutral-400">3. Quanto & Filtros</span>
+                <p className="font-semibold text-xs text-neutral-900">
+                  {activeTargetLeads === 0 ? 'Sem limite' : `${activeTargetLeads} leads`}
+                  {onlyWithPhone ? ' · C/ Tel' : ''}
+                  {onlyWithoutWebsite ? ' · S/ Site' : ''}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+              <p className="text-[11px] text-neutral-500 max-w-md">
+                O robô fará a extração no Google Places em tempo real, deduplicará registros e calculará o Score Comercial de cada lead.
+              </p>
+
+              <button
+                type="submit"
+                disabled={isSubmitting || !activeNiche}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-neutral-900 px-6 py-3 text-xs font-bold text-white hover:bg-neutral-800 transition-all shadow-md active:scale-98 disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                {isSubmitting ? (
+                  <>
+                    <RotateCw className="h-4 w-4 animate-spin text-white" />
+                    <span>INICIANDO VARREDURA...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 fill-white" />
+                    <span>
+                      INICIAR BUSCA DE LEADS {activeTargetLeads > 0 ? `(${activeTargetLeads})` : ''}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -454,10 +736,19 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                   className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5 hover:bg-neutral-50/70 rounded-lg px-2 -mx-2 transition-colors cursor-pointer"
                 >
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold text-neutral-900 text-sm">
                         {job.niche} — {job.city === 'all' ? `Todas as cidades de ${job.state}` : `${job.city}, ${job.state}`}
                       </span>
+                      {job.target_leads && job.target_leads > 0 ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          Meta: {job.target_leads}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-neutral-100 text-neutral-600 border border-neutral-200">
+                          Sem limite
+                        </span>
+                      )}
                       <span
                         className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border ${st.bg} ${st.text}`}
                       >

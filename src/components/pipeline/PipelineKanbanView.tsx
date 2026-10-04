@@ -25,10 +25,14 @@ const STAGES: { id: PipelineStatus; label: string }[] = [
   { id: 'CONTATADO', label: 'Contatado' },
   { id: 'RESPONDEU', label: 'Respondeu' },
   { id: 'INTERESSADO', label: 'Interessado' },
+  { id: 'FOLLOW_UP', label: 'Follow-up' },
+  { id: 'NEGOCIACAO', label: 'Negociação' },
   { id: 'REUNIÃO', label: 'Reunião' },
   { id: 'PROPOSTA', label: 'Proposta' },
   { id: 'FECHADO', label: 'Fechado' },
   { id: 'PERDIDO', label: 'Perdido' },
+  { id: 'NAO_INTERESSADO', label: 'Não Interessado' },
+  { id: 'SEM_RESPOSTA', label: 'Sem Resposta' },
 ];
 
 export const PipelineKanbanView: React.FC<PipelineKanbanViewProps> = ({
@@ -40,10 +44,14 @@ export const PipelineKanbanView: React.FC<PipelineKanbanViewProps> = ({
     'CONTATADO': [],
     'RESPONDEU': [],
     'INTERESSADO': [],
+    'FOLLOW_UP': [],
+    'NEGOCIACAO': [],
     'REUNIÃO': [],
     'PROPOSTA': [],
     'FECHADO': [],
     'PERDIDO': [],
+    'NAO_INTERESSADO': [],
+    'SEM_RESPOSTA': [],
   });
 
   const [loading, setLoading] = useState<boolean>(true);

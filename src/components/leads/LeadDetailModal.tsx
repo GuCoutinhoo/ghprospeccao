@@ -56,10 +56,14 @@ const PIPELINE_STATUSES: PipelineStatus[] = [
   'CONTATADO',
   'RESPONDEU',
   'INTERESSADO',
+  'FOLLOW_UP',
+  'NEGOCIACAO',
   'REUNIÃO',
   'PROPOSTA',
   'FECHADO',
   'PERDIDO',
+  'NAO_INTERESSADO',
+  'SEM_RESPOSTA',
 ];
 
 // Ícones por nicho para dar identidade visual à loja
@@ -119,6 +123,78 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
       onLeadUpdated(updated);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleRegisterContact = async (channel: string = 'WhatsApp') => {
+    if (!lead) return;
+    try {
+      const res = await api.registerContactAttempt(lead.id, channel);
+      if (res?.lead) {
+        setLead(res.lead);
+        onLeadUpdated(res.lead);
+      }
+    } catch (err) {
+      console.error('Erro ao registrar contato:', err);
+    }
+  };
+
+  const handleRegisterResponse = async () => {
+    if (!lead) return;
+    try {
+      const updated = await api.updateLead(lead.id, {
+        pipeline_status: 'RESPONDEU',
+        response_at: new Date().toISOString(),
+      });
+      setLead(updated);
+      onLeadUpdated(updated);
+    } catch (err) {
+      console.error('Erro ao registrar resposta:', err);
+    }
+  };
+
+  const handleRegisterFollowUp = async () => {
+    if (!lead) return;
+    try {
+      const updated = await api.updateLead(lead.id, {
+        pipeline_status: 'FOLLOW_UP',
+        follow_up_at: new Date().toISOString(),
+      });
+      setLead(updated);
+      onLeadUpdated(updated);
+    } catch (err) {
+      console.error('Erro ao registrar follow-up:', err);
+    }
+  };
+
+  const handleRegisterNegotiation = async () => {
+    if (!lead) return;
+    try {
+      const updated = await api.updateLead(lead.id, {
+        pipeline_status: 'NEGOCIACAO',
+        negotiation_at: new Date().toISOString(),
+      });
+      setLead(updated);
+      onLeadUpdated(updated);
+    } catch (err) {
+      console.error('Erro ao iniciar negociação:', err);
+    }
+  };
+
+  const handleRegisterSale = async () => {
+    if (!lead) return;
+    const valStr = prompt('Informe o valor total do contrato fechado (R$):', '1500');
+    if (valStr === null) return;
+    const value = parseFloat(valStr.replace(',', '.')) || 0;
+    try {
+      const res = await api.registerSale(lead.id, value);
+      if (res?.lead) {
+        setLead(res.lead);
+        onLeadUpdated(res.lead);
+        alert(`Venda fechada de R$ ${value.toFixed(2)} registrada com sucesso no sistema!`);
+      }
+    } catch (err) {
+      console.error('Erro ao registrar venda:', err);
     }
   };
 
@@ -411,8 +487,8 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
           </div>
 
           {/* Seletor de Status Comercial */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-500 font-medium">Status no Funil:</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-neutral-500 font-medium">Status:</span>
             <select
               value={lead.pipeline_status}
               onChange={(e) => handleStatusChange(e.target.value as PipelineStatus)}
@@ -424,6 +500,54 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 </option>
               ))}
             </select>
+
+            {/* Ações Rápidas de Esteira com Auditoria */}
+            <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleRegisterContact('WhatsApp')}
+                className="px-2.5 py-1 text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+                title="Registrar tentativa de contato neste lead"
+              >
+                + Contato ({lead.contact_attempts_count || (lead.contacted_at ? 1 : 0)})
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRegisterResponse}
+                className="px-2.5 py-1 text-[11px] font-semibold bg-sky-50 text-sky-800 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors cursor-pointer"
+                title="Registrar que o cliente respondeu à abordagem"
+              >
+                + Respondeu
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRegisterFollowUp}
+                className="px-2.5 py-1 text-[11px] font-semibold bg-purple-50 text-purple-800 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors cursor-pointer"
+                title="Agendar ou registrar follow-up"
+              >
+                + Follow-up
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRegisterNegotiation}
+                className="px-2.5 py-1 text-[11px] font-semibold bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors cursor-pointer"
+                title="Mover para fase de negociação"
+              >
+                + Negociação
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRegisterSale}
+                className="px-2.5 py-1 text-[11px] font-bold bg-amber-400 hover:bg-amber-300 text-neutral-950 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                title="Registrar venda fechada com valor em R$"
+              >
+                ★ Venda Fechada
+              </button>
+            </div>
           </div>
         </div>
 

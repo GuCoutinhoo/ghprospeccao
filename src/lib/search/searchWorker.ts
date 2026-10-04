@@ -14,6 +14,8 @@ const activeWorkers = new Map<string, ActiveWorker>();
 
 export async function createAndPrepareSearchJob(params: {
   userId: string;
+  freelancerId?: string;
+  freelancerName?: string;
   state: string;
   city: string; // 'all' ou nome da cidade
   niche: string;
@@ -23,6 +25,7 @@ export async function createAndPrepareSearchJob(params: {
     minRating: number;
     minReviews: number;
     maxReviews?: number;
+    targetLeads?: number;
   };
 }): Promise<{ job: SearchJob; estimatedQueries: number; totalCities: number; totalAreas: number }> {
   const settings = db.getSettings();
@@ -86,11 +89,14 @@ export async function createAndPrepareSearchJob(params: {
   const newJob: SearchJob = {
     id: jobId,
     user_id: params.userId,
+    freelancer_id: params.freelancerId,
+    freelancer_name: params.freelancerName,
     state: params.state,
     city: params.city,
     niche: params.niche,
     status: 'pending',
     filters: params.filters,
+    target_leads: params.filters.targetLeads || 0,
     total_cities: targetCities.length,
     processed_cities: 0,
     total_search_areas: areas.length,
@@ -132,11 +138,19 @@ export async function runSearchJob(jobId: string) {
   const areas = db.getSearchAreas(jobId);
   const pendingAreas = areas.filter((a) => a.status === 'pending' || a.status === 'failed');
   const settings = db.getSettings();
+  const targetGoal = job.target_leads || 0;
 
   const citiesSeen = new Set<string>();
 
   for (const area of pendingAreas) {
     try {
+      // Checa se já atingiu a meta de leads desejada pelo usuário
+      if (targetGoal > 0) {
+        const currentJobCheck = db.getSearchJob(jobId);
+        if (currentJobCheck && currentJobCheck.leads_created >= targetGoal) {
+          break;
+        }
+      }
       // Checagem de pausa ou cancelamento
       const currentWorker = activeWorkers.get(jobId);
       if (!currentWorker || currentWorker.cancelled) {
@@ -218,9 +232,12 @@ export async function runSearchJob(jobId: string) {
         const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
         if (matchesFilters) {
           const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
+          const leadId = `lead_${job.freelancer_id ? job.freelancer_id + '_' : ''}${normalizedPlace.place_id}`;
           const { created } = db.createLead({
-            id: `lead_${normalizedPlace.place_id}`,
+            id: leadId,
             user_id: job.user_id,
+            freelancer_id: job.freelancer_id,
+            freelancer_name: job.freelancer_name,
             place_id: normalizedPlace.place_id,
             name: normalizedPlace.name,
             niche: job.niche,
@@ -241,6 +258,13 @@ export async function runSearchJob(jobId: string) {
 
           // Incrementa leads encontrados no job mesmo se já existia na base de dados
           newLeadsCreated++;
+
+          if (targetGoal > 0) {
+            const currentTotal = (job.leads_created || 0) + newLeadsCreated;
+            if (currentTotal >= targetGoal) {
+              break;
+            }
+          }
         }
       }
 
@@ -265,6 +289,11 @@ export async function runSearchJob(jobId: string) {
         });
       }
 
+      // Se atingiu a meta de leads, conclui a busca imediatamente
+      if (targetGoal > 0 && updatedJob && (updatedJob.leads_created + newLeadsCreated >= targetGoal)) {
+        break;
+      }
+
       // Delay de proteção contra rate limit
       const delay = Math.max(300, settings.requestDelayMs || 600);
       await new Promise((r) => setTimeout(r, delay));
@@ -282,6 +311,18 @@ export async function runSearchJob(jobId: string) {
     status: 'completed',
     finished_at: new Date().toISOString(),
   });
+
+  if (job.freelancer_id) {
+    const finalJob = db.getSearchJob(jobId);
+    db.logActivity({
+      freelancer_id: job.freelancer_id,
+      freelancer_name: job.freelancer_name,
+      action_type: 'search_completed',
+      description: `Busca finalizada: "${job.niche} em ${job.city}, ${job.state}" gerou ${finalJob?.leads_created || 0} novos leads`,
+      metadata: { jobId, leads_created: finalJob?.leads_created || 0 },
+    });
+  }
+
   activeWorkers.delete(jobId);
 }
 

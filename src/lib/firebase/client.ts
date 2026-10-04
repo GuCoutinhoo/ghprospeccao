@@ -92,10 +92,14 @@ export function computeStatsFromLeads(leads: Lead[]): DashboardStats {
     'CONTATADO': 0,
     'RESPONDEU': 0,
     'INTERESSADO': 0,
+    'FOLLOW_UP': 0,
+    'NEGOCIACAO': 0,
     'REUNIÃO': 0,
     'PROPOSTA': 0,
     'FECHADO': 0,
     'PERDIDO': 0,
+    'NAO_INTERESSADO': 0,
+    'SEM_RESPOSTA': 0,
   };
 
   const dayMap: Record<string, number> = {};

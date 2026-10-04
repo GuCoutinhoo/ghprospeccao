@@ -122,9 +122,13 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
     );
   }
 
-  const percent = job.total_search_areas > 0
+  const areasPercent = job.total_search_areas > 0
     ? Math.min(100, Math.round((job.processed_search_areas / job.total_search_areas) * 100))
     : 0;
+  const leadsPercent = job.target_leads && job.target_leads > 0
+    ? Math.min(100, Math.round((job.leads_created / job.target_leads) * 100))
+    : 0;
+  const percent = job.status === 'completed' ? 100 : Math.max(areasPercent, leadsPercent);
 
   const statusLabels: Record<string, { label: string; bg: string; text: string; icon: React.ElementType }> = {
     running: { label: 'Em execução', bg: 'bg-blue-50 border-blue-200', text: 'text-blue-700', icon: RotateCw },
@@ -199,10 +203,19 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
       <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-2xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-100">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-bold text-neutral-900 tracking-tight">
                 {job.niche} — {job.city === 'all' ? `Todas as cidades de ${job.state}` : `${job.city}, ${job.state}`}
               </h2>
+              {job.target_leads && job.target_leads > 0 ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  Meta: {job.target_leads} leads
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-neutral-100 text-neutral-700 border border-neutral-200">
+                  Meta: Sem limite
+                </span>
+              )}
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-medium border ${currentSt.bg} ${currentSt.text}`}
               >
@@ -305,6 +318,11 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
             </span>
             <div className="text-lg font-bold text-emerald-900 font-mono tabular-nums">
               {job.leads_created.toLocaleString('pt-BR')}
+              {job.target_leads && job.target_leads > 0 ? (
+                <span className="text-xs text-neutral-400 font-normal"> / {job.target_leads} meta</span>
+              ) : (
+                <span className="text-xs text-neutral-400 font-normal"> (livre)</span>
+              )}
             </div>
           </div>
         </div>

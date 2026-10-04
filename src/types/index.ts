@@ -1,15 +1,103 @@
 export type WebsiteStatus = 'no_website' | 'website_found' | 'not_verified' | 'invalid_website';
 
+export type UserRole = 'admin' | 'freelancer';
+
+export type FreelancerStatus = 'active' | 'blocked' | 'inactive';
+
+export interface Freelancer {
+  id: string; // e.g. "free_7F4K92XQ"
+  name: string;
+  email: string;
+  access_code: string; // e.g. "7F4K92XQ"
+  status: FreelancerStatus;
+  notes?: string;
+  pin?: string;
+  created_at: string;
+  updated_at: string;
+  last_access_at?: string;
+  last_activity_at?: string;
+}
+
+export type ActivityActionType =
+  | 'login'
+  | 'search_performed'
+  | 'search_completed'
+  | 'lead_opened'
+  | 'lead_contacted'
+  | 'contact_attempt'
+  | 'status_changed'
+  | 'response_registered'
+  | 'follow_up_registered'
+  | 'negotiation_started'
+  | 'sale_registered'
+  | 'freelancer_created'
+  | 'freelancer_blocked'
+  | 'freelancer_unblocked'
+  | 'access_link_regenerated'
+  | 'note_added';
+
+export interface Activity {
+  id: string;
+  freelancer_id: string;
+  freelancer_name?: string;
+  action_type: ActivityActionType;
+  description: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface FreelancerPerformance {
+  freelancer: Freelancer;
+  leadsFound: number;
+  leadsContacted: number;
+  contactAttempts: number;
+  responses: number;
+  followUps: number;
+  negotiations: number;
+  sales: number;
+  responseRate: number; // percentage
+  conversionRate: number; // percentage
+  searchesCount: number;
+  activeDays: number;
+  lastActivity?: string;
+  lastAccess?: string;
+  leadsPerDay: { date: string; count: number }[];
+  contactsPerDay: { date: string; count: number }[];
+}
+
+export interface AdminDashboardStats {
+  totalFreelancers: number;
+  activeFreelancers: number;
+  blockedFreelancers: number;
+  totalSearches: number;
+  totalLeadsFound: number;
+  totalLeadsContacted: number;
+  totalResponses: number;
+  totalFollowUps: number;
+  totalNegotiations: number;
+  totalSales: number;
+  totalSalesValue?: number;
+  overallResponseRate: number;
+  overallConversionRate: number;
+  recentActivities: Activity[];
+  mostActiveFreelancers: FreelancerPerformance[];
+  bestPerformingFreelancers: FreelancerPerformance[];
+}
+
 export type PipelineStatus = 
   | 'NOVO'
   | 'PRÉVIA CRIADA'
   | 'CONTATADO'
   | 'RESPONDEU'
   | 'INTERESSADO'
+  | 'FOLLOW_UP'
+  | 'NEGOCIACAO'
   | 'REUNIÃO'
   | 'PROPOSTA'
   | 'FECHADO'
-  | 'PERDIDO';
+  | 'PERDIDO'
+  | 'NAO_INTERESSADO'
+  | 'SEM_RESPOSTA';
 
 export type SearchJobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
@@ -39,6 +127,8 @@ export interface Place {
 export interface Lead {
   id: string;
   user_id: string;
+  freelancer_id?: string;
+  freelancer_name?: string;
   place_id: string;
   name: string;
   niche: string;
@@ -55,9 +145,15 @@ export interface Lead {
   pipeline_status: PipelineStatus;
   is_favorite?: boolean;
   notes?: string;
+  contact_attempts_count?: number;
+  sale_value?: number;
+  sale_date?: string;
+  contacted_at?: string;
+  response_at?: string;
+  follow_up_at?: string;
+  negotiation_at?: string;
   created_at: string;
   updated_at: string;
-  contacted_at?: string;
 }
 
 export interface LeadNote {
@@ -74,16 +170,20 @@ export interface SearchJobFilters {
   minRating: number;
   minReviews: number;
   maxReviews?: number;
+  targetLeads?: number; // 0 ou undefined = sem limite
 }
 
 export interface SearchJob {
   id: string;
   user_id: string;
+  freelancer_id?: string;
+  freelancer_name?: string;
   state: string;
   city: string; // 'all' or specific city name
   niche: string;
   status: SearchJobStatus;
   filters: SearchJobFilters;
+  target_leads?: number;
   total_cities: number;
   processed_cities: number;
   total_search_areas: number;

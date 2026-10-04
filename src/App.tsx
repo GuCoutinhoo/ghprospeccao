@@ -13,8 +13,14 @@ import { SettingsView } from './components/settings/SettingsView';
 import { SpeedOutreachView } from './components/outreach/SpeedOutreachView';
 import { TemplatesView } from './components/templates/TemplatesView';
 import { LoginView } from './components/auth/LoginView';
-import { DashboardStats, Lead } from './types';
-import { api } from './lib/api';
+import { FreelancerAccessView } from './components/auth/FreelancerAccessView';
+import { AdminDashboardView } from './components/admin/AdminDashboardView';
+import { FreelancersListView } from './components/admin/FreelancersListView';
+import { FreelancerDetailView } from './components/admin/FreelancerDetailView';
+import { AuditLogView } from './components/admin/AuditLogView';
+import { DashboardStats, Lead, Freelancer, UserRole } from './types';
+import { api, getActiveFreelancerSession } from './lib/api';
+import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 const DEFAULT_STATS: DashboardStats = {
   totalLeads: 0,
@@ -44,15 +50,24 @@ const DEFAULT_STATS: DashboardStats = {
 };
 
 export default function App() {
+  // Roles: 'admin' | 'freelancer'
+  const [userRole, setUserRole] = useState<UserRole>('admin');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
-  const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>({
+  const [adminUser, setAdminUser] = useState<{ email: string; name: string } | null>({
     email: 'gustavohcsantos.mm2020@gmail.com',
     name: 'Gustavo Santos',
   });
+  const [activeFreelancer, setActiveFreelancer] = useState<Freelancer | null>(null);
 
-  const [currentPath, setCurrentPath] = useState<string>('/dashboard');
+  // Navegação
+  const [currentPath, setCurrentPath] = useState<string>('/admin');
   const [activeSearchJobId, setActiveSearchJobId] = useState<string | null>(null);
+  const [selectedFreelancerIdForDetail, setSelectedFreelancerIdForDetail] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
+  // Freelancer link flow na URL: /f/:code
+  const [pendingFreelancerCode, setPendingFreelancerCode] = useState<string | null>(null);
+  const [showFreelancerLoginScreen, setShowFreelancerLoginScreen] = useState<boolean>(false);
 
   // Filtros contextuais passados para a tabela de leads
   const [leadsNicheFilter, setLeadsNicheFilter] = useState<string | undefined>(undefined);
@@ -70,12 +85,57 @@ export default function App() {
   const [publicPreviewLead, setPublicPreviewLead] = useState<Lead | null>(null);
   const [loadingPublicPreview, setLoadingPublicPreview] = useState<boolean>(false);
 
+  // 1. Inicialização de rotas e verificação de URL (/f/:code ou /admin)
+  useEffect(() => {
+    const pathname = window.location.pathname;
+
+    // Acesso direto via link de freelancer: /f/:code
+    if (pathname.startsWith('/f/')) {
+      const code = pathname.substring(3).trim();
+      if (code) {
+        setPendingFreelancerCode(code);
+        setShowFreelancerLoginScreen(true);
+        return;
+      }
+    }
+
+    if (pathname === '/f' || pathname === '/f/') {
+      setShowFreelancerLoginScreen(true);
+      return;
+    }
+
+    // Se já havia sessão de freelancer salva
+    const freeSession = getActiveFreelancerSession();
+    if (freeSession?.freelancer) {
+      setActiveFreelancer(freeSession.freelancer);
+      setUserRole('freelancer');
+      setIsAuthenticated(true);
+      setCurrentPath('/dashboard');
+      return;
+    }
+
+    // Se a rota for administrativa ou padrão, garante token do administrador
+    if (pathname.startsWith('/admin') || pathname === '/' || pathname === '/dashboard') {
+      if (!localStorage.getItem('gh_admin_token')) {
+        localStorage.setItem('gh_admin_token', 'admin_master_session_token');
+      }
+      setUserRole('admin');
+      if (pathname.startsWith('/admin')) {
+        setCurrentPath(pathname);
+      } else if (pathname === '/' || pathname === '/dashboard') {
+        setCurrentPath('/dashboard');
+      }
+    }
+  }, []);
+
+  // 2. Prévia de Lead pública via ?leadId=
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const leadId = urlParams.get('leadId');
     if (leadId) {
       setLoadingPublicPreview(true);
-      api.getLeadById(leadId)
+      api
+        .getLeadById(leadId)
         .then((res) => {
           if (res?.lead) {
             setPublicPreviewLead(res.lead);
@@ -86,11 +146,12 @@ export default function App() {
     }
   }, []);
 
+  // 3. Carregar dados do dashboard quando autenticado
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !showFreelancerLoginScreen) {
       loadInitialData();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, userRole, activeFreelancer]);
 
   const loadInitialData = async () => {
     setIsRefreshing(true);
@@ -130,11 +191,21 @@ export default function App() {
   };
 
   const handleNavigate = (path: string) => {
+    // PROTEÇÃO CONTRA MANIPULAÇÃO DE URL (Requisito 6 do prompt)
+    // Se o usuário for freelancer e tentar acessar qualquer rota de /admin ou /settings
+    if (userRole === 'freelancer' && (path.startsWith('/admin') || path === '/settings')) {
+      alert('Acesso Negado: Apenas administradores autenticados podem acessar esta área.');
+      return;
+    }
+
     setCurrentPath(path);
     if (!path.startsWith('/search/')) {
       setActiveSearchJobId(null);
     }
-    // Quando navega diretamente para /leads pelo menu, limpa filtros contextuais de buscas antigas
+    if (!path.startsWith('/admin/freelancers/')) {
+      setSelectedFreelancerIdForDetail(null);
+    }
+    // Quando navega diretamente para /leads pelo menu, limpa filtros contextuais
     if (path === '/leads') {
       setLeadsNicheFilter(undefined);
       setLeadsStateFilter(undefined);
@@ -158,17 +229,57 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentUser(null);
+    if (userRole === 'freelancer') {
+      api.freelancerLogout();
+      setActiveFreelancer(null);
+      setShowFreelancerLoginScreen(true);
+    } else {
+      api.adminLogout();
+      setIsAuthenticated(false);
+      setAdminUser(null);
+    }
   };
 
-  // Se não estiver logado, exibe tela de login
-  if (!isAuthenticated) {
+  const handleFreelancerWorkspaceReady = (freelancer: Freelancer, _token: string) => {
+    setActiveFreelancer(freelancer);
+    setUserRole('freelancer');
+    setIsAuthenticated(true);
+    setShowFreelancerLoginScreen(false);
+    setPendingFreelancerCode(null);
+    setCurrentPath('/dashboard');
+    // Atualiza histórico do navegador sem recarregar
+    if (window.history && window.history.pushState) {
+      window.history.pushState({}, '', `/f/${freelancer.access_code}`);
+    }
+  };
+
+  // Se estiver na tela de login de freelancer via código
+  if (showFreelancerLoginScreen) {
+    return (
+      <FreelancerAccessView
+        initialCode={pendingFreelancerCode || ''}
+        onWorkspaceReady={handleFreelancerWorkspaceReady}
+        onGoToAdminLogin={() => {
+          setShowFreelancerLoginScreen(false);
+          setUserRole('admin');
+          setIsAuthenticated(false);
+        }}
+      />
+    );
+  }
+
+  // Se não estiver logado como administrador
+  if (!isAuthenticated && userRole === 'admin') {
     return (
       <LoginView
         onLoginSuccess={(user) => {
-          setCurrentUser(user);
+          setAdminUser(user);
           setIsAuthenticated(true);
+          setUserRole('admin');
+          setCurrentPath('/admin');
+        }}
+        onGoToFreelancerAccess={() => {
+          setShowFreelancerLoginScreen(true);
         }}
       />
     );
@@ -176,10 +287,37 @@ export default function App() {
 
   // Títulos e subtítulos contextuais para o header
   const getHeaderMeta = () => {
+    if (currentPath === '/admin' || currentPath === '/admin/dashboard') {
+      return {
+        title: 'Painel Geral de Controle',
+        subtitle: 'Visão consolidada da operação, métricas comerciais por freelancer e auditoria em tempo real',
+      };
+    }
+    if (currentPath === '/admin/freelancers') {
+      return {
+        title: 'Gestão de Freelancers & Equipe',
+        subtitle: 'Criação de acessos, links exclusivos, bloqueio/desbloqueio e métricas individuais',
+      };
+    }
+    if (currentPath.startsWith('/admin/freelancers/')) {
+      return {
+        title: 'Perfil & Desempenho do Freelancer',
+        subtitle: 'Histórico de atividades, leads atribuídos, varreduras e vendas fechadas',
+      };
+    }
+    if (currentPath === '/admin/activities') {
+      return {
+        title: 'Auditoria de Ações & Rastreabilidade',
+        subtitle: 'Log inalterável em tempo real de buscas, abordagens, respostas e vendas',
+      };
+    }
     if (currentPath === '/dashboard') {
       return {
-        title: 'Visão Geral & Métricas',
-        subtitle: 'Indicadores de prospecção comercial e oportunidades mapeadas',
+        title: userRole === 'freelancer' ? 'Meu Dashboard' : 'Visão Geral & Métricas',
+        subtitle:
+          userRole === 'freelancer'
+            ? `Workspace individual de ${activeFreelancer?.name || 'prospecção'}`
+            : 'Indicadores de prospecção comercial e oportunidades mapeadas',
       };
     }
     if (currentPath === '/search') {
@@ -196,7 +334,7 @@ export default function App() {
     }
     if (currentPath === '/leads') {
       return {
-        title: 'Base de Estabelecimentos & Leads',
+        title: userRole === 'freelancer' ? 'Meus Estabelecimentos & Leads' : 'Base Global de Leads',
         subtitle: 'Gerenciamento comercial, filtros de qualificação e exportação',
       };
     }
@@ -230,7 +368,7 @@ export default function App() {
         subtitle: 'Chaves de API, cotas e scripts de migração do Supabase',
       };
     }
-    return { title: 'ProspectaPlaces B2B' };
+    return { title: 'GH Prospecção' };
   };
 
   const headerMeta = getHeaderMeta();
@@ -277,6 +415,9 @@ export default function App() {
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onLogout={handleLogout}
         hasCustomKey={hasCustomKey}
+        userRole={userRole}
+        freelancer={activeFreelancer}
+        adminUser={adminUser}
       />
 
       {/* Main Content Area */}
@@ -289,10 +430,48 @@ export default function App() {
           onNewSearch={currentPath !== '/search' ? () => handleNavigate('/search') : undefined}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
+          userRole={userRole}
+          freelancerName={activeFreelancer?.name}
         />
 
         {/* Viewport Principal */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          {/* ================= AREA ADMINISTRATIVA ================= */}
+          {userRole === 'admin' && (currentPath === '/admin' || currentPath === '/admin/dashboard') && (
+            <AdminDashboardView
+              onNavigateToFreelancers={() => handleNavigate('/admin/freelancers')}
+              onNavigateToActivities={() => handleNavigate('/admin/activities')}
+              onSelectFreelancer={(id) => {
+                setSelectedFreelancerIdForDetail(id);
+                setCurrentPath(`/admin/freelancers/${id}`);
+              }}
+            />
+          )}
+
+          {userRole === 'admin' && currentPath === '/admin/freelancers' && (
+            <FreelancersListView
+              onSelectFreelancer={(id) => {
+                setSelectedFreelancerIdForDetail(id);
+                setCurrentPath(`/admin/freelancers/${id}`);
+              }}
+            />
+          )}
+
+          {userRole === 'admin' &&
+            currentPath.startsWith('/admin/freelancers/') &&
+            (selectedFreelancerIdForDetail || currentPath.split('/')[3]) && (
+              <FreelancerDetailView
+                freelancerId={selectedFreelancerIdForDetail || currentPath.split('/')[3]}
+                onBack={() => handleNavigate('/admin/freelancers')}
+                onSelectLead={(lead) => setSelectedLead(lead)}
+              />
+            )}
+
+          {userRole === 'admin' && currentPath === '/admin/activities' && (
+            <AuditLogView />
+          )}
+
+          {/* ================= AREA DE PROSPECCAO ================= */}
           {currentPath === '/dashboard' && (
             <DashboardView
               stats={stats || DEFAULT_STATS}
@@ -357,7 +536,9 @@ export default function App() {
             />
           )}
 
-          {currentPath === '/settings' && <SettingsView onSettingsUpdated={loadInitialData} />}
+          {userRole === 'admin' && currentPath === '/settings' && (
+            <SettingsView onSettingsUpdated={loadInitialData} />
+          )}
         </main>
       </div>
 

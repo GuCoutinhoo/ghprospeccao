@@ -1,4 +1,20 @@
-import { DashboardStats, Lead, LeadNote, Place, SearchJob, SearchArea, SearchQueryLog, AppSettings, IBGEState, IBGECity, PipelineStatus } from '../types';
+import {
+  DashboardStats,
+  Lead,
+  LeadNote,
+  Place,
+  SearchJob,
+  SearchArea,
+  SearchQueryLog,
+  AppSettings,
+  IBGEState,
+  IBGECity,
+  PipelineStatus,
+  Freelancer,
+  Activity,
+  AdminDashboardStats,
+  FreelancerPerformance,
+} from '../types';
 import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
 import {
   fetchAllLeadsFromFirestore,
@@ -8,23 +24,323 @@ import {
   invalidateLeadsCache,
 } from './firebase/client';
 
+export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (typeof window === 'undefined') return headers;
+
+  const freelancerToken = localStorage.getItem('gh_freelancer_token');
+  if (freelancerToken) {
+    headers['Authorization'] = `Bearer ${freelancerToken}`;
+    return headers;
+  }
+
+  let adminToken = localStorage.getItem('gh_admin_token');
+  if (!adminToken) {
+    adminToken = 'admin_master_session_token';
+    try {
+      localStorage.setItem('gh_admin_token', adminToken);
+      localStorage.setItem(
+        'gh_admin_user',
+        JSON.stringify({
+          id: 'admin_1',
+          email: 'gustavohcsantos.mm2020@gmail.com',
+          name: 'Gustavo Santos',
+          role: 'admin',
+        })
+      );
+    } catch {}
+  }
+
+  headers['Authorization'] = `Bearer ${adminToken}`;
+  return headers;
+}
+
+export function isFreelancerMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  return Boolean(localStorage.getItem('gh_freelancer_token')) && !localStorage.getItem('gh_admin_token');
+}
+
+export function getActiveFreelancerSession(): { token: string; freelancer: Freelancer } | null {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('gh_freelancer_session');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export const api = {
-  // Auth
-  async login(email: string, pass: string) {
-    const res = await fetch('/api/auth/login', {
+  // Admin Authentication
+  async adminLogin(email: string, pass: string) {
+    const res = await fetch('/api/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: pass }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Falha ao autenticar.');
+      throw new Error(err.error || 'Falha ao autenticar administrador.');
+    }
+    const data = await res.json();
+    if (data.token) {
+      localStorage.setItem('gh_admin_token', data.token);
+      localStorage.setItem('gh_admin_user', JSON.stringify(data.user));
+    }
+    return data;
+  },
+
+  async adminGetMe() {
+    const res = await fetch('/api/admin/me', {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Não autenticado como administrador.');
+    return res.json();
+  },
+
+  async adminLogout() {
+    try {
+      await fetch('/api/admin/logout', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+    } finally {
+      localStorage.removeItem('gh_admin_token');
+      localStorage.removeItem('gh_admin_user');
+    }
+    return { success: true };
+  },
+
+  // Freelancer Authentication & Workspace Access
+  async verifyFreelancerLink(accessCode: string, pin?: string) {
+    const res = await fetch('/api/freelancer/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessCode, pin }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (res.status === 403 && err.blocked) {
+        const error = new Error(err.message || 'Seu acesso ao GHProspecção foi desativado. Entre em contato com o administrador.');
+        (error as any).blocked = true;
+        throw error;
+      }
+      const error = new Error(err.message || err.error || 'Código ou link de acesso inválido.');
+      (error as any).status = res.status;
+      (error as any).requiresPin = err.requiresPin;
+      throw error;
+    }
+
+    const data = await res.json();
+    if (data.token && data.freelancer) {
+      localStorage.setItem('gh_freelancer_token', data.token);
+      localStorage.setItem('gh_freelancer_session', JSON.stringify({ token: data.token, freelancer: data.freelancer }));
+    }
+    return data;
+  },
+
+  async getFreelancerMe(): Promise<{ freelancer: Freelancer }> {
+    const res = await fetch('/api/freelancer/me', {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (res.status === 403 && err.blocked) {
+        const error = new Error(err.message || 'Seu acesso ao GHProspecção foi desativado. Entre em contato com o administrador.');
+        (error as any).blocked = true;
+        throw error;
+      }
+      throw new Error(err.error || 'Sessão do freelancer expirada.');
     }
     return res.json();
   },
 
+  freelancerLogout() {
+    localStorage.removeItem('gh_freelancer_token');
+    localStorage.removeItem('gh_freelancer_session');
+  },
+
+  // Admin: Gestão de Freelancers
+  async adminGetDashboardStats(filters?: {
+    freelancer_id?: string;
+    period?: string;
+    state?: string;
+    niche?: string;
+    status?: string;
+  }): Promise<AdminDashboardStats> {
+    const query = new URLSearchParams();
+    if (filters?.freelancer_id) query.set('freelancer_id', filters.freelancer_id);
+    if (filters?.period) query.set('period', filters.period);
+    if (filters?.state) query.set('state', filters.state);
+    if (filters?.niche) query.set('niche', filters.niche);
+    if (filters?.status) query.set('status', filters.status);
+
+    const res = await fetch(`/api/admin/dashboard/stats?${query.toString()}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || 'Falha ao carregar métricas operacionais do painel admin.');
+    }
+    return res.json();
+  },
+
+  async adminGetFreelancers(): Promise<(Freelancer & { performance?: FreelancerPerformance })[]> {
+    const res = await fetch('/api/admin/freelancers', {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Falha ao carregar lista de freelancers.');
+    return res.json();
+  },
+
+  async adminCreateFreelancer(data: {
+    name: string;
+    email: string;
+    notes?: string;
+    pin?: string;
+    status?: 'active' | 'blocked' | 'inactive';
+  }): Promise<{ success: boolean; freelancer: Freelancer; accessLink: string }> {
+    const res = await fetch('/api/admin/freelancers', {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao cadastrar freelancer.');
+    }
+    return res.json();
+  },
+
+  async adminGetFreelancerById(id: string): Promise<{ freelancer: Freelancer; performance?: FreelancerPerformance }> {
+    const res = await fetch(`/api/admin/freelancers/${id}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Freelancer não encontrado.');
+    return res.json();
+  },
+
+  async adminUpdateFreelancer(id: string, updates: Partial<Freelancer>): Promise<{ success: boolean; freelancer: Freelancer }> {
+    const res = await fetch(`/api/admin/freelancers/${id}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error('Falha ao atualizar dados do freelancer.');
+    return res.json();
+  },
+
+  async adminBlockFreelancer(id: string): Promise<{ success: boolean; freelancer: Freelancer }> {
+    const res = await fetch(`/api/admin/freelancers/${id}/block`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Falha ao bloquear freelancer.');
+    return res.json();
+  },
+
+  async adminUnblockFreelancer(id: string): Promise<{ success: boolean; freelancer: Freelancer }> {
+    const res = await fetch(`/api/admin/freelancers/${id}/unblock`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Falha ao desbloquear freelancer.');
+    return res.json();
+  },
+
+  async adminRegenerateLink(id: string): Promise<{ success: boolean; accessCode: string; accessLink: string; freelancer: Freelancer }> {
+    const res = await fetch(`/api/admin/freelancers/${id}/regenerate-link`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Falha ao regenerar link do freelancer.');
+    return res.json();
+  },
+
+  async adminDeleteFreelancer(id: string): Promise<{ success: boolean }> {
+    const res = await fetch(`/api/admin/freelancers/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Falha ao excluir freelancer.');
+    return res.json();
+  },
+
+  async adminGetFreelancerLeads(id: string): Promise<{ leads: Lead[]; total: number }> {
+    const res = await fetch(`/api/admin/freelancers/${id}/leads`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Falha ao carregar leads do freelancer.');
+    return res.json();
+  },
+
+  async adminGetFreelancerSearches(id: string): Promise<SearchJob[]> {
+    const res = await fetch(`/api/admin/freelancers/${id}/searches`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Falha ao carregar buscas do freelancer.');
+    return res.json();
+  },
+
+  async adminGetFreelancerActivities(id: string): Promise<{ activities: Activity[]; total: number }> {
+    const res = await fetch(`/api/admin/freelancers/${id}/activities`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Falha ao carregar atividades do freelancer.');
+    return res.json();
+  },
+
+  async adminGetActivities(params?: {
+    freelancer_id?: string;
+    action_type?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ activities: Activity[]; total: number }> {
+    const query = new URLSearchParams();
+    if (params?.freelancer_id) query.set('freelancer_id', params.freelancer_id);
+    if (params?.action_type) query.set('action_type', params.action_type);
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset) query.set('offset', String(params.offset));
+
+    const res = await fetch(`/api/admin/activities?${query.toString()}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Falha ao carregar registro de auditoria.');
+    return res.json();
+  },
+
+  // Auth legacy
+  async login(email: string, pass: string) {
+    return this.adminLogin(email, pass);
+  },
+
   async getMe() {
-    const res = await fetch('/api/auth/me');
+    const res = await fetch('/api/auth/me', {
+      headers: getAuthHeaders(),
+    });
+    return res.json();
+  },
+
+  // Ações Comerciais com Auditoria
+  async recordContactAttempt(leadId: string, channel = 'WhatsApp') {
+    const res = await fetch(`/api/leads/${leadId}/contact-attempt`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ channel }),
+    });
+    if (!res.ok) throw new Error('Falha ao registrar tentativa de contato.');
+    return res.json();
+  },
+
+  async recordSale(leadId: string, value: number) {
+    const res = await fetch(`/api/leads/${leadId}/register-sale`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ value }),
+    });
+    if (!res.ok) throw new Error('Falha ao registrar venda.');
     return res.json();
   },
 
@@ -288,6 +604,47 @@ export const api = {
     return { id, ...updates } as Lead;
   },
 
+  async registerContactAttempt(id: string, channel: string = 'WhatsApp'): Promise<{ success: boolean; lead: Lead }> {
+    try {
+      const res = await fetch(`/api/leads/${id}/contact-attempt`, {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ channel }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('[API] Falha em contact-attempt:', err);
+    }
+    const updated = await this.updateLead(id, {
+      pipeline_status: 'CONTATADO',
+      contacted_at: new Date().toISOString(),
+    });
+    return { success: true, lead: updated };
+  },
+
+  async registerSale(id: string, value: number): Promise<{ success: boolean; lead: Lead }> {
+    try {
+      const res = await fetch(`/api/leads/${id}/register-sale`, {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ value }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('[API] Falha em register-sale:', err);
+    }
+    const updated = await this.updateLead(id, {
+      pipeline_status: 'FECHADO',
+      sale_value: value,
+      sale_date: new Date().toISOString(),
+    });
+    return { success: true, lead: updated };
+  },
+
   async toggleLeadFavorite(id: string): Promise<Lead> {
     try {
       const res = await fetch(`/api/leads/${id}/favorite`, {
@@ -338,10 +695,14 @@ export const api = {
       'CONTATADO': [],
       'RESPONDEU': [],
       'INTERESSADO': [],
+      'FOLLOW_UP': [],
+      'NEGOCIACAO': [],
       'REUNIÃO': [],
       'PROPOSTA': [],
       'FECHADO': [],
       'PERDIDO': [],
+      'NAO_INTERESSADO': [],
+      'SEM_RESPOSTA': [],
     };
     for (const l of allLeads) {
       const st = (l.pipeline_status || 'NOVO') as PipelineStatus;
@@ -384,6 +745,7 @@ export const api = {
       minRating: number;
       minReviews: number;
       maxReviews?: number;
+      targetLeads?: number;
     };
   }): Promise<{ job: SearchJob; estimatedQueries: number; totalCities: number; totalAreas: number }> {
     const res = await fetch('/api/search-jobs', {

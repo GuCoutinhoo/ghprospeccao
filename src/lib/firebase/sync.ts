@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
-import { Place, Lead, LeadNote, SearchJob, AppSettings } from '../../types';
+import { Place, Lead, LeadNote, SearchJob, AppSettings, Freelancer, Activity } from '../../types';
 import firebaseConfigJson from '../../../firebase-applet-config.json';
 
 let dbInstance: Firestore | null = null;
@@ -49,16 +49,20 @@ export async function fetchAllFromFirestore(): Promise<{
   leads: Lead[];
   jobs: SearchJob[];
   settings?: AppSettings;
+  freelancers?: Freelancer[];
+  activities?: Activity[];
 } | null> {
   const db = getFirestoreDb();
   if (!db) return null;
 
   try {
-    const [leadsSnap, placesSnap, jobsSnap, settingsSnap] = await Promise.all([
+    const [leadsSnap, placesSnap, jobsSnap, settingsSnap, freelancersSnap, activitiesSnap] = await Promise.all([
       getDocs(collection(db, 'leads')).catch(() => null),
       getDocs(collection(db, 'places')).catch(() => null),
       getDocs(collection(db, 'search_jobs')).catch(() => null),
       getDoc(doc(db, 'settings', 'config')).catch(() => null),
+      getDocs(collection(db, 'freelancers')).catch(() => null),
+      getDocs(collection(db, 'activities')).catch(() => null),
     ]);
 
     const leads: Lead[] = [];
@@ -76,11 +80,21 @@ export async function fetchAllFromFirestore(): Promise<{
       jobsSnap.forEach((d) => jobs.push(d.data() as SearchJob));
     }
 
+    const freelancers: Freelancer[] = [];
+    if (freelancersSnap) {
+      freelancersSnap.forEach((d) => freelancers.push(d.data() as Freelancer));
+    }
+
+    const activities: Activity[] = [];
+    if (activitiesSnap) {
+      activitiesSnap.forEach((d) => activities.push(d.data() as Activity));
+    }
+
     const settings = settingsSnap && settingsSnap.exists()
       ? (settingsSnap.data() as AppSettings)
       : undefined;
 
-    return { places, leads, jobs, settings };
+    return { places, leads, jobs, settings, freelancers, activities };
   } catch (err) {
     console.warn('[Firebase] Erro ao carregar dados do Firestore:', err);
     return null;
@@ -141,5 +155,35 @@ export async function syncSettingsToFirestore(settings: AppSettings): Promise<vo
     await setDoc(doc(db, 'settings', 'config'), cleanForFirestore(settings), { merge: true });
   } catch (err) {
     console.warn('[Firebase] Erro ao salvar configurações no Firestore:', err);
+  }
+}
+
+export async function syncFreelancerToFirestore(freelancer: Freelancer): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !freelancer.id) return;
+  try {
+    await setDoc(doc(db, 'freelancers', freelancer.id), cleanForFirestore(freelancer), { merge: true });
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao sincronizar freelancer ${freelancer.id}:`, err);
+  }
+}
+
+export async function deleteFreelancerFromFirestore(id: string): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !id) return;
+  try {
+    await deleteDoc(doc(db, 'freelancers', id));
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao deletar freelancer ${id} do Firestore:`, err);
+  }
+}
+
+export async function syncActivityToFirestore(activity: Activity): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !activity.id) return;
+  try {
+    await setDoc(doc(db, 'activities', activity.id), cleanForFirestore(activity), { merge: true });
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao sincronizar atividade ${activity.id}:`, err);
   }
 }

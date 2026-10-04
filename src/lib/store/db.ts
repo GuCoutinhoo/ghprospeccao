@@ -10,6 +10,11 @@ import {
   AppSettings,
   DashboardStats,
   PipelineStatus,
+  Freelancer,
+  FreelancerStatus,
+  Activity,
+  FreelancerPerformance,
+  AdminDashboardStats,
 } from '../../types';
 import { calculateLeadScore, DEFAULT_SCORING_WEIGHTS } from '../scoring/leadScore';
 import {
@@ -18,6 +23,9 @@ import {
   syncPlaceToFirestore,
   syncJobToFirestore,
   syncSettingsToFirestore,
+  syncFreelancerToFirestore,
+  deleteFreelancerFromFirestore,
+  syncActivityToFirestore,
 } from '../firebase/sync';
 
 function normalizeStr(str?: string | null): string {
@@ -29,6 +37,15 @@ function normalizeStr(str?: string | null): string {
     .trim();
 }
 
+function generateAccessCode(): string {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 interface DbSchema {
   places: Place[];
   leads: Lead[];
@@ -37,6 +54,8 @@ interface DbSchema {
   search_areas: SearchArea[];
   search_queries: SearchQueryLog[];
   settings: AppSettings;
+  freelancers: Freelancer[];
+  activities: Activity[];
 }
 
 const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
@@ -70,6 +89,8 @@ class Database {
     search_areas: [],
     search_queries: [],
     settings: INITIAL_SETTINGS,
+    freelancers: [],
+    activities: [],
   };
 
   private initialized = false;
@@ -86,6 +107,33 @@ class Database {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         this.data = JSON.parse(raw);
         this.data.settings = { ...INITIAL_SETTINGS, ...(this.data.settings || {}) };
+        if (!this.data.freelancers) this.data.freelancers = [];
+        if (!this.data.activities) this.data.activities = [];
+
+        // Modo Produção Real: remove freelancers de teste e zera simulações
+        this.data.freelancers = [];
+        this.data.activities = [];
+
+        for (const l of this.data.leads || []) {
+          // Remove campos simulados para refletir dados reais de produção
+          if (!l.pipeline_status || l.pipeline_status !== 'NOVO') {
+            l.pipeline_status = 'NOVO';
+          }
+          delete l.contacted_at;
+          delete l.response_at;
+          delete l.follow_up_at;
+          delete l.negotiation_at;
+          delete l.sale_date;
+          delete l.sale_value;
+          delete l.contact_attempts_count;
+          delete l.freelancer_id;
+          delete l.freelancer_name;
+        }
+        for (const j of this.data.search_jobs || []) {
+          delete j.freelancer_id;
+          delete j.freelancer_name;
+        }
+        this.save();
         this.initialized = true;
         return;
       }
@@ -210,6 +258,52 @@ class Database {
         }
         this.data.search_jobs = Array.from(jobMap.values());
 
+        // MERGE FREELANCERS
+        const demoFreeIds = ['free_7F4K92XQ', 'free_8HKS82MD', 'free_9YPL21BZ', 'free_4TRM67KV'];
+        if (remote.freelancers && remote.freelancers.length > 0) {
+          const freeMap = new Map<string, Freelancer>();
+          for (const f of remote.freelancers) {
+            if (f && f.id && !demoFreeIds.includes(f.id)) freeMap.set(f.id, f);
+            else if (f && f.id && demoFreeIds.includes(f.id)) {
+              deleteFreelancerFromFirestore(f.id).catch(() => {});
+            }
+          }
+          for (const f of this.data.freelancers || []) {
+            if (!f || !f.id || demoFreeIds.includes(f.id)) continue;
+            if (!freeMap.has(f.id)) {
+              freeMap.set(f.id, f);
+              syncFreelancerToFirestore(f).catch(() => {});
+            }
+          }
+          this.data.freelancers = Array.from(freeMap.values());
+        } else {
+          this.data.freelancers = (this.data.freelancers || []).filter((f) => !demoFreeIds.includes(f.id));
+        }
+
+        // MERGE ACTIVITIES
+        if (remote.activities && remote.activities.length > 0) {
+          const actMap = new Map<string, Activity>();
+          for (const a of remote.activities) {
+            if (a && a.id && !demoFreeIds.includes(a.freelancer_id) && !['act_1', 'act_2', 'act_3', 'act_4', 'act_5', 'act_6', 'act_7'].includes(a.id)) {
+              actMap.set(a.id, a);
+            }
+          }
+          for (const a of this.data.activities || []) {
+            if (!a || !a.id || demoFreeIds.includes(a.freelancer_id) || ['act_1', 'act_2', 'act_3', 'act_4', 'act_5', 'act_6', 'act_7'].includes(a.id)) continue;
+            if (!actMap.has(a.id)) {
+              actMap.set(a.id, a);
+              syncActivityToFirestore(a).catch(() => {});
+            }
+          }
+          this.data.activities = Array.from(actMap.values()).sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        } else {
+          this.data.activities = (this.data.activities || []).filter(
+            (a) => !demoFreeIds.includes(a.freelancer_id) && !['act_1', 'act_2', 'act_3', 'act_4', 'act_5', 'act_6', 'act_7'].includes(a.id)
+          );
+        }
+
         if (remote.settings) {
           this.data.settings = { ...this.data.settings, ...remote.settings };
         }
@@ -235,7 +329,35 @@ class Database {
     this.data.search_jobs = [];
     this.data.search_areas = [];
     this.data.search_queries = [];
+    this.data.freelancers = [];
+    this.data.activities = [];
     this.data.settings = INITIAL_SETTINGS;
+    this.seedInitialFreelancers();
+  }
+
+  private seedInitialFreelancers() {
+    this.data.freelancers = [];
+    this.data.activities = [];
+  }
+
+  public removeAllFreelancers(): void {
+    const list = [...(this.data.freelancers || [])];
+    for (const f of list) {
+      deleteFreelancerFromFirestore(f.id).catch(() => {});
+    }
+    this.data.freelancers = [];
+    this.data.activities = [];
+
+    // Limpa vínculos de leads e jobs com freelancers
+    for (const l of this.data.leads || []) {
+      delete l.freelancer_id;
+      delete l.freelancer_name;
+    }
+    for (const j of this.data.search_jobs || []) {
+      delete j.freelancer_id;
+      delete j.freelancer_name;
+    }
+    this.save();
   }
 
   private save() {
@@ -276,10 +398,11 @@ class Database {
 
   // --- LEADS ---
   public createLead(lead: Lead): { lead: Lead; created: boolean } {
-    // Deduplicação comercial: único por place_id + niche normalizado
+    // Deduplicação comercial: único por place_id + niche + escopo do freelancer
     const normNiche = normalizeStr(lead.niche);
+    const scope = lead.freelancer_id || lead.user_id || 'default_user_1';
     const existingIndex = this.data.leads.findIndex(
-      (l) => l.place_id === lead.place_id && normalizeStr(l.niche) === normNiche
+      (l) => l.place_id === lead.place_id && normalizeStr(l.niche) === normNiche && (l.freelancer_id || l.user_id || 'default_user_1') === scope
     );
     if (existingIndex >= 0) {
       const prev = this.data.leads[existingIndex];
@@ -302,6 +425,7 @@ class Database {
   }
 
   public getLeads(params: {
+    freelancer_id?: string;
     state?: string;
     city?: string;
     niche?: string;
@@ -318,6 +442,10 @@ class Database {
     limit?: number;
   }): { leads: Lead[]; total: number; page: number; totalPages: number } {
     let filtered = [...this.data.leads];
+
+    if (params.freelancer_id && params.freelancer_id !== 'ALL') {
+      filtered = filtered.filter((l) => l.freelancer_id === params.freelancer_id);
+    }
 
     if (params.state && params.state !== 'ALL') {
       const targetState = params.state.toUpperCase().trim();
@@ -453,9 +581,13 @@ class Database {
     return this.data.leads.find((l) => l.id === id);
   }
 
-  public updateLead(id: string, updates: Partial<Lead>): Lead | undefined {
+  public updateLead(id: string, updates: Partial<Lead>, freelancer_id?: string): Lead | undefined {
     const idx = this.data.leads.findIndex((l) => l.id === id);
     if (idx === -1) return undefined;
+
+    if (freelancer_id && this.data.leads[idx].freelancer_id && this.data.leads[idx].freelancer_id !== freelancer_id) {
+      return undefined;
+    }
 
     this.data.leads[idx] = {
       ...this.data.leads[idx],
@@ -497,21 +629,30 @@ class Database {
   }
 
   // --- PIPELINE ---
-  public getPipelineBoard(): Record<PipelineStatus, Lead[]> {
+  public getPipelineBoard(freelancer_id?: string): Record<PipelineStatus, Lead[]> {
     const columns: Record<PipelineStatus, Lead[]> = {
       'NOVO': [],
       'PRÉVIA CRIADA': [],
       'CONTATADO': [],
       'RESPONDEU': [],
       'INTERESSADO': [],
+      'FOLLOW_UP': [],
+      'NEGOCIACAO': [],
       'REUNIÃO': [],
       'PROPOSTA': [],
       'FECHADO': [],
       'PERDIDO': [],
+      'NAO_INTERESSADO': [],
+      'SEM_RESPOSTA': [],
     };
 
+    let list = this.data.leads;
+    if (freelancer_id && freelancer_id !== 'ALL') {
+      list = list.filter((l) => l.freelancer_id === freelancer_id);
+    }
+
     // Ordenar leads por score decrescente dentro de cada coluna
-    for (const lead of this.data.leads) {
+    for (const lead of list) {
       if (columns[lead.pipeline_status]) {
         columns[lead.pipeline_status].push(lead);
       } else {
@@ -527,18 +668,21 @@ class Database {
   }
 
   // --- DASHBOARD ---
-  public getDashboardStats(): DashboardStats {
-    const leads = this.data.leads;
+  public getDashboardStats(freelancer_id?: string): DashboardStats {
+    let leads = this.data.leads;
+    if (freelancer_id && freelancer_id !== 'ALL') {
+      leads = leads.filter((l) => l.freelancer_id === freelancer_id);
+    }
     const totalLeads = leads.length;
     const newLeads = leads.filter((l) => l.pipeline_status === 'NOVO').length;
     const contactedLeads = leads.filter((l) => l.pipeline_status === 'CONTATADO').length;
-    const interestedLeads = leads.filter((l) => l.pipeline_status === 'INTERESSADO').length;
+    const interestedLeads = leads.filter((l) => l.pipeline_status === 'INTERESSADO' || l.pipeline_status === 'NEGOCIACAO').length;
     const closedLeads = leads.filter((l) => l.pipeline_status === 'FECHADO').length;
     const noWebsiteLeads = leads.filter((l) => l.website_status === 'no_website' || !l.website).length;
     const withPhoneLeads = leads.filter((l) => Boolean(l.phone && l.phone.trim().length >= 8)).length;
 
-    const contactedOrMore = leads.filter((l) => ['CONTATADO', 'RESPONDEU', 'INTERESSADO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)).length;
-    const respondedOrMore = leads.filter((l) => ['RESPONDEU', 'INTERESSADO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)).length;
+    const contactedOrMore = leads.filter((l) => ['CONTATADO', 'RESPONDEU', 'INTERESSADO', 'FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)).length;
+    const respondedOrMore = leads.filter((l) => ['RESPONDEU', 'INTERESSADO', 'FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)).length;
 
     const responseRate = contactedOrMore > 0 ? Math.round((respondedOrMore / contactedOrMore) * 100) : 0;
     const closingRate = totalLeads > 0 ? Math.round((closedLeads / totalLeads) * 100) : 0;
@@ -579,7 +723,7 @@ class Database {
       }
     }
 
-    const pipelineStatuses: PipelineStatus[] = ['NOVO', 'PRÉVIA CRIADA', 'CONTATADO', 'RESPONDEU', 'INTERESSADO', 'REUNIÃO', 'PROPOSTA', 'FECHADO', 'PERDIDO'];
+    const pipelineStatuses: PipelineStatus[] = ['NOVO', 'PRÉVIA CRIADA', 'CONTATADO', 'RESPONDEU', 'INTERESSADO', 'FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO', 'PERDIDO'];
     const pipelineDistribution = pipelineStatuses.map((st) => ({
       status: st,
       count: leads.filter((l) => l.pipeline_status === st).length,
@@ -621,10 +765,427 @@ class Database {
     return this.data.search_jobs.find((j) => j.id === id);
   }
 
-  public getAllSearchJobs(): SearchJob[] {
-    return [...this.data.search_jobs].sort(
+  public getAllSearchJobs(freelancer_id?: string): SearchJob[] {
+    let list = [...this.data.search_jobs];
+    if (freelancer_id && freelancer_id !== 'ALL') {
+      list = list.filter((j) => j.freelancer_id === freelancer_id);
+    }
+    return list.sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
+  }
+
+  // --- FREELANCERS MANAGEMENT ---
+  public getFreelancers(): Freelancer[] {
+    return [...(this.data.freelancers || [])];
+  }
+
+  public getFreelancerById(id: string): Freelancer | undefined {
+    return (this.data.freelancers || []).find((f) => f.id === id);
+  }
+
+  public getFreelancerByAccessCode(code: string): Freelancer | undefined {
+    const clean = code.trim().toUpperCase();
+    return (this.data.freelancers || []).find((f) => f.access_code.toUpperCase() === clean);
+  }
+
+  public createFreelancer(data: {
+    name: string;
+    email: string;
+    notes?: string;
+    pin?: string;
+    status?: FreelancerStatus;
+  }): Freelancer {
+    let code = generateAccessCode();
+    while ((this.data.freelancers || []).some((f) => f.access_code === code)) {
+      code = generateAccessCode();
+    }
+
+    const id = `free_${code}`;
+    const now = new Date().toISOString();
+    const freelancer: Freelancer = {
+      id,
+      name: data.name.trim(),
+      email: data.email.trim().toLowerCase(),
+      access_code: code,
+      status: data.status || 'active',
+      notes: data.notes?.trim(),
+      pin: data.pin?.trim(),
+      created_at: now,
+      updated_at: now,
+    };
+
+    if (!this.data.freelancers) this.data.freelancers = [];
+    this.data.freelancers.unshift(freelancer);
+    this.save();
+    syncFreelancerToFirestore(freelancer).catch(() => {});
+
+    this.logActivity({
+      freelancer_id: freelancer.id,
+      freelancer_name: freelancer.name,
+      action_type: 'freelancer_created',
+      description: `Administrador cadastrou o freelancer "${freelancer.name}" (Link: /f/${freelancer.access_code})`,
+      metadata: { freelancer_id: freelancer.id, access_code: freelancer.access_code },
+    });
+
+    return freelancer;
+  }
+
+  public updateFreelancer(id: string, updates: Partial<Freelancer>): Freelancer | undefined {
+    const idx = (this.data.freelancers || []).findIndex((f) => f.id === id);
+    if (idx === -1) return undefined;
+
+    const prev = this.data.freelancers[idx];
+    const updated: Freelancer = {
+      ...prev,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.data.freelancers[idx] = updated;
+    this.save();
+    syncFreelancerToFirestore(updated).catch(() => {});
+    return updated;
+  }
+
+  public regenerateFreelancerAccessCode(id: string): string | undefined {
+    const f = this.getFreelancerById(id);
+    if (!f) return undefined;
+
+    let newCode = generateAccessCode();
+    while ((this.data.freelancers || []).some((x) => x.access_code === newCode)) {
+      newCode = generateAccessCode();
+    }
+
+    f.access_code = newCode;
+    f.updated_at = new Date().toISOString();
+    this.save();
+    syncFreelancerToFirestore(f).catch(() => {});
+
+    this.logActivity({
+      freelancer_id: f.id,
+      freelancer_name: f.name,
+      action_type: 'access_link_regenerated',
+      description: `Link de acesso de ${f.name} foi regenerado pelo administrador (Novo código: ${newCode})`,
+      metadata: { new_code: newCode },
+    });
+
+    return newCode;
+  }
+
+  public setFreelancerStatus(id: string, status: FreelancerStatus): Freelancer | undefined {
+    const f = this.getFreelancerById(id);
+    if (!f) return undefined;
+
+    const oldStatus = f.status;
+    f.status = status;
+    f.updated_at = new Date().toISOString();
+    this.save();
+    syncFreelancerToFirestore(f).catch(() => {});
+
+    if (status === 'blocked' && oldStatus !== 'blocked') {
+      this.logActivity({
+        freelancer_id: f.id,
+        freelancer_name: f.name,
+        action_type: 'freelancer_blocked',
+        description: `Administrador bloqueou o acesso do freelancer "${f.name}"`,
+      });
+    } else if (status === 'active' && oldStatus === 'blocked') {
+      this.logActivity({
+        freelancer_id: f.id,
+        freelancer_name: f.name,
+        action_type: 'freelancer_unblocked',
+        description: `Administrador desbloqueou o acesso do freelancer "${f.name}"`,
+      });
+    }
+
+    return f;
+  }
+
+  public deleteFreelancer(id: string): boolean {
+    const idx = (this.data.freelancers || []).findIndex((f) => f.id === id);
+    if (idx === -1) return false;
+    const removed = this.data.freelancers.splice(idx, 1)[0];
+    this.save();
+    deleteFreelancerFromFirestore(id).catch(() => {});
+
+    this.logActivity({
+      freelancer_id: id,
+      freelancer_name: removed.name,
+      action_type: 'freelancer_blocked',
+      description: `Administrador removeu o cadastro do freelancer "${removed.name}"`,
+    });
+    return true;
+  }
+
+  // --- ACTIVITIES AUDIT LOG ---
+  public logActivity(activity: Omit<Activity, 'id' | 'created_at'>): Activity {
+    const item: Activity = {
+      ...activity,
+      id: `act_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      created_at: new Date().toISOString(),
+    };
+    if (!this.data.activities) this.data.activities = [];
+    this.data.activities.unshift(item);
+    if (this.data.activities.length > 500) {
+      this.data.activities = this.data.activities.slice(0, 500);
+    }
+    this.save();
+    syncActivityToFirestore(item).catch(() => {});
+    return item;
+  }
+
+  public getActivities(params?: {
+    freelancer_id?: string;
+    limit?: number;
+    offset?: number;
+    action_type?: string;
+  }): { activities: Activity[]; total: number } {
+    let list = [...(this.data.activities || [])];
+    if (params?.freelancer_id && params.freelancer_id !== 'ALL') {
+      list = list.filter((a) => a.freelancer_id === params.freelancer_id);
+    }
+    if (params?.action_type && params.action_type !== 'ALL') {
+      list = list.filter((a) => a.action_type === params.action_type);
+    }
+    const total = list.length;
+    const offset = params?.offset || 0;
+    const limit = params?.limit || 50;
+    return {
+      activities: list.slice(offset, offset + limit),
+      total,
+    };
+  }
+
+  // --- PERFORMANCE METRICS ---
+  public getFreelancerPerformance(freelancerId: string): FreelancerPerformance | undefined {
+    const f = this.getFreelancerById(freelancerId);
+    if (!f) return undefined;
+
+    const leads = (this.data.leads || []).filter((l) => l.freelancer_id === freelancerId);
+    const searches = (this.data.search_jobs || []).filter((j) => j.freelancer_id === freelancerId);
+    const activities = (this.data.activities || []).filter((a) => a.freelancer_id === freelancerId);
+
+    const leadsFound = leads.length;
+    // Diferencia LEADS FOUND de LEADS EFETIVAMENTE CONTATADOS
+    const contactedLeads = leads.filter((l) =>
+      Boolean(l.contacted_at) ||
+      ['CONTATADO', 'RESPONDEU', 'INTERESSADO', 'FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO', 'PERDIDO', 'NAO_INTERESSADO', 'SEM_RESPOSTA'].includes(l.pipeline_status)
+    ).length;
+
+    let contactAttempts = 0;
+    for (const l of leads) {
+      contactAttempts += l.contact_attempts_count || (l.contacted_at ? 1 : 0);
+    }
+    if (contactAttempts < contactedLeads) contactAttempts = contactedLeads;
+
+    const responses = leads.filter((l) =>
+      Boolean(l.response_at) ||
+      ['RESPONDEU', 'INTERESSADO', 'FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)
+    ).length;
+
+    const followUps = leads.filter((l) =>
+      Boolean(l.follow_up_at) ||
+      ['FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)
+    ).length;
+
+    const negotiations = leads.filter((l) =>
+      Boolean(l.negotiation_at) ||
+      ['NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)
+    ).length;
+
+    const sales = leads.filter((l) =>
+      Boolean(l.sale_date) || l.pipeline_status === 'FECHADO'
+    ).length;
+
+    const responseRate = contactedLeads > 0 ? Math.round((responses / contactedLeads) * 100) : 0;
+    const conversionRate = contactedLeads > 0 ? Math.round((sales / contactedLeads) * 100) : 0;
+
+    // Contagem de dias ativos
+    const activeDaysSet = new Set<string>();
+    for (const l of leads) {
+      if (l.created_at) activeDaysSet.add(l.created_at.split('T')[0]);
+      if (l.contacted_at) activeDaysSet.add(l.contacted_at.split('T')[0]);
+    }
+    for (const a of activities) {
+      if (a.created_at) activeDaysSet.add(a.created_at.split('T')[0]);
+    }
+
+    // Tendência por dia (últimos 7 dias)
+    const days: { date: string; count: number }[] = [];
+    const contactDays: { date: string; count: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const str = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      days.push({ date: str, count: 0 });
+      contactDays.push({ date: str, count: 0 });
+    }
+
+    for (const l of leads) {
+      const lDate = new Date(l.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      const found = days.find((d) => d.date === lDate);
+      if (found) found.count++;
+
+      if (l.contacted_at) {
+        const cDate = new Date(l.contacted_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const cFound = contactDays.find((d) => d.date === cDate);
+        if (cFound) cFound.count++;
+      }
+    }
+
+    const lastAct = activities.length > 0 ? activities[0].created_at : f.last_activity_at;
+
+    return {
+      freelancer: f,
+      leadsFound,
+      leadsContacted: contactedLeads,
+      contactAttempts,
+      responses,
+      followUps,
+      negotiations,
+      sales,
+      responseRate,
+      conversionRate,
+      searchesCount: searches.length,
+      activeDays: Math.max(1, activeDaysSet.size),
+      lastActivity: lastAct,
+      lastAccess: f.last_access_at,
+      leadsPerDay: days,
+      contactsPerDay: contactDays,
+    };
+  }
+
+  public getAdminDashboardStats(filter?: {
+    freelancer_id?: string;
+    period?: string;
+    state?: string;
+    niche?: string;
+    status?: string;
+  }): AdminDashboardStats {
+    const freelancers = this.data.freelancers || [];
+    const totalFreelancers = freelancers.length;
+    const activeFreelancers = freelancers.filter((f) => f.status === 'active').length;
+    const blockedFreelancers = freelancers.filter((f) => f.status === 'blocked').length;
+
+    let leads = [...(this.data.leads || [])];
+    let searches = [...(this.data.search_jobs || [])];
+    let activities = [...(this.data.activities || [])];
+
+    // Filtro por Freelancer
+    if (filter?.freelancer_id && filter.freelancer_id !== 'ALL') {
+      leads = leads.filter((l) => l.freelancer_id === filter.freelancer_id);
+      searches = searches.filter((s) => s.freelancer_id === filter.freelancer_id);
+      activities = activities.filter((a) => a.freelancer_id === filter.freelancer_id);
+    }
+
+    // Filtro por Período
+    if (filter?.period && filter.period !== 'ALL') {
+      const now = Date.now();
+      let msLimit = 0;
+      if (filter.period === 'today') msLimit = 24 * 3600 * 1000;
+      else if (filter.period === '7d') msLimit = 7 * 24 * 3600 * 1000;
+      else if (filter.period === '30d') msLimit = 30 * 24 * 3600 * 1000;
+
+      if (msLimit > 0) {
+        leads = leads.filter((l) => now - new Date(l.created_at).getTime() <= msLimit);
+        searches = searches.filter((s) => now - new Date(s.created_at).getTime() <= msLimit);
+        activities = activities.filter((a) => now - new Date(a.created_at).getTime() <= msLimit);
+      }
+    }
+
+    // Filtro por Estado
+    if (filter?.state && filter.state !== 'ALL') {
+      leads = leads.filter((l) => (l.state || '').toUpperCase() === filter.state!.toUpperCase());
+    }
+
+    // Filtro por Nicho
+    if (filter?.niche && filter.niche !== 'ALL') {
+      const normN = normalizeStr(filter.niche);
+      leads = leads.filter((l) => normalizeStr(l.niche).includes(normN));
+    }
+
+    // Filtro por Status
+    if (filter?.status && filter.status !== 'ALL') {
+      leads = leads.filter((l) => l.pipeline_status === filter.status);
+    }
+
+    const totalLeadsFound = leads.length;
+    const totalLeadsContacted = leads.filter((l) =>
+      Boolean(l.contacted_at) ||
+      ['CONTATADO', 'RESPONDEU', 'INTERESSADO', 'FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO', 'PERDIDO', 'NAO_INTERESSADO', 'SEM_RESPOSTA'].includes(l.pipeline_status)
+    ).length;
+
+    const totalResponses = leads.filter((l) =>
+      Boolean(l.response_at) ||
+      ['RESPONDEU', 'INTERESSADO', 'FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)
+    ).length;
+
+    const totalFollowUps = leads.filter((l) =>
+      Boolean(l.follow_up_at) ||
+      ['FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)
+    ).length;
+
+    const totalNegotiations = leads.filter((l) =>
+      Boolean(l.negotiation_at) ||
+      ['NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)
+    ).length;
+
+    const totalSales = leads.filter((l) =>
+      Boolean(l.sale_date) || l.pipeline_status === 'FECHADO'
+    ).length;
+
+    let totalSalesValue = 0;
+    for (const l of leads) {
+      if (l.pipeline_status === 'FECHADO' || l.sale_date) {
+        totalSalesValue += l.sale_value || 0;
+      }
+    }
+
+    const overallResponseRate = totalLeadsContacted > 0
+      ? Math.round((totalResponses / totalLeadsContacted) * 100)
+      : 0;
+
+    const overallConversionRate = totalLeadsContacted > 0
+      ? Math.round((totalSales / totalLeadsContacted) * 100)
+      : 0;
+
+    // Desempenho individual por freelancer
+    const allPerformances: FreelancerPerformance[] = freelancers.map((f) => {
+      return this.getFreelancerPerformance(f.id)!;
+    }).filter(Boolean);
+
+    // Freelancers Mais Ativos (ponderado por buscas, contatos e atividades)
+    const mostActiveFreelancers = [...allPerformances].sort((a, b) => {
+      const scoreA = a.searchesCount * 5 + a.leadsContacted * 2 + a.leadsFound;
+      const scoreB = b.searchesCount * 5 + b.leadsContacted * 2 + b.leadsFound;
+      return scoreB - scoreA;
+    });
+
+    // Melhores Desempenhos (ponderado por vendas, taxa de resposta e contatos)
+    const bestPerformingFreelancers = [...allPerformances].sort((a, b) => {
+      if (b.sales !== a.sales) return b.sales - a.sales;
+      if (b.responseRate !== a.responseRate) return b.responseRate - a.responseRate;
+      return b.leadsContacted - a.leadsContacted;
+    });
+
+    return {
+      totalFreelancers,
+      activeFreelancers,
+      blockedFreelancers,
+      totalSearches: searches.length,
+      totalLeadsFound,
+      totalLeadsContacted,
+      totalResponses,
+      totalFollowUps,
+      totalNegotiations,
+      totalSales,
+      totalSalesValue,
+      overallResponseRate,
+      overallConversionRate,
+      recentActivities: activities.slice(0, 30),
+      mostActiveFreelancers,
+      bestPerformingFreelancers,
+    };
   }
 
   public updateSearchJob(id: string, updates: Partial<SearchJob>): SearchJob | undefined {
