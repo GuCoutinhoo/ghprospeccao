@@ -178,6 +178,36 @@ export async function deleteFreelancerFromFirestore(id: string): Promise<void> {
   }
 }
 
+export async function deleteLeadFromFirestore(id: string): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !id) return;
+  try {
+    await deleteDoc(doc(db, 'leads', id));
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao deletar lead ${id} do Firestore:`, err);
+  }
+}
+
+export async function deleteJobFromFirestore(id: string): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !id) return;
+  try {
+    await deleteDoc(doc(db, 'search_jobs', id));
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao deletar job ${id} do Firestore:`, err);
+  }
+}
+
+export async function deleteActivityFromFirestore(id: string): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !id) return;
+  try {
+    await deleteDoc(doc(db, 'activities', id));
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao deletar atividade ${id} do Firestore:`, err);
+  }
+}
+
 export async function syncActivityToFirestore(activity: Activity): Promise<void> {
   const db = getFirestoreDb();
   if (!db || !activity.id) return;

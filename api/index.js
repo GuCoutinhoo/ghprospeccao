@@ -242,6 +242,33 @@ async function deleteFreelancerFromFirestore(id) {
     console.warn(`[Firebase] Erro ao deletar freelancer ${id} do Firestore:`, err);
   }
 }
+async function deleteLeadFromFirestore(id) {
+  const db2 = getFirestoreDb();
+  if (!db2 || !id) return;
+  try {
+    await deleteDoc(doc(db2, "leads", id));
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao deletar lead ${id} do Firestore:`, err);
+  }
+}
+async function deleteJobFromFirestore(id) {
+  const db2 = getFirestoreDb();
+  if (!db2 || !id) return;
+  try {
+    await deleteDoc(doc(db2, "search_jobs", id));
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao deletar job ${id} do Firestore:`, err);
+  }
+}
+async function deleteActivityFromFirestore(id) {
+  const db2 = getFirestoreDb();
+  if (!db2 || !id) return;
+  try {
+    await deleteDoc(doc(db2, "activities", id));
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao deletar atividade ${id} do Firestore:`, err);
+  }
+}
 async function syncActivityToFirestore(activity) {
   const db2 = getFirestoreDb();
   if (!db2 || !activity.id) return;
@@ -889,6 +916,25 @@ var Database = class {
     }
     const id = `free_${code}`;
     const now = (/* @__PURE__ */ new Date()).toISOString();
+    const codesToClean = [id, code, `free_${code}`];
+    const oldLeads = (this.data.leads || []).filter((l) => codesToClean.includes(l.freelancer_id || ""));
+    for (const l of oldLeads) {
+      deleteLeadFromFirestore(l.id).catch(() => {
+      });
+    }
+    this.data.leads = (this.data.leads || []).filter((l) => !codesToClean.includes(l.freelancer_id || ""));
+    const oldJobs = (this.data.search_jobs || []).filter((j) => codesToClean.includes(j.freelancer_id || ""));
+    for (const j of oldJobs) {
+      deleteJobFromFirestore(j.id).catch(() => {
+      });
+    }
+    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !codesToClean.includes(j.freelancer_id || ""));
+    const oldActivities = (this.data.activities || []).filter((a) => codesToClean.includes(a.freelancer_id || ""));
+    for (const a of oldActivities) {
+      deleteActivityFromFirestore(a.id).catch(() => {
+      });
+    }
+    this.data.activities = (this.data.activities || []).filter((a) => !codesToClean.includes(a.freelancer_id || ""));
     const freelancer = {
       id,
       name: rawName,
@@ -983,16 +1029,66 @@ var Database = class {
     const idx = (this.data.freelancers || []).findIndex((f) => f.id === id);
     if (idx === -1) return false;
     const removed = this.data.freelancers.splice(idx, 1)[0];
+    const codes = [id, removed.access_code, `free_${removed.access_code}`].filter(Boolean);
+    const leadsToDelete = (this.data.leads || []).filter((l) => codes.includes(l.freelancer_id || ""));
+    for (const lead of leadsToDelete) {
+      deleteLeadFromFirestore(lead.id).catch(() => {
+      });
+    }
+    this.data.leads = (this.data.leads || []).filter((l) => !codes.includes(l.freelancer_id || ""));
+    const jobsToDelete = (this.data.search_jobs || []).filter((j) => codes.includes(j.freelancer_id || ""));
+    for (const job of jobsToDelete) {
+      deleteJobFromFirestore(job.id).catch(() => {
+      });
+    }
+    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !codes.includes(j.freelancer_id || ""));
+    const activitiesToDelete = (this.data.activities || []).filter((a) => codes.includes(a.freelancer_id || ""));
+    for (const act of activitiesToDelete) {
+      deleteActivityFromFirestore(act.id).catch(() => {
+      });
+    }
+    this.data.activities = (this.data.activities || []).filter((a) => !codes.includes(a.freelancer_id || ""));
     this.save();
     deleteFreelancerFromFirestore(id).catch(() => {
     });
+    if (removed.access_code && removed.access_code !== id) {
+      deleteFreelancerFromFirestore(`free_${removed.access_code}`).catch(() => {
+      });
+      deleteFreelancerFromFirestore(removed.access_code).catch(() => {
+      });
+    }
     this.logActivity({
       freelancer_id: id,
       freelancer_name: removed.name,
       action_type: "freelancer_blocked",
-      description: `Administrador removeu o cadastro do freelancer "${removed.name}"`
+      description: `Administrador removeu o cadastro e todos os dados do workspace "${removed.name}"`
     });
     return true;
+  }
+  cleanFreelancerWorkspace(id) {
+    const f = this.getFreelancerById(id) || this.getFreelancerByAccessCode(id);
+    const code = f?.access_code || id;
+    const codes = [id, code, `free_${code}`, f?.id].filter(Boolean);
+    const leadsToDelete = (this.data.leads || []).filter((l) => codes.includes(l.freelancer_id || ""));
+    for (const lead of leadsToDelete) {
+      deleteLeadFromFirestore(lead.id).catch(() => {
+      });
+    }
+    this.data.leads = (this.data.leads || []).filter((l) => !codes.includes(l.freelancer_id || ""));
+    const jobsToDelete = (this.data.search_jobs || []).filter((j) => codes.includes(j.freelancer_id || ""));
+    for (const job of jobsToDelete) {
+      deleteJobFromFirestore(job.id).catch(() => {
+      });
+    }
+    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !codes.includes(j.freelancer_id || ""));
+    const activitiesToDelete = (this.data.activities || []).filter((a) => codes.includes(a.freelancer_id || ""));
+    for (const act of activitiesToDelete) {
+      deleteActivityFromFirestore(act.id).catch(() => {
+      });
+    }
+    this.data.activities = (this.data.activities || []).filter((a) => !codes.includes(a.freelancer_id || ""));
+    this.save();
+    return { leadsRemoved: leadsToDelete.length };
   }
   // --- ACTIVITIES AUDIT LOG ---
   logActivity(activity) {
