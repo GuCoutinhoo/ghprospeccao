@@ -59,15 +59,21 @@ export default function App() {
   });
   const [activeFreelancer, setActiveFreelancer] = useState<Freelancer | null>(null);
 
-  // Navegação
-  const [currentPath, setCurrentPath] = useState<string>('/admin');
+  // Navegação - Acesso Direto
+  const [currentPath, setCurrentPath] = useState<string>(() => {
+    if (typeof window === 'undefined') return '/leads';
+    const p = window.location.pathname;
+    if (p.startsWith('/search/')) return p;
+    if (p.startsWith('/admin/freelancers/')) return p;
+    if (p.startsWith('/admin')) return p;
+    if (p === '/leads' || p === '/search' || p === '/pipeline' || p === '/outreach' || p === '/templates' || p === '/favorites' || p === '/settings') {
+      return p;
+    }
+    return '/leads';
+  });
   const [activeSearchJobId, setActiveSearchJobId] = useState<string | null>(null);
   const [selectedFreelancerIdForDetail, setSelectedFreelancerIdForDetail] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-
-  // Freelancer link flow na URL: /f/:code
-  const [pendingFreelancerCode, setPendingFreelancerCode] = useState<string | null>(null);
-  const [showFreelancerLoginScreen, setShowFreelancerLoginScreen] = useState<boolean>(false);
 
   // Filtros contextuais passados para a tabela de leads
   const [leadsNicheFilter, setLeadsNicheFilter] = useState<string | undefined>(undefined);
@@ -85,49 +91,51 @@ export default function App() {
   const [publicPreviewLead, setPublicPreviewLead] = useState<Lead | null>(null);
   const [loadingPublicPreview, setLoadingPublicPreview] = useState<boolean>(false);
 
-  // 1. Inicialização de rotas e verificação de URL (/f/:code ou /admin)
+  // 1. Inicialização de rotas com Acesso Direto Instantâneo (sem login, sem verificação de acesso)
   useEffect(() => {
+    // Garante token mestre persistido no navegador
+    try {
+      localStorage.setItem('gh_admin_token', 'admin_master_session_token');
+      localStorage.setItem(
+        'gh_admin_user',
+        JSON.stringify({
+          id: 'admin_1',
+          email: 'gustavohcsantos.mm2020@gmail.com',
+          name: 'Gustavo Santos',
+          role: 'admin',
+        })
+      );
+      // Remove tokens restritivos anteriores de freelancer se existirem
+      localStorage.removeItem('gh_freelancer_token');
+      localStorage.removeItem('gh_freelancer_session');
+    } catch {}
+
     const pathname = window.location.pathname;
 
-    // Acesso direto via link de freelancer: /f/:code
-    if (pathname.startsWith('/f/')) {
-      const code = pathname.substring(3).trim();
-      if (code) {
-        setPendingFreelancerCode(code);
-        setShowFreelancerLoginScreen(true);
+    // Se o usuário entrou por link /f/... redireciona diretamente para os leads ou dashboard
+    if (pathname.startsWith('/f/') || pathname === '/f') {
+      setCurrentPath('/leads');
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, '', '/leads');
+      }
+      return;
+    }
+
+    if (pathname.startsWith('/search/')) {
+      const jId = pathname.substring(8).trim();
+      if (jId) {
+        setActiveSearchJobId(jId);
+        setCurrentPath(pathname);
         return;
       }
     }
 
-    if (pathname === '/f' || pathname === '/f/') {
-      setShowFreelancerLoginScreen(true);
-      return;
-    }
-
-    // Se já havia sessão de freelancer salva
-    const freeSession = getActiveFreelancerSession();
-    if (freeSession?.freelancer) {
-      localStorage.removeItem('gh_admin_token');
-      localStorage.removeItem('gh_admin_user');
-      setActiveFreelancer(freeSession.freelancer);
-      setUserRole('freelancer');
-      setIsAuthenticated(true);
-      setStats(DEFAULT_STATS);
+    if (pathname.startsWith('/admin')) {
+      setCurrentPath(pathname);
+    } else if (pathname === '/' || pathname === '/dashboard') {
       setCurrentPath('/dashboard');
-      return;
-    }
-
-    // Se a rota for administrativa ou padrão, garante token do administrador
-    if (pathname.startsWith('/admin') || pathname === '/' || pathname === '/dashboard') {
-      if (!localStorage.getItem('gh_admin_token')) {
-        localStorage.setItem('gh_admin_token', 'admin_master_session_token');
-      }
-      setUserRole('admin');
-      if (pathname.startsWith('/admin')) {
-        setCurrentPath(pathname);
-      } else if (pathname === '/' || pathname === '/dashboard') {
-        setCurrentPath('/dashboard');
-      }
+    } else if (pathname === '/leads' || pathname === '/search' || pathname === '/outreach' || pathname === '/pipeline' || pathname === '/templates' || pathname === '/favorites' || pathname === '/settings') {
+      setCurrentPath(pathname);
     }
   }, []);
 
@@ -149,21 +157,16 @@ export default function App() {
     }
   }, []);
 
-  // 3. Carregar dados do dashboard quando autenticado
+  // 3. Carregar dados do dashboard no carregamento direto
   useEffect(() => {
-    if (isAuthenticated && !showFreelancerLoginScreen) {
-      loadInitialData();
-    }
-  }, [isAuthenticated, userRole, activeFreelancer]);
+    loadInitialData();
+  }, [userRole]);
 
   const loadInitialData = async () => {
     setIsRefreshing(true);
     try {
-      const isFreelancer = userRole === 'freelancer' || Boolean(activeFreelancer);
-      const targetFreelancerId = isFreelancer ? activeFreelancer?.id : undefined;
-
       const [s, set] = await Promise.all([
-        api.getDashboardStats(targetFreelancerId).catch((e) => {
+        api.getDashboardStats().catch((e) => {
           console.warn('[App] Erro ao carregar stats da API:', e);
           return null;
         }),
@@ -172,23 +175,13 @@ export default function App() {
           return null;
         }),
       ]);
-
-      if (isFreelancer) {
-        setStats(s || DEFAULT_STATS);
-      } else {
-        setStats(s || stats || DEFAULT_STATS);
-      }
-
+      setStats(s || stats || DEFAULT_STATS);
       if (set && typeof set.hasCustomKey === 'boolean') {
         setHasCustomKey(set.hasCustomKey);
       }
     } catch (err) {
       console.error('Falha ao carregar dados iniciais:', err);
-      if (userRole === 'freelancer') {
-        setStats(DEFAULT_STATS);
-      } else if (!stats) {
-        setStats(DEFAULT_STATS);
-      }
+      if (!stats) setStats(DEFAULT_STATS);
     } finally {
       setIsRefreshing(false);
     }
@@ -207,13 +200,6 @@ export default function App() {
   };
 
   const handleNavigate = (path: string) => {
-    // PROTEÇÃO CONTRA MANIPULAÇÃO DE URL (Requisito 6 do prompt)
-    // Se o usuário for freelancer e tentar acessar qualquer rota de /admin ou /settings
-    if (userRole === 'freelancer' && (path.startsWith('/admin') || path === '/settings')) {
-      alert('Acesso Negado: Apenas administradores autenticados podem acessar esta área.');
-      return;
-    }
-
     setCurrentPath(path);
     if (!path.startsWith('/search/')) {
       setActiveSearchJobId(null);
@@ -245,69 +231,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    if (userRole === 'freelancer') {
-      api.freelancerLogout();
-      setActiveFreelancer(null);
-      setStats(DEFAULT_STATS);
-      setShowFreelancerLoginScreen(true);
-    } else {
-      api.adminLogout();
-      setIsAuthenticated(false);
-      setAdminUser(null);
-      setStats(DEFAULT_STATS);
-    }
+    // Modo de Acesso Direto: apenas recarrega os dados sem bloquear a tela
+    loadInitialData();
   };
-
-  const handleFreelancerWorkspaceReady = (freelancer: Freelancer, token: string) => {
-    localStorage.removeItem('gh_admin_token');
-    localStorage.removeItem('gh_admin_user');
-    localStorage.setItem('gh_freelancer_token', token);
-    localStorage.setItem('gh_freelancer_session', JSON.stringify({ token, freelancer }));
-
-    setActiveFreelancer(freelancer);
-    setUserRole('freelancer');
-    setIsAuthenticated(true);
-    setShowFreelancerLoginScreen(false);
-    setPendingFreelancerCode(null);
-    setStats(DEFAULT_STATS);
-    setCurrentPath('/dashboard');
-    // Atualiza histórico do navegador sem recarregar
-    if (window.history && window.history.pushState) {
-      window.history.pushState({}, '', `/f/${freelancer.access_code}`);
-    }
-  };
-
-  // Se estiver na tela de login de freelancer via código
-  if (showFreelancerLoginScreen) {
-    return (
-      <FreelancerAccessView
-        initialCode={pendingFreelancerCode || ''}
-        onWorkspaceReady={handleFreelancerWorkspaceReady}
-        onGoToAdminLogin={() => {
-          setShowFreelancerLoginScreen(false);
-          setUserRole('admin');
-          setIsAuthenticated(false);
-        }}
-      />
-    );
-  }
-
-  // Se não estiver logado como administrador
-  if (!isAuthenticated && userRole === 'admin') {
-    return (
-      <LoginView
-        onLoginSuccess={(user) => {
-          setAdminUser(user);
-          setIsAuthenticated(true);
-          setUserRole('admin');
-          setCurrentPath('/admin');
-        }}
-        onGoToFreelancerAccess={() => {
-          setShowFreelancerLoginScreen(true);
-        }}
-      />
-    );
-  }
 
   // Títulos e subtítulos contextuais para o header
   const getHeaderMeta = () => {

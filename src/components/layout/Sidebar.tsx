@@ -257,29 +257,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* User Session Footer */}
         <div className="border-t border-neutral-100 p-3">
-          <div className="flex items-center justify-between rounded-lg p-2 hover:bg-neutral-50 transition-colors">
+          <div className="flex items-center justify-between rounded-lg p-2 bg-neutral-50/80">
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="h-7 w-7 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                {isAdmin
-                  ? 'GS'
-                  : (freelancer?.name.substring(0, 2).toUpperCase() || 'FR')}
+              <div className="h-7 w-7 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                GS
               </div>
               <div className="overflow-hidden">
                 <div className="text-xs font-semibold text-neutral-900 truncate">
-                  {isAdmin ? (adminUser?.name || 'Gustavo Santos') : (freelancer?.name || 'Freelancer')}
+                  Gustavo Santos
                 </div>
-                <div className="text-[10px] text-neutral-400 truncate font-mono">
-                  {isAdmin ? 'Administrador Geral' : 'Freelancer BDR'}
+                <div className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Acesso Direto Liberado
                 </div>
               </div>
             </div>
-            <button
-              onClick={onLogout}
-              title={isAdmin ? 'Sair do painel administrativo' : 'Sair do workspace'}
-              className="p-1.5 text-neutral-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <span className="text-[10px] font-mono font-bold bg-neutral-200 text-neutral-700 px-1.5 py-0.5 rounded">
+              Livre
+            </span>
           </div>
         </div>
       </aside>

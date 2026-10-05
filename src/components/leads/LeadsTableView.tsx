@@ -96,6 +96,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [total, setTotal] = useState<number>(0);
+  const [totalOverallLeads, setTotalOverallLeads] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   // Tamanho da página: 0 = Sem limite (exibe todos os leads sem paginação)
@@ -130,17 +131,13 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   // Sincroniza quando filtros iniciais forem passados (ex: ao vir da busca)
   useEffect(() => {
-    if (initialNicheFilter !== undefined) {
-      setNicheFilter(initialNicheFilter || 'ALL');
-      setPage(1);
-    }
+    setNicheFilter(initialNicheFilter || 'ALL');
+    setPage(1);
   }, [initialNicheFilter]);
 
   useEffect(() => {
-    if (initialStateFilter !== undefined) {
-      setStateFilter(initialStateFilter || 'ALL');
-      setPage(1);
-    }
+    setStateFilter(initialStateFilter || 'ALL');
+    setPage(1);
   }, [initialStateFilter]);
 
   useEffect(() => {
@@ -148,6 +145,15 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     loadNiches();
     loadStates();
   }, [page, pageSize, stateFilter, cityFilter, nicheFilter, statusFilter, onlyWithoutWebsite, onlyWithPhone, onlyFavorites, minScore, sortBy]);
+
+  // Carrega contagem global no início
+  useEffect(() => {
+    api.getLeads({ limit: 1 }).then((res) => {
+      if (res && typeof res.total === 'number') {
+        setTotalOverallLeads(res.total);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Monitora se há buscas rodando em segundo plano e recarrega em tempo real
   useEffect(() => {
@@ -465,7 +471,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                     nicheFilter === 'ALL' && !onlyFavorites ? 'bg-white/20 text-white' : 'bg-neutral-200 text-neutral-700'
                   }`}
                 >
-                  {niches.reduce((acc, curr) => acc + curr.count, 0) || total}
+                  {niches.reduce((acc, curr) => acc + curr.count, 0) || totalOverallLeads || total}
                 </span>
               </button>
 
@@ -569,7 +575,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                     stateFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-neutral-200 text-neutral-700'
                   }`}
                 >
-                  {statesSummary.reduce((acc, curr) => acc + curr.count, 0) || total}
+                  {statesSummary.reduce((acc, curr) => acc + curr.count, 0) || totalOverallLeads || total}
                 </span>
               </button>
 
@@ -956,28 +962,28 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
           <span>Carregando estabelecimentos e dados do Maps...</span>
         </div>
       ) : leads.length === 0 ? (
-        <div className="py-16 text-center space-y-3 rounded-xl border border-neutral-200 bg-white p-6 shadow-2xs">
+        <div className="py-16 text-center space-y-4 rounded-xl border border-neutral-200 bg-white p-6 shadow-2xs">
           <Globe className="h-10 w-10 text-neutral-300 mx-auto" />
           <h4 className="text-sm font-bold text-neutral-900">
             Nenhuma loja encontrada com os filtros selecionados
           </h4>
           <p className="text-xs text-neutral-500 max-w-md mx-auto">
-            {hasActiveFilters
-              ? 'Os filtros atuais (nicho, estado ou opções de site/telefone) restringiram todos os resultados. Clique abaixo para limpar os filtros e visualizar todas as lojas da sua base comercial.'
+            {totalOverallLeads > 0
+              ? `Você possui ${totalOverallLeads} estabelecimentos na sua base comercial. Os filtros ativos (nicho ou localização) restringiram os resultados.`
+              : hasActiveFilters
+              ? 'Os filtros atuais restringiram todos os resultados. Clique abaixo para limpar os filtros e visualizar todas as lojas da sua base comercial.'
               : 'Nenhum lead cadastrado no momento. Use o menu "Buscar Leads" para prospectar novas lojas via Google Maps.'}
           </p>
-          {hasActiveFilters && (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleClearAllFilters}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg transition-all cursor-pointer shadow-xs"
-              >
-                <RotateCw className="h-3.5 w-3.5" />
-                <span>Limpar Filtros e Ver Todos os Leads</span>
-              </button>
-            </div>
-          )}
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={handleClearAllFilters}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-neutral-950 bg-amber-400 hover:bg-amber-300 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <RotateCw className="h-4 w-4" />
+              <span>Limpar Filtros e Ver Todos os Leads {totalOverallLeads > 0 ? `(${totalOverallLeads})` : ''}</span>
+            </button>
+          </div>
         </div>
       ) : viewMode === 'cards' ? (
         /* MODO 1: VITRINE DE LOJAS (CARDS RICOS E BONITOS) */

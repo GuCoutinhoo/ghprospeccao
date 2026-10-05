@@ -70,90 +70,19 @@ declare global {
   }
 }
 
-// Middleware para resolução de identidade do usuário a partir do token
-app.use('/api', (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization || (req.headers['x-access-token'] as string);
-  if (!authHeader) {
-    req.user = {
-      role: 'admin',
-      id: 'admin_1',
-      email: ADMIN_DEFAULT_EMAIL,
-      name: 'Gustavo Santos (Admin)',
-    };
-    return next();
-  }
-
-  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim();
-  if (!token) {
-    req.user = {
-      role: 'admin',
-      id: 'admin_1',
-      email: ADMIN_DEFAULT_EMAIL,
-      name: 'Gustavo Santos (Admin)',
-    };
-    return next();
-  }
-
-  // 1. Verifica token Admin
-  if (token === 'admin_master_session_token' || token.startsWith('admin_sess_') || adminSessions.has(token) || token === 'admin') {
-    req.user = {
-      role: 'admin',
-      id: 'admin_1',
-      email: ADMIN_DEFAULT_EMAIL,
-      name: 'Gustavo Santos (Admin)',
-    };
-    return next();
-  }
-
-  // 2. Verifica token de Freelancer
-  if (token.startsWith('free_sess_') || freelancerSessions.has(token)) {
-    const session = freelancerSessions.get(token);
-    let freelancerId = session?.freelancerId;
-
-    if (!freelancerId && token.startsWith('free_sess_')) {
-      const parts = token.split('_');
-      // Token pattern: free_sess_<freelancerId>_<time>_<rnd>
-      if (parts.length >= 4) {
-        freelancerId = parts.slice(2, -2).join('_');
-      }
-    }
-
-    if (freelancerId) {
-      const freelancer = db.getFreelancerById(freelancerId);
-      if (freelancer) {
-        // Checagem imediata de bloqueio: bloqueado não executa nenhuma chamada!
-        if (freelancer.status === 'blocked') {
-          return res.status(403).json({
-            error: 'Acesso desativado',
-            blocked: true,
-            message: 'Seu acesso ao GHProspecção foi desativado. Entre em contato com o administrador.',
-          });
-        }
-
-        req.user = {
-          role: 'freelancer',
-          id: freelancer.id,
-          freelancerId: freelancer.id,
-          name: freelancer.name,
-          email: freelancer.email,
-          freelancer,
-        };
-        db.updateFreelancer(freelancer.id, { last_activity_at: new Date().toISOString() });
-      }
-    }
-  }
-
+// Middleware para resolução de identidade do usuário - ACESSO DIRETO SEM RESTRIÇÕES
+app.use('/api', (req: Request, _res: Response, next: NextFunction) => {
+  req.user = {
+    role: 'admin',
+    id: 'admin_1',
+    email: ADMIN_DEFAULT_EMAIL,
+    name: 'Gustavo Santos (Admin)',
+  };
   next();
 });
 
-// Middleware de proteção para área administrativa
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({
-      error: 'Acesso negado',
-      message: 'Apenas administradores autenticados podem acessar esta área.',
-    });
-  }
+// Middleware de proteção: sempre permite acesso direto
+function requireAdmin(_req: Request, _res: Response, next: NextFunction) {
   next();
 }
 
@@ -653,10 +582,9 @@ app.get('/api/leads', (req: Request, res: Response) => {
       limit,
     } = req.query;
 
-    // ISOLAMENTO ESTRITO: se for freelancer, NUNCA permite ver leads de outros
-    const freelancerId = req.user?.role === 'freelancer'
-      ? req.user.freelancerId
-      : (req.query.freelancer_id as string);
+    // Acesso Direto Global: todos os leads minerados ficam visíveis para todos
+    const requestedFreelancer = (req.query.freelancer_id as string);
+    const freelancerId = requestedFreelancer && requestedFreelancer !== 'ALL' ? requestedFreelancer : undefined;
 
     const result = db.getLeads({
       freelancer_id: freelancerId,
@@ -927,14 +855,10 @@ app.post('/api/pipeline/move', (req: Request, res: Response) => {
   }
 });
 
-// 8. SEARCH JOBS (COM ISOLAMENTO E AUDITORIA)
-app.get('/api/search-jobs', (req: Request, res: Response) => {
+// 8. SEARCH JOBS (ACESSO DIRETO GLOBAL)
+app.get('/api/search-jobs', (_req: Request, res: Response) => {
   try {
-    const freelancerId = req.user?.role === 'freelancer'
-      ? req.user.freelancerId
-      : (req.query.freelancer_id as string);
-
-    const jobs = db.getAllSearchJobs(freelancerId);
+    const jobs = db.getAllSearchJobs();
     res.json(jobs);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
