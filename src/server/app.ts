@@ -275,13 +275,22 @@ app.post('/api/auth/logout', (_req: Request, res: Response) => {
 });
 
 // 2. FREELANCER AUTHENTICATION & ACCESS VERIFICATION
-app.post('/api/freelancer/auth/verify', (req: Request, res: Response) => {
+app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
   const { accessCode, pin } = req.body;
   if (!accessCode) {
     return res.status(400).json({ error: 'Código de acesso do freelancer é obrigatório.' });
   }
 
-  const freelancer = db.getFreelancerByAccessCode(accessCode);
+  let freelancer = db.getFreelancerByAccessCode(accessCode);
+  if (!freelancer) {
+    try {
+      await db.syncFromFirestore();
+      freelancer = db.getFreelancerByAccessCode(accessCode);
+    } catch (err) {
+      console.warn('[Server] Falha ao sincronizar Firestore ao verificar código:', err);
+    }
+  }
+
   if (!freelancer) {
     return res.status(404).json({
       error: 'Link de acesso não encontrado',
@@ -603,7 +612,8 @@ app.get('/api/dashboard/stats', (req: Request, res: Response) => {
 app.get('/api/niches', (req: Request, res: Response) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === 'true';
-    const niches = db.getNichesSummary({ onlyFavorites });
+    const freelancerId = req.user?.role === 'freelancer' ? req.user.freelancerId : (req.query.freelancer_id as string);
+    const niches = db.getNichesSummary({ onlyFavorites, freelancer_id: freelancerId });
     res.json(niches);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -615,7 +625,8 @@ app.get('/api/states-summary', (req: Request, res: Response) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === 'true';
     const niche = req.query.niche as string;
-    const states = db.getStatesSummary({ onlyFavorites, niche });
+    const freelancerId = req.user?.role === 'freelancer' ? req.user.freelancerId : (req.query.freelancer_id as string);
+    const states = db.getStatesSummary({ onlyFavorites, niche, freelancer_id: freelancerId });
     res.json(states);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -939,8 +950,12 @@ app.post('/api/search-jobs', async (req: Request, res: Response) => {
     }
 
     const isFreelancer = req.user?.role === 'freelancer';
-    const freelancerId = isFreelancer ? req.user?.freelancerId : undefined;
-    const freelancerName = isFreelancer ? req.user?.name : undefined;
+    const freelancerId = isFreelancer ? req.user?.freelancerId : (req.body.freelancerId || (req.query.freelancer_id as string) || undefined);
+    let freelancerName = isFreelancer ? req.user?.name : (req.body.freelancerName || undefined);
+    if (freelancerId && !freelancerName) {
+      const f = db.getFreelancerById(freelancerId);
+      if (f) freelancerName = f.name;
+    }
     const userId = freelancerId || 'default_user_1';
 
     const cleanFilters: {

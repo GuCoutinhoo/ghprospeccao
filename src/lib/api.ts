@@ -57,7 +57,7 @@ export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Recor
 
 export function isFreelancerMode(): boolean {
   if (typeof window === 'undefined') return false;
-  return Boolean(localStorage.getItem('gh_freelancer_token')) && !localStorage.getItem('gh_admin_token');
+  return Boolean(localStorage.getItem('gh_freelancer_token'));
 }
 
 export function getActiveFreelancerSession(): { token: string; freelancer: Freelancer } | null {
@@ -114,11 +114,23 @@ export const api = {
 
   // Freelancer Authentication & Workspace Access
   async verifyFreelancerLink(accessCode: string, pin?: string) {
-    const res = await fetch('/api/freelancer/auth/verify', {
+    let res = await fetch('/api/freelancer/auth/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accessCode, pin }),
     });
+
+    // Se o backend não localizou em cache local, tenta sincronizar e reenviar
+    if (res.status === 404) {
+      try {
+        await fetch('/api/sync', { method: 'POST' });
+        res = await fetch('/api/freelancer/auth/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessCode, pin }),
+        });
+      } catch {}
+    }
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -135,6 +147,8 @@ export const api = {
 
     const data = await res.json();
     if (data.token && data.freelancer) {
+      localStorage.removeItem('gh_admin_token');
+      localStorage.removeItem('gh_admin_user');
       localStorage.setItem('gh_freelancer_token', data.token);
       localStorage.setItem('gh_freelancer_session', JSON.stringify({ token: data.token, freelancer: data.freelancer }));
     }
@@ -346,9 +360,16 @@ export const api = {
   },
 
   // Dashboard
-  async getDashboardStats(): Promise<DashboardStats> {
+  async getDashboardStats(freelancerId?: string): Promise<DashboardStats> {
+    const targetFreelancerId = freelancerId || (isFreelancerMode() ? getActiveFreelancerSession()?.freelancer?.id : undefined);
+
     try {
-      const res = await fetch('/api/dashboard/stats');
+      const url = targetFreelancerId
+        ? `/api/dashboard/stats?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+        : '/api/dashboard/stats';
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (data && typeof data.totalLeads === 'number') {
@@ -359,8 +380,45 @@ export const api = {
       console.warn('[API] /api/dashboard/stats falhou, conectando diretamente ao Google Firestore...', err);
     }
 
-    // Se o backend retornou 0 (ou falhou na Vercel), busca os dados reais diretamente do Firestore
-    const leads = await fetchAllLeadsFromFirestore();
+    // Se o backend falhou ou estamos em fallback no Firestore:
+    // Garante que se for freelancer, filtra estritamente por ele
+    const allLeads = await fetchAllLeadsFromFirestore();
+    const leads = targetFreelancerId
+      ? allLeads.filter((l) => l.freelancer_id === targetFreelancerId)
+      : allLeads;
+
+    // Se for freelancer e não houver leads gerados por ele, retorna 100% zerado
+    if (targetFreelancerId && leads.length === 0) {
+      return {
+        totalLeads: 0,
+        newLeads: 0,
+        contactedLeads: 0,
+        interestedLeads: 0,
+        closedLeads: 0,
+        noWebsiteLeads: 0,
+        withPhoneLeads: 0,
+        responseRate: 0,
+        closingRate: 0,
+        leadsByDay: [],
+        leadsByNiche: [],
+        leadsByState: [],
+        pipelineDistribution: [
+          { status: 'NOVO', count: 0 },
+          { status: 'PRÉVIA CRIADA', count: 0 },
+          { status: 'CONTATADO', count: 0 },
+          { status: 'RESPONDEU', count: 0 },
+          { status: 'INTERESSADO', count: 0 },
+          { status: 'FOLLOW_UP', count: 0 },
+          { status: 'NEGOCIACAO', count: 0 },
+          { status: 'REUNIÃO', count: 0 },
+          { status: 'PROPOSTA', count: 0 },
+          { status: 'FECHADO', count: 0 },
+          { status: 'PERDIDO', count: 0 },
+        ],
+        topOpportunities: [],
+      };
+    }
+
     if (leads && leads.length > 0) {
       return computeStatsFromLeads(leads);
     }
@@ -384,6 +442,8 @@ export const api = {
         { status: 'CONTATADO', count: 0 },
         { status: 'RESPONDEU', count: 0 },
         { status: 'INTERESSADO', count: 0 },
+        { status: 'FOLLOW_UP', count: 0 },
+        { status: 'NEGOCIACAO', count: 0 },
         { status: 'REUNIÃO', count: 0 },
         { status: 'PROPOSTA', count: 0 },
         { status: 'FECHADO', count: 0 },
@@ -454,12 +514,17 @@ export const api = {
   },
 
   // Leads & Niches
-  async getNiches(params?: { onlyFavorites?: boolean }): Promise<{ niche: string; count: number }[]> {
+  async getNiches(params?: { onlyFavorites?: boolean; freelancer_id?: string }): Promise<{ niche: string; count: number }[]> {
+    const targetFreelancerId = params?.freelancer_id || (isFreelancerMode() ? getActiveFreelancerSession()?.freelancer?.id : undefined);
+
     try {
       const query = new URLSearchParams();
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
+      if (targetFreelancerId) query.set('freelancer_id', targetFreelancerId);
       const url = `/api/niches${query.toString() ? '?' + query.toString() : ''}`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -471,7 +536,10 @@ export const api = {
     }
 
     const allLeads = await fetchAllLeadsFromFirestore();
-    let leads = allLeads;
+    let leads = targetFreelancerId
+      ? allLeads.filter((l) => l.freelancer_id === targetFreelancerId)
+      : allLeads;
+
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
     }
@@ -485,13 +553,18 @@ export const api = {
       .sort((a, b) => b.count - a.count);
   },
 
-  async getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string }): Promise<{ state: string; count: number }[]> {
+  async getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string; freelancer_id?: string }): Promise<{ state: string; count: number }[]> {
+    const targetFreelancerId = params?.freelancer_id || (isFreelancerMode() ? getActiveFreelancerSession()?.freelancer?.id : undefined);
+
     try {
       const query = new URLSearchParams();
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
       if (params?.niche && params.niche !== 'ALL') query.set('niche', params.niche);
+      if (targetFreelancerId) query.set('freelancer_id', targetFreelancerId);
       const url = `/api/states-summary${query.toString() ? '?' + query.toString() : ''}`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -503,7 +576,10 @@ export const api = {
     }
 
     const allLeads = await fetchAllLeadsFromFirestore();
-    let leads = allLeads;
+    let leads = targetFreelancerId
+      ? allLeads.filter((l) => l.freelancer_id === targetFreelancerId)
+      : allLeads;
+
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
     }
@@ -537,9 +613,13 @@ export const api = {
     sortBy?: 'score' | 'reviews' | 'rating' | 'recent';
     page?: number;
     limit?: number;
+    freelancer_id?: string;
   }): Promise<{ leads: Lead[]; total: number; page: number; totalPages: number }> {
+    const targetFreelancerId = params.freelancer_id || (isFreelancerMode() ? getActiveFreelancerSession()?.freelancer?.id : undefined);
+
     try {
       const query = new URLSearchParams();
+      if (targetFreelancerId) query.set('freelancer_id', targetFreelancerId);
       if (params.state) query.set('state', params.state);
       if (params.city) query.set('city', params.city);
       if (params.niche) query.set('niche', params.niche);
@@ -555,7 +635,9 @@ export const api = {
       if (params.page) query.set('page', String(params.page));
       if (params.limit !== undefined) query.set('limit', String(params.limit));
 
-      const res = await fetch(`/api/leads?${query.toString()}`);
+      const res = await fetch(`/api/leads?${query.toString()}`, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.leads) && typeof data.total === 'number') {
@@ -567,7 +649,11 @@ export const api = {
     }
 
     const allLeads = await fetchAllLeadsFromFirestore();
-    return filterLeadsList(allLeads, params);
+    const leads = targetFreelancerId
+      ? allLeads.filter((l) => l.freelancer_id === targetFreelancerId)
+      : allLeads;
+
+    return filterLeadsList(leads, params);
   },
 
   async getLeadById(id: string): Promise<{ lead: Lead; notes: LeadNote[]; place?: Place }> {
@@ -675,21 +761,29 @@ export const api = {
   },
 
   // Pipeline
-  async getPipeline(): Promise<Record<PipelineStatus, Lead[]>> {
+  async getPipeline(freelancerId?: string): Promise<Record<PipelineStatus, Lead[]>> {
+    const targetFreelancerId = freelancerId || (isFreelancerMode() ? getActiveFreelancerSession()?.freelancer?.id : undefined);
+
     try {
-      const res = await fetch('/api/pipeline');
+      const url = targetFreelancerId
+        ? `/api/pipeline?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+        : '/api/pipeline';
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const board = await res.json();
-        const total = Object.values(board).reduce((acc: number, list: unknown) => acc + ((list as unknown[])?.length || 0), 0);
-        if (total > 0) {
-          return board;
-        }
+        return board;
       }
     } catch (err) {
       console.warn('[API] Falha em /api/pipeline, montando do Firestore...', err);
     }
 
     const allLeads = await fetchAllLeadsFromFirestore();
+    const leads = targetFreelancerId
+      ? allLeads.filter((l) => l.freelancer_id === targetFreelancerId)
+      : allLeads;
+
     const board: Record<PipelineStatus, Lead[]> = {
       'NOVO': [],
       'PRÉVIA CRIADA': [],
@@ -705,7 +799,7 @@ export const api = {
       'NAO_INTERESSADO': [],
       'SEM_RESPOSTA': [],
     };
-    for (const l of allLeads) {
+    for (const l of leads) {
       const st = (l.pipeline_status || 'NOVO') as PipelineStatus;
       if (board[st]) board[st].push(l);
       else board['NOVO'].push(l);
@@ -723,7 +817,7 @@ export const api = {
     try {
       const res = await fetch('/api/pipeline/move', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ leadId, toStatus }),
       });
       if (res.ok) {
@@ -737,6 +831,9 @@ export const api = {
 
   // Search Jobs
   async createSearchJob(payload: {
+    userId?: string;
+    freelancerId?: string;
+    freelancerName?: string;
     state: string;
     city: string;
     niche: string;
@@ -749,10 +846,16 @@ export const api = {
       targetLeads?: number;
     };
   }): Promise<{ job: SearchJob; estimatedQueries: number; totalCities: number; totalAreas: number }> {
+    const session = getActiveFreelancerSession();
+    const finalPayload = {
+      ...payload,
+      freelancerId: payload.freelancerId || (isFreelancerMode() ? session?.freelancer?.id : undefined),
+      freelancerName: payload.freelancerName || (isFreelancerMode() ? session?.freelancer?.name : undefined),
+    };
     const res = await fetch('/api/search-jobs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(finalPayload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -764,7 +867,14 @@ export const api = {
 
   async getSearchJobs(): Promise<SearchJob[]> {
     try {
-      const res = await fetch('/api/search-jobs');
+      const session = getActiveFreelancerSession();
+      const targetFreelancerId = isFreelancerMode() ? session?.freelancer?.id : undefined;
+      const url = targetFreelancerId
+        ? `/api/search-jobs?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+        : '/api/search-jobs';
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) return data;
@@ -776,7 +886,9 @@ export const api = {
   },
 
   async getSearchJob(id: string): Promise<{ job: SearchJob; areas: SearchArea[]; queries: SearchQueryLog[] }> {
-    const res = await fetch(`/api/search-jobs/${id}`);
+    const res = await fetch(`/api/search-jobs/${id}`, {
+      headers: getAuthHeaders(),
+    });
     if (!res.ok) throw new Error('Falha ao carregar busca.');
     return res.json();
   },

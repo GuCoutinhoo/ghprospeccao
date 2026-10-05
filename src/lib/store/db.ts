@@ -164,7 +164,7 @@ class Database {
   }
 
   public async ensureInitialized(): Promise<void> {
-    if (this.initialized && this.data.leads && this.data.leads.length > 0) {
+    if (this.initialized && this.data.leads && this.data.leads.length > 0 && this.data.freelancers && this.data.freelancers.length > 1) {
       return;
     }
     if (this.initPromise) {
@@ -175,12 +175,10 @@ class Database {
       if (!this.initialized) {
         this.init();
       }
-      // Se a base local estiver vazia (ex: na Vercel em cold start sem arquivo persistido),
-      // busca imediatamente do Firestore em nuvem
-      if (!this.data.leads || this.data.leads.length === 0) {
-        console.log('[DB] Base local sem dados. Conectando e sincronizando com o Google Firestore...');
+      try {
         await this.syncFromFirestore();
-        console.log(`[DB] Firestore sincronizado: ${this.data.leads.length} leads carregados.`);
+      } catch (syncErr) {
+        console.warn('[DB] Erro ao sincronizar inicialização com Firestore:', syncErr);
       }
     })().finally(() => {
       this.initPromise = null;
@@ -525,9 +523,12 @@ class Database {
     return { leads: paginated, total, page, totalPages };
   }
 
-  public getNichesSummary(params?: { onlyFavorites?: boolean }): { niche: string; count: number }[] {
+  public getNichesSummary(params?: { onlyFavorites?: boolean; freelancer_id?: string }): { niche: string; count: number }[] {
     const counts: Record<string, { display: string; count: number }> = {};
     let leads = this.data.leads;
+    if (params?.freelancer_id && params.freelancer_id !== 'ALL') {
+      leads = leads.filter((l) => l.freelancer_id === params.freelancer_id);
+    }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
     }
@@ -544,9 +545,12 @@ class Database {
       .sort((a, b) => b.count - a.count);
   }
 
-  public getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string }): { state: string; count: number }[] {
+  public getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string; freelancer_id?: string }): { state: string; count: number }[] {
     const counts: Record<string, number> = {};
     let leads = this.data.leads;
+    if (params?.freelancer_id && params.freelancer_id !== 'ALL') {
+      leads = leads.filter((l) => l.freelancer_id === params.freelancer_id);
+    }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
     }
@@ -788,6 +792,7 @@ class Database {
     const cleanNorm = normalizeStr(cleanRaw).replace(/[^a-z0-9]/g, '');
 
     return (this.data.freelancers || []).find((f) => {
+      if (!f) return false;
       const fCode = f.access_code || '';
       const fCodeLower = fCode.toLowerCase().trim();
       const fCodeSlug = slugifyFreelancerName(fCode);
@@ -795,6 +800,7 @@ class Database {
       const fNameSlug = slugifyFreelancerName(f.name || '');
       const fFirstNameSlug = slugifyFreelancerName((f.name || '').split(' ')[0]);
       const fNameNorm = normalizeStr(f.name || '').replace(/[^a-z0-9]/g, '');
+      const fIdLower = (f.id || '').toLowerCase().trim();
 
       return (
         fCodeLower === cleanLower ||
@@ -803,6 +809,9 @@ class Database {
         fFirstNameSlug === cleanSlug ||
         fNameLower === cleanLower ||
         fNameNorm === cleanNorm ||
+        fIdLower === cleanLower ||
+        fIdLower === `free_${cleanLower}` ||
+        fIdLower.replace('free_', '') === cleanLower ||
         fCode.toUpperCase() === cleanRaw.toUpperCase() ||
         (f.email && f.email.toLowerCase() === cleanLower)
       );

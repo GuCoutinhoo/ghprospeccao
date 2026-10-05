@@ -107,9 +107,12 @@ export default function App() {
     // Se já havia sessão de freelancer salva
     const freeSession = getActiveFreelancerSession();
     if (freeSession?.freelancer) {
+      localStorage.removeItem('gh_admin_token');
+      localStorage.removeItem('gh_admin_user');
       setActiveFreelancer(freeSession.freelancer);
       setUserRole('freelancer');
       setIsAuthenticated(true);
+      setStats(DEFAULT_STATS);
       setCurrentPath('/dashboard');
       return;
     }
@@ -156,8 +159,11 @@ export default function App() {
   const loadInitialData = async () => {
     setIsRefreshing(true);
     try {
+      const isFreelancer = userRole === 'freelancer' || Boolean(activeFreelancer);
+      const targetFreelancerId = isFreelancer ? activeFreelancer?.id : undefined;
+
       const [s, set] = await Promise.all([
-        api.getDashboardStats().catch((e) => {
+        api.getDashboardStats(targetFreelancerId).catch((e) => {
           console.warn('[App] Erro ao carregar stats da API:', e);
           return null;
         }),
@@ -166,13 +172,23 @@ export default function App() {
           return null;
         }),
       ]);
-      setStats(s || stats || DEFAULT_STATS);
+
+      if (isFreelancer) {
+        setStats(s || DEFAULT_STATS);
+      } else {
+        setStats(s || stats || DEFAULT_STATS);
+      }
+
       if (set && typeof set.hasCustomKey === 'boolean') {
         setHasCustomKey(set.hasCustomKey);
       }
     } catch (err) {
       console.error('Falha ao carregar dados iniciais:', err);
-      if (!stats) setStats(DEFAULT_STATS);
+      if (userRole === 'freelancer') {
+        setStats(DEFAULT_STATS);
+      } else if (!stats) {
+        setStats(DEFAULT_STATS);
+      }
     } finally {
       setIsRefreshing(false);
     }
@@ -232,20 +248,28 @@ export default function App() {
     if (userRole === 'freelancer') {
       api.freelancerLogout();
       setActiveFreelancer(null);
+      setStats(DEFAULT_STATS);
       setShowFreelancerLoginScreen(true);
     } else {
       api.adminLogout();
       setIsAuthenticated(false);
       setAdminUser(null);
+      setStats(DEFAULT_STATS);
     }
   };
 
-  const handleFreelancerWorkspaceReady = (freelancer: Freelancer, _token: string) => {
+  const handleFreelancerWorkspaceReady = (freelancer: Freelancer, token: string) => {
+    localStorage.removeItem('gh_admin_token');
+    localStorage.removeItem('gh_admin_user');
+    localStorage.setItem('gh_freelancer_token', token);
+    localStorage.setItem('gh_freelancer_session', JSON.stringify({ token, freelancer }));
+
     setActiveFreelancer(freelancer);
     setUserRole('freelancer');
     setIsAuthenticated(true);
     setShowFreelancerLoginScreen(false);
     setPendingFreelancerCode(null);
+    setStats(DEFAULT_STATS);
     setCurrentPath('/dashboard');
     // Atualiza histórico do navegador sem recarregar
     if (window.history && window.history.pushState) {
