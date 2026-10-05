@@ -43092,7 +43092,9 @@
       "city": "Rio de Janeiro",
       "website_status": "no_website",
       "state": "RJ",
-      "reviews_count": 46
+      "reviews_count": 46,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJ-5skD1yhwJQRCHFD_FKjwxE",
@@ -43246,7 +43248,9 @@
       "user_id": "default_user_1",
       "phone": "(21) 2263-9285",
       "name": "Dentista Centro RJ - Odonto Loureiro Clínica Odontológica e Implante",
-      "place_id": "ChIJ-x7T11t_mQARtnapN5YrPPw"
+      "place_id": "ChIJ-x7T11t_mQARtnapN5YrPPw",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "place_id": "ChIJ-z-_5985yJQRiTbuyBB0jL0",
@@ -43304,7 +43308,9 @@
       "user_id": "default_user_1",
       "id": "lead_ChIJ00iFfBXamwAR1dIJ3E3Yook",
       "phone": "(21) 3410-1034",
-      "reviews_count": 191
+      "reviews_count": 191,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "state": "RJ",
@@ -43323,7 +43329,9 @@
       "city": "Rio de Janeiro",
       "reviews_count": 122,
       "rating": 5,
-      "niche": "Clínica Odontológica"
+      "niche": "Clínica Odontológica",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJ098Ji9_NxZQRutHz2YEgRMY",
@@ -43557,7 +43565,9 @@
       "pipeline_status": "NOVO",
       "updated_at": "2026-09-26T23:32:50.655Z",
       "state": "RJ",
-      "place_id": "ChIJ0zIuak9_mQARgADibwQ81sY"
+      "place_id": "ChIJ0zIuak9_mQARgADibwQ81sY",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "name": "Dentista Copacabana RJ | Amil Hapvida Metlife Primavida Sulamérica Unimed",
@@ -43577,7 +43587,9 @@
       "website_status": "website_found",
       "rating": 4.4,
       "pipeline_status": "NOVO",
-      "reviews_count": 650
+      "reviews_count": 650,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "lead_score": 60,
@@ -43945,7 +43957,9 @@
       "rating": 4.8,
       "reviews_count": 38,
       "pipeline_status": "NOVO",
-      "niche": "Clínica Odontológica"
+      "niche": "Clínica Odontológica",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "address": "Rua Barão de Jaguara, 625 - Centro, Campinas - SP, 13015-001, Brasil",
@@ -44196,7 +44210,9 @@
       "reviews_count": 12,
       "niche": "Clínica Odontológica",
       "place_id": "ChIJ2dGgk9LVmwAR2fzIA0wv644",
-      "lead_score": 70
+      "lead_score": 70,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "reviews_count": 14,
@@ -44235,7 +44251,9 @@
       "state": "RJ",
       "place_id": "ChIJ33sNHpDVmwARWT_ki3T8og4",
       "lead_score": 55,
-      "address": "Largo do Machado, 29 - Sobreloja, 201 - Catete, Rio de Janeiro - RJ, 22221-901, Brasil"
+      "address": "Largo do Machado, 29 - Sobreloja, 201 - Catete, Rio de Janeiro - RJ, 22221-901, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "address": "R. Mal. Deodoro Da Fonseca, 640 - Centro, Adolfo - SP, 15230-000, Brasil",
@@ -44274,7 +44292,9 @@
       "pipeline_status": "NOVO",
       "user_id": "default_user_1",
       "state": "RJ",
-      "rating": 4.8
+      "rating": 4.8,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "place_id": "ChIJ3QJpMWI3yJQR6i5PBB6EVIs",
@@ -44392,7 +44412,9 @@
       "place_id": "ChIJ3dLy0ILbmwARuS_m1-ao2Z0",
       "pipeline_status": "NOVO",
       "rating": 5,
-      "city": "Rio de Janeiro"
+      "city": "Rio de Janeiro",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "created_at": "2026-10-03T12:43:12.609Z",
@@ -44432,7 +44454,9 @@
       "website_status": "website_found",
       "city": "Rio de Janeiro",
       "reviews_count": 48,
-      "state": "RJ"
+      "state": "RJ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJ41_FEdCZngARYsEAv8U8rVI",
@@ -44472,7 +44496,9 @@
       "website": "https://www.omint.com.br/clinica-odontologica/",
       "id": "lead_ChIJ446ltmpXzpQRE__TMXVPWyM",
       "maps_url": "https://maps.google.com/?cid=2547717378973892371&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
-      "place_id": "ChIJ446ltmpXzpQRE__TMXVPWyM"
+      "place_id": "ChIJ446ltmpXzpQRE__TMXVPWyM",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJ458i-ykblwARPkVmwpvGc4k",
@@ -44568,7 +44594,9 @@
       "name": "Odonto Stilo Clínica Norte Shopping Odontológica no Cachambi Rio de Janeiro",
       "reviews_count": 42,
       "niche": "Clínica Odontológica",
-      "place_id": "ChIJ4_ByRiF9mQARNOVcZ6tv7LY"
+      "place_id": "ChIJ4_ByRiF9mQARNOVcZ6tv7LY",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJ4_xbssivnQARcBTN9oD1AGU",
@@ -44646,7 +44674,9 @@
       "website_status": "website_found",
       "user_id": "default_user_1",
       "phone": "(21) 99570-1789",
-      "reviews_count": 270
+      "reviews_count": 270,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "website_status": "no_website",
@@ -44704,7 +44734,9 @@
       "updated_at": "2026-09-26T23:32:48.682Z",
       "city": "Rio de Janeiro",
       "niche": "Clínica Odontológica",
-      "place_id": "ChIJ4zWjavJ_mQARLVEsM0vjPp8"
+      "place_id": "ChIJ4zWjavJ_mQARLVEsM0vjPp8",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "phone": "(19) 98153-8677",
@@ -44857,7 +44889,9 @@
       "maps_url": "https://maps.google.com/?cid=15274277187181402474&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
       "place_id": "ChIJ5QDrBiRazpQRatnM1iwi-dM",
       "website": "http://www.comerciarios.org.br/",
-      "city": "Angatuba"
+      "city": "Angatuba",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "name": "Barbearia",
@@ -44954,7 +44988,9 @@
       "niche": "Clínica Odontológica",
       "pipeline_status": "NOVO",
       "address": "R. Voluntários da Pátria, 45 - Sala: 703 - Botafogo, Rio de Janeiro - RJ, 22270-018, Brasil",
-      "maps_url": "https://maps.google.com/?cid=8628636029608808200&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+      "maps_url": "https://maps.google.com/?cid=8628636029608808200&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "maps_url": "https://maps.google.com/?cid=220707258711268966&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
@@ -45109,7 +45145,9 @@
       "website": "http://lmodontologica.com.br/?utm_source=google&utm_medium=gmn",
       "reviews_count": 69,
       "city": "Rio de Janeiro",
-      "state": "RJ"
+      "state": "RJ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "user_id": "default_user_1",
@@ -45206,7 +45244,9 @@
       "place_id": "ChIJ73Hvb7Z_mQARDQljxQ10auk",
       "phone": "(21) 96730-3712",
       "address": "Av. Treze de Maio, 23 - Sl 2017 - Centro, Rio de Janeiro - RJ, 20031-007, Brasil",
-      "updated_at": "2026-09-26T23:32:48.693Z"
+      "updated_at": "2026-09-26T23:32:48.693Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "niche": "Academia",
@@ -45322,7 +45362,9 @@
       "lead_score": 90,
       "niche": "Clínica Odontológica",
       "updated_at": "2026-09-26T23:32:48.692Z",
-      "id": "lead_ChIJ7VO9-2B_mQARGZrJcwcHDs8"
+      "id": "lead_ChIJ7VO9-2B_mQARGZrJcwcHDs8",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJ7ZRVpsQTlwARe56rO5PQkp4",
@@ -45478,7 +45520,9 @@
       "id": "lead_ChIJ8-OA-F3VmwAR4aR4wxSvYcs",
       "name": "Clínica Odontológica Oral 360 Copacabana | Dentista",
       "user_id": "default_user_1",
-      "updated_at": "2026-09-26T23:32:49.661Z"
+      "updated_at": "2026-09-26T23:32:49.661Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJ80gMQwW9ngAROIgQ0flfvL8",
@@ -45518,7 +45562,9 @@
       "name": "dr.consulta",
       "updated_at": "2026-10-03T13:28:57.343Z",
       "pipeline_status": "NOVO",
-      "niche": "Clínica odontológica"
+      "niche": "Clínica odontológica",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "name": "RENOV ENERGY ENERGIA SOLAR",
@@ -45904,7 +45950,9 @@
       "state": "SP",
       "maps_url": "https://maps.google.com/?cid=1533655856692055663&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
       "place_id": "ChIJA0fYx6BXzpQRb87TQeCjSBU",
-      "name": "dr.consulta - Teodoro"
+      "name": "dr.consulta - Teodoro",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "reviews_count": 86,
@@ -45943,7 +45991,9 @@
       "city": "Rio de Janeiro",
       "reviews_count": 117,
       "place_id": "ChIJA3ToOWzbmwAR3Fxk9BkfwfI",
-      "address": "Av. das Américas, 4200 - Bloco 9 - Sala 203 A - Barra da Tijuca, Rio de Janeiro - RJ, 22640-102, Brasil"
+      "address": "Av. das Américas, 4200 - Bloco 9 - Sala 203 A - Barra da Tijuca, Rio de Janeiro - RJ, 22640-102, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "rating": 5,
@@ -46039,7 +46089,9 @@
       "rating": 4.7,
       "niche": "Clínica Odontológica",
       "maps_url": "https://maps.google.com/?cid=512092461038987121&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
-      "user_id": "default_user_1"
+      "user_id": "default_user_1",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "state": "SP",
@@ -46369,7 +46421,9 @@
       "reviews_count": 754,
       "rating": 4.9,
       "state": "RJ",
-      "website_status": "website_found"
+      "website_status": "website_found",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "user_id": "default_user_1",
@@ -46542,7 +46596,9 @@
       "website_status": "website_found",
       "rating": 5,
       "reviews_count": 133,
-      "phone": "(21) 99022-4470"
+      "phone": "(21) 99022-4470",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJC8B87QBvz5QRE6z_KIAFB2E",
@@ -46718,7 +46774,9 @@
       "phone": "(11) 93080-3560",
       "city": "Angatuba",
       "pipeline_status": "NOVO",
-      "lead_score": 70
+      "lead_score": 70,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJCWxGpgQtmAARnelfFWfY3eo",
@@ -46797,7 +46855,9 @@
       "place_id": "ChIJCbvfrULVmwARUyPdr_xM_nM",
       "name": "Dr. Ricardo Cader - Dentista no Rio de Janeiro",
       "lead_score": 55,
-      "created_at": "2026-09-26T23:32:49.659Z"
+      "created_at": "2026-09-26T23:32:49.659Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "place_id": "ChIJCfkqXtObngARGHTz4vGe2PQ",
@@ -46875,7 +46935,9 @@
       "niche": "Clínica Odontológica",
       "updated_at": "2026-09-26T23:32:52.655Z",
       "name": "Dentista e Invisalign no Meier - Clinica Odontológica Prime Dente",
-      "website": "http://www.primedente.com.br/"
+      "website": "http://www.primedente.com.br/",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "created_at": "2026-09-29T18:11:18.263Z",
@@ -46972,7 +47034,9 @@
       "state": "SP",
       "user_id": "default_user_1",
       "pipeline_status": "NOVO",
-      "website_status": "website_found"
+      "website_status": "website_found",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJD9Ca_9z0vJQRxYbXcWzgB5k",
@@ -47374,7 +47438,9 @@
       "address": "R. Santa Clara, 60 - Copacabana, Rio de Janeiro - RJ, 22050-001, Brasil",
       "maps_url": "https://maps.google.com/?cid=16486051316152762441&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "reviews_count": 1005,
-      "created_at": "2026-09-26T23:32:49.675Z"
+      "created_at": "2026-09-26T23:32:49.675Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJFdgWdiX_zpQR-RqNzNJcKWY",
@@ -47452,7 +47518,9 @@
       "reviews_count": 423,
       "user_id": "default_user_1",
       "updated_at": "2026-10-03T13:28:57.699Z",
-      "niche": "Clínica odontológica"
+      "niche": "Clínica odontológica",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJGRl2gR5_ngAR1OQ7enmtLjU",
@@ -47607,7 +47675,9 @@
       "created_at": "2026-09-26T23:32:49.662Z",
       "user_id": "default_user_1",
       "pipeline_status": "NOVO",
-      "lead_score": 70
+      "lead_score": 70,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "created_at": "2026-09-26T23:32:19.793Z",
@@ -47685,7 +47755,9 @@
       "website": "https://www.saude.rj.gov.br/rede-de-atendimento?Municipio=&Bairro=&TipoDeAtendimento=UPA+24+Horas",
       "niche": "Clínica Odontológica",
       "pipeline_status": "NOVO",
-      "place_id": "ChIJH3HIqOh_mQARsukuVTTTQeY"
+      "place_id": "ChIJH3HIqOh_mQARsukuVTTTQeY",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "maps_url": "https://maps.google.com/?cid=18126817523949237623&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
@@ -47897,7 +47969,9 @@
       "phone": "(11) 2092-4422",
       "lead_score": 60,
       "city": "Angatuba",
-      "id": "lead_ChIJHw9NIetezpQRyG6QM9adSq0"
+      "id": "lead_ChIJHw9NIetezpQRyG6QM9adSq0",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "reviews_count": 54,
@@ -47916,7 +47990,9 @@
       "website_status": "no_website",
       "updated_at": "2026-09-26T23:32:52.642Z",
       "rating": 3.3,
-      "state": "RJ"
+      "state": "RJ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "phone": "(19) 99649-1129",
@@ -48147,7 +48223,9 @@
       "city": "Rio de Janeiro",
       "phone": "(21) 99570-2659",
       "updated_at": "2026-09-26T23:32:49.656Z",
-      "rating": 5
+      "rating": 5,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "created_at": "2026-10-03T12:43:30.539Z",
@@ -48401,7 +48479,9 @@
       "state": "RJ",
       "reviews_count": 56,
       "website": "http://www.clinicacorb.com.br/",
-      "place_id": "ChIJJ4yRZ2B_mQARTYYYmaSGHPQ"
+      "place_id": "ChIJJ4yRZ2B_mQARTYYYmaSGHPQ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "updated_at": "2026-10-03T12:43:26.019Z",
@@ -48918,7 +48998,9 @@
       "state": "RJ",
       "id": "lead_ChIJLW3fFSV9mQARcEwILU_u4zk",
       "city": "Rio de Janeiro",
-      "user_id": "default_user_1"
+      "user_id": "default_user_1",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJLX2WWqV9mQARB_lHjdwCX20",
@@ -48938,7 +49020,9 @@
       "updated_at": "2026-09-26T23:32:52.680Z",
       "city": "Rio de Janeiro",
       "reviews_count": 150,
-      "website": "https://implantesim.com.br/"
+      "website": "https://implantesim.com.br/",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "user_id": "default_user_1",
@@ -49092,7 +49176,9 @@
       "user_id": "default_user_1",
       "lead_score": 60,
       "website_status": "website_found",
-      "phone": "(11) 4090-1510"
+      "phone": "(11) 4090-1510",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "reviews_count": 161,
@@ -49209,7 +49295,9 @@
       "niche": "Clínica Odontológica",
       "website": "http://www.clinique.odo.br/",
       "pipeline_status": "NOVO",
-      "updated_at": "2026-09-26T23:32:50.658Z"
+      "updated_at": "2026-09-26T23:32:50.658Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJMX-DtDqhwJQRW_gYTNiYsR8",
@@ -49481,7 +49569,9 @@
       "lead_score": 55,
       "name": "Odontoclínica Via Parque",
       "updated_at": "2026-09-26T23:32:51.672Z",
-      "website_status": "website_found"
+      "website_status": "website_found",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJNcQv3ZdzvAARgD9RJdZuVh8",
@@ -49635,7 +49725,9 @@
       "id": "lead_ChIJO7OjMIVZzpQRIQTT2C5pbE8",
       "pipeline_status": "NOVO",
       "created_at": "2026-10-03T13:28:57.871Z",
-      "phone": "(11) 2877-4747"
+      "phone": "(11) 2877-4747",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJO7q7jaJplwARA4GpEIiLXDM",
@@ -49907,7 +49999,9 @@
       "name": "Clínica Santé Rio - Odontologia, Invisalign e Odontopediatria",
       "user_id": "default_user_1",
       "pipeline_status": "NOVO",
-      "niche": "Clínica Odontológica"
+      "niche": "Clínica Odontológica",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "lead_score": 55,
@@ -49927,7 +50021,9 @@
       "place_id": "ChIJPSGJdGA5VgERHPxAM5hNi0I",
       "user_id": "default_user_1",
       "state": "RJ",
-      "website_status": "website_found"
+      "website_status": "website_found",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "pipeline_status": "NOVO",
@@ -50219,7 +50315,9 @@
       "address": "Av. Nossa Sra. de Copacabana, 540 - Sl 1007 - Copacabana, Rio de Janeiro - RJ, 22020-959, Brasil",
       "city": "Rio de Janeiro",
       "website": "https://dentistaemcopacabana.com.br/clinica-odontologica-em-copacabana/",
-      "state": "RJ"
+      "state": "RJ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "website_status": "no_website",
@@ -50315,7 +50413,9 @@
       "created_at": "2026-09-26T23:32:52.650Z",
       "website": "http://www.alphareabilitacao.com.br/",
       "updated_at": "2026-09-26T23:32:52.650Z",
-      "state": "RJ"
+      "state": "RJ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJQS8JwVLzwJQRdR3lD1ZFgcE",
@@ -50354,7 +50454,9 @@
       "reviews_count": 744,
       "name": "Clínica odontológica Vamos Sorrir - Méier",
       "state": "RJ",
-      "address": "R. Dias da Cruz, 135 - Méier, Rio de Janeiro - RJ, 20720-010, Brasil"
+      "address": "R. Dias da Cruz, 135 - Méier, Rio de Janeiro - RJ, 20720-010, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "reviews_count": 12,
@@ -50487,7 +50589,9 @@
       "maps_url": "https://maps.google.com/?cid=8690120127317048037&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "pipeline_status": "NOVO",
       "updated_at": "2026-09-26T23:32:51.646Z",
-      "address": "Av. das Américas, 3301 - Bl 03 - Barra da Tijuca, Rio de Janeiro - RJ, 22631-004, Brasil"
+      "address": "Av. das Américas, 3301 - Bl 03 - Barra da Tijuca, Rio de Janeiro - RJ, 22631-004, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "maps_url": "https://maps.google.com/?cid=13812375746993787590&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
@@ -50507,7 +50611,9 @@
       "updated_at": "2026-09-26T23:32:51.664Z",
       "rating": 5,
       "place_id": "ChIJR3a_p0DbmwARxhLJj49qr78",
-      "phone": "(21) 2431-6963"
+      "phone": "(21) 2431-6963",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "user_id": "default_user_1",
@@ -50546,7 +50652,9 @@
       "address": "R. Sete de Setembro, 92 - Sl 702 - Centro, Rio de Janeiro - RJ, 20050-005, Brasil",
       "rating": 5,
       "id": "lead_ChIJR4w-Pl5_mQAR7GJtg2-J4WA",
-      "pipeline_status": "NOVO"
+      "pipeline_status": "NOVO",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJR5gKr-wFlwARERrZ2Bk_C5A",
@@ -50662,7 +50770,9 @@
       "pipeline_status": "NOVO",
       "place_id": "ChIJRXEOk1DVmwARvrwwbpzV5TY",
       "updated_at": "2026-09-26T23:32:49.670Z",
-      "address": "Av. Nossa Sra. de Copacabana, 435 - Sl 601 - Copacabana, Rio de Janeiro - RJ, 22020-002, Brasil"
+      "address": "Av. Nossa Sra. de Copacabana, 435 - Sl 601 - Copacabana, Rio de Janeiro - RJ, 22020-002, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJR_1PrB1vz5QRX9BHwVAsnes",
@@ -50701,7 +50811,9 @@
       "created_at": "2026-09-26T23:32:52.697Z",
       "website_status": "website_found",
       "lead_score": 70,
-      "reviews_count": 306
+      "reviews_count": 306,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJRdJ7hwgBlwAR_voIbWgqWnQ",
@@ -50797,7 +50909,9 @@
       "maps_url": "https://maps.google.com/?cid=13993973229035900104&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "rating": 5,
       "state": "RJ",
-      "name": "Dr. Alexandre Matias | Clínica Premium de Implantes e Próteses no Rio de Janeiro | Dentista na Barra da Tijuca"
+      "name": "Dr. Alexandre Matias | Clínica Premium de Implantes e Próteses no Rio de Janeiro | Dentista na Barra da Tijuca",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJS54Z7F5_mQARcO9PW541kMM",
@@ -50817,7 +50931,9 @@
       "rating": 4.4,
       "city": "Rio de Janeiro",
       "niche": "Clínica Odontológica",
-      "user_id": "default_user_1"
+      "user_id": "default_user_1",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "pipeline_status": "NOVO",
@@ -51028,7 +51144,9 @@
       "maps_url": "https://maps.google.com/?cid=4851970455692797359&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
       "user_id": "default_user_1",
       "name": "Unidade Básica de Saúde - UBS Vila Ede",
-      "pipeline_status": "NOVO"
+      "pipeline_status": "NOVO",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "user_id": "default_user_1",
@@ -51219,7 +51337,9 @@
       "lead_score": 70,
       "pipeline_status": "NOVO",
       "place_id": "ChIJTbngggaAmQARDmttnLRLbcg",
-      "website": "https://copacabanaodonto.com.br/"
+      "website": "https://copacabanaodonto.com.br/",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJTds_fxATlwARKza9gkmhcEs",
@@ -51336,7 +51456,9 @@
       "maps_url": "https://maps.google.com/?cid=14883286365492627171&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "name": "Clínica Odontológica Dra. Alice Freitas | Invisalign Barra da Tijuca",
       "niche": "Clínica Odontológica",
-      "updated_at": "2026-09-26T23:32:51.649Z"
+      "updated_at": "2026-09-26T23:32:51.649Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJUQTEeXcFlwARVKK85TzER1c",
@@ -51376,7 +51498,9 @@
       "pipeline_status": "NOVO",
       "maps_url": "https://maps.google.com/?cid=18194203183745611660&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "rating": 4.4,
-      "state": "RJ"
+      "state": "RJ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "created_at": "2026-10-03T12:43:17.974Z",
@@ -51550,7 +51674,9 @@
       "lead_score": 55,
       "phone": "(21) 99166-8503",
       "created_at": "2026-09-26T23:32:52.676Z",
-      "name": "OdontoRiso - Dentista Preço Popular Rj, Dentista"
+      "name": "OdontoRiso - Dentista Preço Popular Rj, Dentista",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJV3WPFS7JyZQRos51AjSdWwE",
@@ -52008,7 +52134,9 @@
       "reviews_count": 167,
       "name": "Odontoclínica de Copacabana Dentistas Associados",
       "user_id": "default_user_1",
-      "id": "lead_ChIJX3H1zFrVmwARQCyzGJnWxjY"
+      "id": "lead_ChIJX3H1zFrVmwARQCyzGJnWxjY",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "reviews_count": 78,
@@ -52028,7 +52156,9 @@
       "place_id": "ChIJX6tFr-R_mQARk8eDM3SbSp8",
       "user_id": "default_user_1",
       "phone": "(21) 2542-4548",
-      "id": "lead_ChIJX6tFr-R_mQARk8eDM3SbSp8"
+      "id": "lead_ChIJX6tFr-R_mQARk8eDM3SbSp8",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "user_id": "default_user_1",
@@ -52068,7 +52198,9 @@
       "phone": "(11) 3031-3509",
       "reviews_count": 459,
       "id": "lead_ChIJXR0AlaFXzpQRMHVeUVJtFyo",
-      "city": "Angatuba"
+      "city": "Angatuba",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJXSh5yvHJyJQRvhm-ZDBs7uQ",
@@ -52126,7 +52258,9 @@
       "created_at": "2026-09-26T23:32:52.672Z",
       "place_id": "ChIJXUYxj9dimQAR5JWbR0x0-G8",
       "address": "Av. Dom Hélder Câmara, 5200 - Sl 602 - Cachambi, Rio de Janeiro - RJ, 20771-004, Brasil",
-      "lead_score": 40
+      "lead_score": 40,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "state": "SP",
@@ -52549,7 +52683,9 @@
       "created_at": "2026-10-03T13:28:57.454Z",
       "website_status": "website_found",
       "state": "SP",
-      "id": "lead_ChIJZ7MG3IVYzpQRlJZkSb_xU34"
+      "id": "lead_ChIJZ7MG3IVYzpQRlJZkSb_xU34",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "website_status": "no_website",
@@ -52646,7 +52782,9 @@
       "maps_url": "https://maps.google.com/?cid=11190034560339289409&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "website_status": "website_found",
       "name": "Odonto 21",
-      "state": "RJ"
+      "state": "RJ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "reviews_count": 397,
@@ -52666,7 +52804,9 @@
       "place_id": "ChIJZTsLd5DbmwARGSJVwberRrE",
       "state": "RJ",
       "rating": 4.9,
-      "address": "Avenida Embaixador Abelardo Bueno, numero 1 - Próximo a Perinatal, no Dimension Office Park, bloco Lagoa 1 - sala 211 - Barra Olímpica, Rio de Janeiro - RJ, 22775-040, Brasil"
+      "address": "Avenida Embaixador Abelardo Bueno, numero 1 - Próximo a Perinatal, no Dimension Office Park, bloco Lagoa 1 - sala 211 - Barra Olímpica, Rio de Janeiro - RJ, 22775-040, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "created_at": "2026-09-26T23:55:23.728Z",
@@ -52955,7 +53095,9 @@
       "reviews_count": 173,
       "phone": "(21) 3042-1213",
       "updated_at": "2026-09-26T23:32:52.666Z",
-      "id": "lead_ChIJ_UJWllR8mQAR75_XJXo0Zk4"
+      "id": "lead_ChIJ_UJWllR8mQAR75_XJXo0Zk4",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "place_id": "ChIJ_VlvEiX3zpQRFojP8af5S4Y",
@@ -53070,7 +53212,9 @@
       "created_at": "2026-09-26T23:32:48.679Z",
       "id": "lead_ChIJa2aAZF1_mQARPaddO9WRApo",
       "website_status": "website_found",
-      "maps_url": "https://maps.google.com/?cid=11097592776804378429&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+      "maps_url": "https://maps.google.com/?cid=11097592776804378429&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "created_at": "2026-10-03T12:43:16.800Z",
@@ -53394,7 +53538,9 @@
       "user_id": "default_user_1",
       "state": "RJ",
       "updated_at": "2026-09-26T23:32:51.666Z",
-      "pipeline_status": "NOVO"
+      "pipeline_status": "NOVO",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "name": "Clínica Odonto Consullte",
@@ -53414,7 +53560,9 @@
       "place_id": "ChIJb71Ufl5_mQAR22FACAkSxGQ",
       "user_id": "default_user_1",
       "id": "lead_ChIJb71Ufl5_mQAR22FACAkSxGQ",
-      "phone": "(21) 2509-7710"
+      "phone": "(21) 2509-7710",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "city": "Agudos",
@@ -53491,7 +53639,9 @@
       "place_id": "ChIJbQRFj2B_mQARDXKwSMxClYQ",
       "pipeline_status": "NOVO",
       "created_at": "2026-09-26T23:32:48.691Z",
-      "address": "Av. Rio Branco, 156 - SALA 1001 - Centro, Rio de Janeiro - RJ, 20040-003, Brasil"
+      "address": "Av. Rio Branco, 156 - SALA 1001 - Centro, Rio de Janeiro - RJ, 20040-003, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJbQUv2JHTwScReVU1ay3e0vs",
@@ -53568,7 +53718,9 @@
       "state": "RJ",
       "created_at": "2026-09-26T23:32:48.688Z",
       "rating": 5,
-      "lead_score": 85
+      "lead_score": 85,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJbQxvMaT8lZQR-VbqF-206pM",
@@ -53625,7 +53777,9 @@
       "reviews_count": 1275,
       "website": "https://www.instagram.com/luxodontologiaestetica/profilecard/?igsh=MTlxMGE2aDhudm5w",
       "id": "lead_ChIJbUFILYhezpQRldHrzy2VLaQ",
-      "address": "R. Antônio de Barros, 1933 - Vila Carrão, São Paulo - SP, 03401-001, Brazil"
+      "address": "R. Antônio de Barros, 1933 - Vila Carrão, São Paulo - SP, 03401-001, Brazil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "niche": "Energia solar",
@@ -53723,7 +53877,9 @@
       "created_at": "2026-09-26T23:32:50.668Z",
       "state": "RJ",
       "reviews_count": 218,
-      "address": "Edifício Plenus Empresarial - R. São Francisco Xavier, 32 - Sl 310 - Tijuca, Rio de Janeiro - RJ, 20550-012, Brasil"
+      "address": "Edifício Plenus Empresarial - R. São Francisco Xavier, 32 - Sl 310 - Tijuca, Rio de Janeiro - RJ, 20550-012, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJc8Fx01FplwARGkp_dS856Ik",
@@ -54226,7 +54382,9 @@
       "reviews_count": 40,
       "name": "DRA CAROLINA GARCÊS - DENTISTA ESPECIALIZADA EM IMPLANTES EM BOTAFOGO ZONA SUL -RJ",
       "place_id": "ChIJdalT_QJ_mQARfyS5P9xezZc",
-      "updated_at": "2026-09-26T23:32:50.663Z"
+      "updated_at": "2026-09-26T23:32:50.663Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJdcAX4hQFlwARuLv3h_sRb7Q",
@@ -54342,7 +54500,9 @@
       "rating": 5,
       "phone": "(21) 99675-7963",
       "name": "Dra. Fernanda Loureiro Clínica Odontológica | Dentista | Ortodontia Invisalign | Copacabana",
-      "address": "Av. Nossa Sra. de Copacabana, 1052 - Sl 201 - Copacabana, Rio de Janeiro - RJ, 22020-001, Brasil"
+      "address": "Av. Nossa Sra. de Copacabana, 1052 - Sl 201 - Copacabana, Rio de Janeiro - RJ, 22020-001, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "phone": "(19) 98122-1852",
@@ -54572,7 +54732,9 @@
       "phone": "(21) 98016-2529",
       "id": "lead_ChIJebIuA8p_mQAR8s--ip-8Bh8",
       "name": "Clínica Sorriso e Saúde Integrada",
-      "website": "https://www.instagram.com/clinica.sorrisosaudeintegrada/"
+      "website": "https://www.instagram.com/clinica.sorrisosaudeintegrada/",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "website_status": "no_website",
@@ -54764,7 +54926,9 @@
       "created_at": "2026-10-03T13:28:57.271Z",
       "state": "SP",
       "reviews_count": 30,
-      "pipeline_status": "NOVO"
+      "pipeline_status": "NOVO",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "created_at": "2026-10-03T00:35:31.100Z",
@@ -54841,7 +55005,9 @@
       "website": "https://capital.sp.gov.br/web/saude/w/noticias/344253",
       "rating": 4,
       "niche": "Clínica odontológica",
-      "lead_score": 60
+      "lead_score": 60,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "reviews_count": 65,
@@ -54956,7 +55122,9 @@
       "lead_score": 60,
       "maps_url": "https://maps.google.com/?cid=12363671689103671760&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
       "place_id": "ChIJg1YCwI5bzpQR0AGUTOWVlKs",
-      "pipeline_status": "NOVO"
+      "pipeline_status": "NOVO",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "state": "RJ",
@@ -55205,7 +55373,9 @@
       "address": "Edifício RIOMEYER - R. Dias da Cruz, 111 - sala 203 - Méier, Rio de Janeiro - RJ, 20720-012, Brasil",
       "phone": "(21) 97876-5142",
       "name": "Dr. Jorge Serra Borges",
-      "updated_at": "2026-09-26T23:32:52.652Z"
+      "updated_at": "2026-09-26T23:32:52.652Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "address": "R. Sete de Abril, 125 - República, São Paulo - SP, 01043-902, Brasil",
@@ -55357,7 +55527,9 @@
       "address": "R. Visc. de Pirajá, 111 - Sl 207 - Ipanema, Rio de Janeiro - RJ, 22410-001, Brasil",
       "city": "Rio de Janeiro",
       "rating": 5,
-      "website_status": "no_website"
+      "website_status": "no_website",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "name": "BB Oral Clinic - Clínica Odontológica - Dentista Barra da Tijuca",
@@ -55377,7 +55549,9 @@
       "phone": "(21) 97972-9292",
       "rating": 5,
       "maps_url": "https://maps.google.com/?cid=12904494240602993788&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
-      "reviews_count": 141
+      "reviews_count": 141,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "state": "SP",
@@ -55456,7 +55630,9 @@
       "city": "Rio de Janeiro",
       "website_status": "website_found",
       "website": "https://belsorrisobotafogo.com.br/",
-      "state": "RJ"
+      "state": "RJ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "place_id": "ChIJi56HU8wQyZQR2nKDANRQm4E",
@@ -55554,7 +55730,9 @@
       "updated_at": "2026-09-26T23:32:52.685Z",
       "place_id": "ChIJiXWbbFN8mQARLLJ-3yVz588",
       "user_id": "default_user_1",
-      "name": "Carraro Espaço Odontológico"
+      "name": "Carraro Espaço Odontológico",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJi_ltpUTAGE0R5tGY3hKtswk",
@@ -56099,7 +56277,9 @@
       "city": "Rio de Janeiro",
       "rating": 4.8,
       "phone": "(21) 2548-0224",
-      "id": "lead_ChIJk9joTlrVmwARI_0tBnteyco"
+      "id": "lead_ChIJk9joTlrVmwARI_0tBnteyco",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJkQK37UUBvQARO4Ko6jQzaVY",
@@ -56311,7 +56491,9 @@
       "state": "RJ",
       "city": "Rio de Janeiro",
       "updated_at": "2026-09-26T23:32:51.678Z",
-      "place_id": "ChIJl-786VvbmwARUr5r78fa5kg"
+      "place_id": "ChIJl-786VvbmwARUr5r78fa5kg",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "place_id": "ChIJl1kPPy_ywJQRiqvVrAUVGYo",
@@ -56349,7 +56531,9 @@
       "phone": "(21) 97994-5150",
       "id": "lead_ChIJl24_s-LbmwARIAkd14DUcAw",
       "website_status": "website_found",
-      "city": "Rio de Janeiro"
+      "city": "Rio de Janeiro",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "reviews_count": 2,
@@ -56503,7 +56687,9 @@
       "place_id": "ChIJlZ3G43l_mQAR7dcqzHWyTgI",
       "user_id": "default_user_1",
       "name": "Consultório Odontológico Dr. Marcelo Virmond de Andrade",
-      "id": "lead_ChIJlZ3G43l_mQAR7dcqzHWyTgI"
+      "id": "lead_ChIJlZ3G43l_mQAR7dcqzHWyTgI",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJl_ZWVEFnmQARardRYgdDPgk",
@@ -56755,7 +56941,9 @@
       "website_status": "website_found",
       "id": "lead_ChIJn2W2xR5azpQRuA9Rw8ZbAzQ",
       "rating": 3.2,
-      "phone": "(11) 4573-8000"
+      "phone": "(11) 4573-8000",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "place_id": "ChIJn2WCVG7FyJQRWqt-Y9g1aYA",
@@ -56871,7 +57059,9 @@
       "website": "https://www.dradeboracamilo.com.br/",
       "updated_at": "2026-09-26T23:32:52.660Z",
       "place_id": "ChIJnXNxuDNjmQARuiKaC4RSSbQ",
-      "address": "R. José Bonifácio, 1050 - Bl 2 sala 1216 - Todos os Santos, Rio de Janeiro - RJ, 20770-240, Brasil"
+      "address": "R. José Bonifácio, 1050 - Bl 2 sala 1216 - Todos os Santos, Rio de Janeiro - RJ, 20770-240, Brasil",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "rating": 5,
@@ -57198,7 +57388,9 @@
       "name": "S.I.N. - Matriz",
       "state": "SP",
       "id": "lead_ChIJoRPFb5xezpQRHxltGBJdCdc",
-      "user_id": "default_user_1"
+      "user_id": "default_user_1",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "website_status": "website_found",
@@ -57218,7 +57410,9 @@
       "user_id": "default_user_1",
       "lead_score": 70,
       "maps_url": "https://maps.google.com/?cid=15968675004312169781&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
-      "place_id": "ChIJoVmI-U9YzpQRNa2vjU8hnN0"
+      "place_id": "ChIJoVmI-U9YzpQRNa2vjU8hnN0",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "updated_at": "2026-09-27T23:37:23.957Z",
@@ -57835,7 +58029,9 @@
       "niche": "Clínica Odontológica",
       "reviews_count": 60,
       "maps_url": "https://maps.google.com/?cid=17957716826155795755&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
-      "user_id": "default_user_1"
+      "user_id": "default_user_1",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "city": "Águas de Santa Bárbara",
@@ -58158,7 +58354,9 @@
       "niche": "Clínica Odontológica",
       "address": "Av. Pres. Vargas, 633 - Sl 402 - Centro, Rio de Janeiro - RJ, 20071-905, Brasil",
       "name": "Clínica Odontológica Odontocor - Dentista Centro Rj | Especialista em Tratamento de Canal",
-      "id": "lead_ChIJrXLZstZ_mQAR2u4_MmXUpOc"
+      "id": "lead_ChIJrXLZstZ_mQAR2u4_MmXUpOc",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "updated_at": "2026-09-26T23:55:20.807Z",
@@ -58389,7 +58587,9 @@
       "pipeline_status": "NOVO",
       "phone": "(21) 99694-4676",
       "rating": 5,
-      "lead_score": 40
+      "lead_score": 40,
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJsWIhCql_vgARP--PPLFQFeo",
@@ -58989,7 +59189,9 @@
       "address": "R. Dias da Cruz, 215 - Méier, Rio de Janeiro - RJ, 20720-010, Brasil",
       "rating": 5,
       "updated_at": "2026-09-26T23:32:52.640Z",
-      "niche": "Clínica Odontológica"
+      "niche": "Clínica Odontológica",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "city": "Aguaí",
@@ -59144,7 +59346,9 @@
       "website": "https://www.sorrio.com.br/",
       "id": "lead_ChIJvXC4uETVmwARGQfGO_vhQMM",
       "state": "RJ",
-      "website_status": "website_found"
+      "website_status": "website_found",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "updated_at": "2026-09-27T23:38:01.611Z",
@@ -59508,7 +59712,9 @@
       "state": "RJ",
       "maps_url": "https://maps.google.com/?cid=12041259442749349699&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
       "user_id": "default_user_1",
-      "updated_at": "2026-09-26T23:32:52.693Z"
+      "updated_at": "2026-09-26T23:32:52.693Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "state": "RJ",
@@ -59798,7 +60004,9 @@
       "place_id": "ChIJxyjc_LzRmwARKRgZCyO6yZE",
       "state": "RJ",
       "pipeline_status": "NOVO",
-      "created_at": "2026-09-26T23:32:51.651Z"
+      "created_at": "2026-09-26T23:32:51.651Z",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJy8BR-GB_mQAR1X1UbTfc16w",
@@ -59818,7 +60026,9 @@
       "rating": 5,
       "niche": "Clínica Odontológica",
       "website": "https://oralriodonto.com.br/",
-      "website_status": "website_found"
+      "website_status": "website_found",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "updated_at": "2026-09-27T23:38:01.590Z",
@@ -59934,7 +60144,9 @@
       "website_status": "no_website",
       "address": "Avenida Almirante Barroso, 63 sala 2217 - Av. Alm. Barroso, 63 - sala 2217 A - Centro, Rio de Janeiro - RJ, 20031-003, Brasil",
       "reviews_count": 13,
-      "state": "RJ"
+      "state": "RJ",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "maps_url": "https://maps.google.com/?cid=12011579658055110765&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
@@ -59954,7 +60166,9 @@
       "user_id": "default_user_1",
       "city": "Rio de Janeiro",
       "niche": "Clínica Odontológica",
-      "place_id": "ChIJyyvvrMJ_mQARbdCuFQ-0saY"
+      "place_id": "ChIJyyvvrMJ_mQARbdCuFQ-0saY",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "id": "lead_ChIJz38OIt5tvAARw5jIImJzndE",
@@ -60163,7 +60377,9 @@
       "city": "Rio de Janeiro",
       "address": "Condomínio do Edifício Santarém - Tv. do Ouvidor, 7 - 301 - Centro, Rio de Janeiro - RJ, 20040-040, Brasil",
       "pipeline_status": "NOVO",
-      "website": "http://www.premiumodontologia.com.br/"
+      "website": "http://www.premiumodontologia.com.br/",
+      "freelancer_id": "free_demonstracao",
+      "freelancer_name": "Demonstração"
     },
     {
       "maps_url": "https://maps.google.com/?cid=15717601494193707431&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
@@ -67992,6 +68208,15 @@
       "id": "free_natalia",
       "last_access_at": "2026-10-04T22:01:13.710Z",
       "name": "Natalia Ferreira"
+    },
+    {
+      "id": "free_demonstracao",
+      "name": "Demonstração",
+      "email": "demonstracao@ghprospeccao.com",
+      "access_code": "demonstracao",
+      "status": "active",
+      "created_at": "2026-10-05T23:19:47.528Z",
+      "updated_at": "2026-10-05T23:19:47.528Z"
     }
   ],
   "activities": [

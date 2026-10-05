@@ -212,7 +212,11 @@ class Database {
         for (const l of remote.leads || []) {
           if (!l || !l.id) continue;
           const fid = (l.freelancer_id || '').toLowerCase().trim();
-          if (fid && (deletedFreelancerCodes.has(fid) || deletedFreelancerCodes.has(`free_${fid}`))) {
+          const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
+          const isFreelancerActive = (this.data.freelancers || []).some(
+            (f) => f.id.toLowerCase() === fid || f.access_code.toLowerCase() === cleanFid
+          );
+          if (fid && !isFreelancerActive && (deletedFreelancerCodes.has(fid) || deletedFreelancerCodes.has(`free_${fid}`))) {
             deleteLeadFromFirestore(l.id).catch(() => {});
             continue;
           }
