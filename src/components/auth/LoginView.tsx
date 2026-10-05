@@ -9,7 +9,7 @@ interface LoginViewProps {
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onGoToFreelancerAccess }) => {
   const [email, setEmail] = useState<string>('gustavohcsantos.mm2020@gmail.com');
-  const [password, setPassword] = useState<string>('prospecta123');
+  const [password, setPassword] = useState<string>('gustavo34');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 

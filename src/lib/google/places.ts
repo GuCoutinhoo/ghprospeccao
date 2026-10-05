@@ -89,6 +89,27 @@ export function hasWebsite(rawWebsiteUri?: string | null): { hasWebsite: boolean
   }
 }
 
+export function extractCityAndStateFromAddress(address?: string): { city?: string; state?: string } {
+  if (!address) return {};
+  const matchHyphen = address.match(/,\s*([A-Za-zÀ-ÿ\s.'-]+?)\s*-\s*([A-Z]{2})\b/);
+  if (matchHyphen) {
+    const rawCity = matchHyphen[1].trim();
+    const rawUf = matchHyphen[2].trim();
+    if (rawCity.length >= 2 && rawCity.length <= 40) {
+      return { city: rawCity, state: rawUf };
+    }
+  }
+  const matchComma = address.match(/,\s*([A-Za-zÀ-ÿ\s.'-]+?),\s*([A-Z]{2})\b/);
+  if (matchComma) {
+    const rawCity = matchComma[1].trim();
+    const rawUf = matchComma[2].trim();
+    if (rawCity.length >= 2 && rawCity.length <= 40) {
+      return { city: rawCity, state: rawUf };
+    }
+  }
+  return {};
+}
+
 export function normalizePlace(raw: GooglePlaceRaw, fallbackCity: string, fallbackState: string): Place {
   const placeId = raw.id || (raw.name ? raw.name.replace('places/', '') : `gen_${Date.now()}_${Math.random().toString(36).substring(7)}`);
   const displayName = raw.displayName?.text || 'Estabelecimento sem nome';
@@ -96,20 +117,24 @@ export function normalizePlace(raw: GooglePlaceRaw, fallbackCity: string, fallba
   const { status: websiteStatus } = hasWebsite(raw.websiteUri);
   const now = new Date().toISOString();
 
-  // Tenta extrair CEP e cidade do endereço formatado brasileiro se possível
+  // Extrai CEP e cidade/UF real do endereço retornado pelo Google
   let postalCode: string | undefined;
   const cepMatch = address.match(/\d{5}-\d{3}/);
   if (cepMatch) {
     postalCode = cepMatch[0];
   }
 
+  const extracted = extractCityAndStateFromAddress(address);
+  const resolvedCity = (fallbackCity && fallbackCity !== 'all') ? fallbackCity : (extracted.city || fallbackCity);
+  const resolvedState = extracted.state || fallbackState;
+
   return {
     id: placeId,
     place_id: placeId,
     name: displayName,
     formatted_address: address,
-    city: fallbackCity,
-    state: fallbackState,
+    city: resolvedCity,
+    state: resolvedState,
     postal_code: postalCode,
     lat: raw.location?.latitude ?? 0,
     lng: raw.location?.longitude ?? 0,
@@ -242,14 +267,18 @@ export async function searchPlacesOfficial(
     maxResultCount: Math.min(options?.maxResultCount || 20, 20),
   };
 
-  if (options?.locationBias?.circle) {
+  const centerLat = options?.locationBias?.circle?.center?.latitude;
+  const centerLng = options?.locationBias?.circle?.center?.longitude;
+  const hasValidCenter = typeof centerLat === 'number' && typeof centerLng === 'number' && centerLat !== 0 && centerLng !== 0;
+
+  if (options?.locationBias?.circle && hasValidCenter) {
     body.locationBias = {
       circle: {
         center: {
-          latitude: options.locationBias.circle.center.latitude,
-          longitude: options.locationBias.circle.center.longitude,
+          latitude: centerLat,
+          longitude: centerLng,
         },
-        radius: options.locationBias.circle.radius,
+        radius: options.locationBias.circle.radius || 12000,
       },
     };
   }
@@ -273,14 +302,13 @@ export async function searchPlacesOfficial(
         const errorMessage = errorJson?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
         lastError = errorMessage;
 
-        // Se for limite de cota do SearchTextRequest (429 / RESOURCE_EXHAUSTED),
-        // recorre transparentemente ao searchNearby para NÃO interromper a varredura
-        if (response.status === 429 || errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('resource_exhausted')) {
-          console.warn('[Places] Cota de SearchTextRequest atingida, alternando imediatamente para searchNearby...');
+        // Se for limite de cota do SearchTextRequest (429 / RESOURCE_EXHAUSTED) e houver coordenadas reais
+        if (hasValidCenter && (response.status === 429 || errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('resource_exhausted'))) {
+          console.warn('[Places] Cota de SearchTextRequest atingida, alternando para searchNearby...');
           const center = options?.locationBias?.circle?.center;
           if (center) {
             const types = getIncludedTypesForQuery(query);
-            const nearbyRes = await searchPlacesNearby(apiKey, center, options?.locationBias?.circle?.radius || 8000, types);
+            const nearbyRes = await searchPlacesNearby(apiKey, center, options?.locationBias?.circle?.radius || 12000, types);
             if (nearbyRes.places && nearbyRes.places.length > 0) {
               return { places: nearbyRes.places };
             }
@@ -301,10 +329,10 @@ export async function searchPlacesOfficial(
         return { places: data.places };
       }
 
-      // Se searchText não retornou resultados, tenta searchNearby se houver coordenadas
-      if (options?.locationBias?.circle?.center) {
+      // Se searchText não retornou resultados e temos coordenadas válidas
+      if (hasValidCenter && options?.locationBias?.circle?.center) {
         const types = getIncludedTypesForQuery(query);
-        const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius, types);
+        const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 12000, types);
         if (nearbyRes.places && nearbyRes.places.length > 0) {
           return { places: nearbyRes.places };
         }
@@ -319,11 +347,11 @@ export async function searchPlacesOfficial(
     }
   }
 
-  // Fallback final: se searchText falhou completamente mas temos coordenadas da área/cidade, tentar searchNearby
-  if (options?.locationBias?.circle?.center) {
+  // Fallback final: somente se houver coordenadas válidas reais
+  if (hasValidCenter && options?.locationBias?.circle?.center) {
     try {
       const types = getIncludedTypesForQuery(query);
-      const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 8000, types);
+      const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 12000, types);
       if (nearbyRes.places && nearbyRes.places.length > 0) {
         return { places: nearbyRes.places };
       }

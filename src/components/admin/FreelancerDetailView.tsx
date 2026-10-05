@@ -24,6 +24,8 @@ import {
   Briefcase,
   Flame,
   Award,
+  Trash2,
+  AlertCircle,
 } from 'lucide-react';
 import {
   Freelancer,
@@ -55,6 +57,9 @@ export const FreelancerDetailView: React.FC<FreelancerDetailViewProps> = ({
 
   const [activeTab, setActiveTab] = useState<'activities' | 'leads' | 'searches' | 'sales' | 'performance'>('activities');
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -110,16 +115,29 @@ export const FreelancerDetailView: React.FC<FreelancerDetailViewProps> = ({
 
   const handleRegenerateLink = async () => {
     if (!freelancer) return;
-    if (!confirm('Deseja realmente gerar um novo código de acesso? O link anterior deixará de funcionar imediatamente.')) {
-      return;
-    }
     try {
       const res = await api.adminRegenerateLink(freelancer.id);
       setFreelancer(res.freelancer);
-      alert(`Novo link gerado: /f/${res.accessCode}`);
+      setActionNotice(`Novo link gerado com sucesso: /f/${res.accessCode}`);
+      setTimeout(() => setActionNotice(null), 5000);
       await loadData();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleConfirmDeleteWorkspace = async () => {
+    if (!freelancer) return;
+    setIsDeleting(true);
+    try {
+      await api.adminDeleteFreelancer(freelancer.id);
+      setIsDeleteModalOpen(false);
+      onBack();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao excluir workspace.';
+      setError(msg);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -231,14 +249,36 @@ export const FreelancerDetailView: React.FC<FreelancerDetailViewProps> = ({
 
             <button
               onClick={handleRegenerateLink}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg text-xs font-bold transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg text-xs font-bold transition-colors cursor-pointer"
               title="Gera um novo código seguro de acesso"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Regenerar Link
             </button>
+
+            <button
+              onClick={() => setIsDeleteModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+              title="Excluir este workspace e remover o freelancer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Excluir Workspace
+            </button>
           </div>
         </div>
+
+        {/* Notificação de Ação */}
+        {actionNotice && (
+          <div className="bg-neutral-900 text-white p-3 rounded-xl text-xs flex items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>{actionNotice}</span>
+            </div>
+            <button onClick={() => setActionNotice(null)} className="text-neutral-400 hover:text-white">
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Banner do Link Exclusivo do Freelancer */}
         <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
@@ -659,6 +699,68 @@ export const FreelancerDetailView: React.FC<FreelancerDetailViewProps> = ({
               <span className="text-base font-bold text-emerald-700">
                 {p?.activeDays && p.leadsContacted ? Math.round(p.leadsContacted / p.activeDays) : 0} contatos/dia
               </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE WORKSPACE */}
+      {isDeleteModalOpen && freelancer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-neutral-200 shadow-2xl p-6 relative animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 pb-3 border-b border-neutral-100">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-neutral-900">
+                  Excluir Workspace de {freelancer.name}?
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Código: <code className="font-mono font-semibold text-neutral-700">{freelancer.access_code}</code>
+                </p>
+              </div>
+            </div>
+
+            <div className="py-4 space-y-2 text-xs text-neutral-600">
+              <p>
+                Tem certeza de que deseja apagar permanentemente este workspace?
+              </p>
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  O link exclusivo <code className="font-mono font-semibold">/f/{freelancer.access_code}</code> será cancelado imediatamente e os dados associados a este workspace serão excluídos.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteWorkspace}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs disabled:opacity-50 cursor-pointer"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Excluindo...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Sim, Excluir Workspace
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

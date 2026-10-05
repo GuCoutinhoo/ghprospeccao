@@ -1,4 +1,4 @@
-import { db } from '../store/db';
+import { db, matchesNicheSemantics } from '../store/db';
 import { searchPlacesOfficial, normalizePlace, GooglePlaceRaw } from '../google/places';
 import { CITY_COORDINATES, METROPOLITAN_GRIDS, POPULAR_CITIES_BY_STATE, fetchCitiesByState } from '../ibge/ibgeService';
 import { calculateLeadScore } from '../scoring/leadScore';
@@ -32,15 +32,22 @@ export async function createAndPrepareSearchJob(params: {
   let targetCities: string[] = [];
 
   if (params.city === 'all') {
-    // Buscar cidades do estado sem limites artificiais
+    // Prioriza as maiores cidades do estado (de grande relevância comercial)
+    const popular = POPULAR_CITIES_BY_STATE[params.state] || [];
     const ibgeCities = await fetchCitiesByState(params.state);
+    const otherCities = ibgeCities
+      .map((c) => c.nome)
+      .filter((nome) => !popular.includes(nome));
+
+    // Combina: cidades polo primeiro, seguidas pelas demais
+    const combined = [...popular, ...otherCities];
     if (settings.maxCitiesPerJob && settings.maxCitiesPerJob > 0) {
-      targetCities = ibgeCities.slice(0, settings.maxCitiesPerJob).map((c) => c.nome);
+      targetCities = combined.slice(0, settings.maxCitiesPerJob);
     } else {
-      targetCities = ibgeCities.map((c) => c.nome);
+      targetCities = combined;
     }
     if (targetCities.length === 0) {
-      targetCities = POPULAR_CITIES_BY_STATE[params.state] || ['Capital'];
+      targetCities = ['Capital'];
     }
   } else {
     targetCities = [params.city];
@@ -69,16 +76,16 @@ export async function createAndPrepareSearchJob(params: {
         });
       }
     } else {
-      // Cidade normal: área central única
-      const coords = CITY_COORDINATES[c] || { lat: -23.5505, lng: -46.6333 };
+      // Cidade normal: usa coordenadas reais se conhecidas, senão 0 para não enviesar a busca geográfica
+      const coords = CITY_COORDINATES[c];
       areas.push({
         id: `area_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         search_job_id: jobId,
         city: c,
         state: params.state,
-        lat: coords.lat,
-        lng: coords.lng,
-        radius: 8000,
+        lat: coords ? coords.lat : 0,
+        lng: coords ? coords.lng : 0,
+        radius: coords ? 12000 : 0,
         status: 'pending',
         attempts: 0,
         places_found: 0,
@@ -179,15 +186,24 @@ export async function runSearchJob(jobId: string) {
 
       // Consulta oficial à Google Places API (New) Text Search
       const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || '';
-      const res = await searchPlacesOfficial(query, apiKey, {
-        locationBias: {
-          circle: {
-            center: { latitude: area.lat, longitude: area.lng },
-            radius: area.radius,
-          },
-        },
-        maxResultCount: 20,
-      });
+      const hasRealCoords = area.lat !== 0 && area.lng !== 0;
+      const res = await searchPlacesOfficial(
+        query,
+        apiKey,
+        hasRealCoords
+          ? {
+              locationBias: {
+                circle: {
+                  center: { latitude: area.lat, longitude: area.lng },
+                  radius: area.radius || 12000,
+                },
+              },
+              maxResultCount: 20,
+            }
+          : {
+              maxResultCount: 20,
+            }
+      );
 
       if (res.isQuotaExceeded) {
         isQuotaExceeded = true;
@@ -228,9 +244,10 @@ export async function runSearchJob(jobId: string) {
           newWithoutWebsite++;
         }
 
-        // Aplica filtros comerciais para criação do Lead
+        // Aplica filtros comerciais e relevância de nicho para criação do Lead
+        const isRelevant = isPlaceRelevantToNiche(normalizedPlace, job.niche);
         const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
-        if (matchesFilters) {
+        if (matchesFilters && isRelevant) {
           const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
           const leadId = `lead_${job.freelancer_id ? job.freelancer_id + '_' : ''}${normalizedPlace.place_id}`;
           const { created } = db.createLead({
@@ -361,6 +378,26 @@ function checkLeadFilters(
   }
 
   if (filters.maxReviews && filters.maxReviews > 0 && reviews > filters.maxReviews) {
+    return false;
+  }
+
+  return true;
+}
+
+function isPlaceRelevantToNiche(place: { name?: string; raw_types?: string[] }, niche: string): boolean {
+  if (!niche || niche.trim() === '') return true;
+  const name = (place.name || '').toLowerCase();
+  const types = (place.raw_types || []).map((t) => t.toLowerCase());
+
+  // 1. Se o nome ou tipos combinarem semanticamente com o nicho
+  if (matchesNicheSemantics(name, niche)) return true;
+  if (matchesNicheSemantics(types.join(' '), niche)) return true;
+
+  // 2. Se a busca oficial retornou o estabelecimento pelo textQuery direto (Google Places já ranqueou)
+  // e não possui tipos incompatíveis óbvios (ex: cemitério, posto de gasolina para nichos de estética)
+  const incompatible = ['gas_station', 'cemetery', 'funeral_home', 'police', 'fire_station'];
+  const hasIncompatible = incompatible.some((inc) => types.includes(inc));
+  if (hasIncompatible && !matchesNicheSemantics(incompatible.join(' '), niche)) {
     return false;
   }
 

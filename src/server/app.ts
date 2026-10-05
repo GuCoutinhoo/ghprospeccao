@@ -45,7 +45,7 @@ app.use('/api', async (req, _res, next) => {
 
 // --- GERENCIAMENTO DE SESSÕES & AUTENTICAÇÃO REAL ---
 const ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || 'gustavohcsantos.mm2020@gmail.com';
-const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
+const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || 'gustavo34';
 
 const adminSessions = new Set<string>();
 const freelancerSessions = new Map<string, { freelancerId: string; accessCode: string; token: string; createdAt: number }>();
@@ -173,7 +173,7 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   // Validação real de credenciais
   const isValidAdmin =
     (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === 'admin@ghprospeccao.com' || cleanEmail === 'admin') &&
-    (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === 'Admin@2026!' || cleanPass === 'admin');
+    (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === 'gustavo34');
 
   if (!isValidAdmin) {
     return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
@@ -215,6 +215,16 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   if (!email || !password) {
     return res.status(400).json({ error: 'Email e senha são obrigatórios.' });
   }
+  const cleanEmail = String(email).trim().toLowerCase();
+  const cleanPass = String(password).trim();
+  const isValid =
+    (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === 'admin@ghprospeccao.com' || cleanEmail === 'admin') &&
+    (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === 'gustavo34');
+
+  if (!isValid) {
+    return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
+  }
+
   const token = `admin_sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
   adminSessions.add(token);
   return res.json({

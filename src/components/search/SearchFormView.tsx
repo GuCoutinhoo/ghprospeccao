@@ -319,7 +319,7 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
               {/* Presets clicáveis rápidos */}
               <div className="flex flex-wrap gap-1.5">
                 {NICHE_PRESETS.map((preset) => {
-                  const isSelected = !customNiche && niche === preset;
+                  const isSelected = activeNiche.toLowerCase() === preset.toLowerCase();
                   return (
                     <button
                       type="button"
@@ -330,7 +330,7 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                       }}
                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs'
+                          ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs font-bold'
                           : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100 hover:border-neutral-300'
                       }`}
                     >

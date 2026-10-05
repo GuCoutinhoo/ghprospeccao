@@ -131,6 +131,35 @@ export const METROPOLITAN_GRIDS: Record<string, { name: string; lat: number; lng
     { name: 'Curitiba - Boqueirão / Hauer / Pinheirinho', lat: -25.5029, lng: -49.2458, radius: 5500 },
     { name: 'Curitiba - Boa Vista / Bacacheri / Cabral', lat: -25.3950, lng: -49.2480, radius: 5000 },
   ],
+  'Campinas': [
+    { name: 'Campinas - Centro / Cambuí / Guanabara', lat: -22.9056, lng: -47.0608, radius: 4500 },
+    { name: 'Campinas - Taquaral / Barão Geraldo / Mansões', lat: -22.8689, lng: -47.0583, radius: 6000 },
+    { name: 'Campinas - Ouro Verde / Campo Grande', lat: -22.9675, lng: -47.1278, radius: 7000 },
+    { name: 'Campinas - Nova Campinas / Alphaville', lat: -22.8850, lng: -47.0250, radius: 5500 },
+  ],
+  'Salvador': [
+    { name: 'Salvador - Centro / Barra / Ondina', lat: -13.0033, lng: -38.5283, radius: 4500 },
+    { name: 'Salvador - Pituba / Itaigara / Caminho das Árvores', lat: -12.9922, lng: -38.4628, radius: 5000 },
+    { name: 'Salvador - Cabula / Brotas', lat: -12.9667, lng: -38.4833, radius: 5500 },
+    { name: 'Salvador - Itapuã / Stella Maris', lat: -12.9356, lng: -38.3611, radius: 6500 },
+  ],
+  'Brasília': [
+    { name: 'Brasília - Asa Sul / Asa Norte (Plano Piloto)', lat: -15.7975, lng: -47.8919, radius: 5500 },
+    { name: 'Brasília - Taguatinga / Samambaia', lat: -15.8333, lng: -48.0567, radius: 6500 },
+    { name: 'Brasília - Águas Claras / Guará', lat: -15.8400, lng: -47.9800, radius: 5500 },
+    { name: 'Brasília - Ceilândia', lat: -15.8200, lng: -48.1100, radius: 6500 },
+  ],
+  'Porto Alegre': [
+    { name: 'Porto Alegre - Centro Histórico / Moinhos de Vento', lat: -30.0346, lng: -51.2177, radius: 4500 },
+    { name: 'Porto Alegre - Menino Deus / Praia de Belas / Azenha', lat: -30.0550, lng: -51.2250, radius: 4500 },
+    { name: 'Porto Alegre - Petrópolis / Bela Vista', lat: -30.0400, lng: -51.1850, radius: 5000 },
+    { name: 'Porto Alegre - Zona Norte / Sarandi', lat: -29.9950, lng: -51.1450, radius: 6000 },
+  ],
+  'Goiânia': [
+    { name: 'Goiânia - Setor Bueno / Marista / Oeste', lat: -16.6980, lng: -49.2680, radius: 4500 },
+    { name: 'Goiânia - Centro / Setor Central / Aeroporto', lat: -16.6780, lng: -49.2550, radius: 4500 },
+    { name: 'Goiânia - Jardim Goiás / Flamboyant', lat: -16.7100, lng: -49.2350, radius: 5000 },
+  ],
 };
 
 const memoryCitiesCache = new Map<string, IBGECity[]>();
