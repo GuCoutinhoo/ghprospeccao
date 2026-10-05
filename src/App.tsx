@@ -49,28 +49,141 @@ const DEFAULT_STATS: DashboardStats = {
   topOpportunities: [],
 };
 
-export default function App() {
-  // Roles: 'admin' | 'freelancer'
-  const [userRole, setUserRole] = useState<UserRole>('admin');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
-  const [adminUser, setAdminUser] = useState<{ email: string; name: string } | null>({
-    email: 'gustavohcsantos.mm2020@gmail.com',
-    name: 'Gustavo Santos',
-  });
-  const [activeFreelancer, setActiveFreelancer] = useState<Freelancer | null>(null);
+function getInitialSession(): {
+  role: UserRole;
+  activeFreelancer: Freelancer | null;
+  adminUser: { email: string; name: string } | null;
+  currentPath: string;
+} {
+  if (typeof window === 'undefined') {
+    return {
+      role: 'admin',
+      activeFreelancer: null,
+      adminUser: { email: 'gustavohcsantos.mm2020@gmail.com', name: 'Gustavo Santos' },
+      currentPath: '/dashboard',
+    };
+  }
 
-  // Navegação - Acesso Direto
-  const [currentPath, setCurrentPath] = useState<string>(() => {
-    if (typeof window === 'undefined') return '/leads';
-    const p = window.location.pathname;
-    if (p.startsWith('/search/')) return p;
-    if (p.startsWith('/admin/freelancers/')) return p;
-    if (p.startsWith('/admin')) return p;
-    if (p === '/leads' || p === '/search' || p === '/pipeline' || p === '/outreach' || p === '/templates' || p === '/favorites' || p === '/settings') {
-      return p;
-    }
-    return '/leads';
-  });
+  const pathname = window.location.pathname;
+  const hash = window.location.hash;
+  const search = window.location.search;
+
+  // Extrai código de acesso por pathname (/f/andre), hash (#/f/andre) ou query (?f=andre)
+  let rawCode = '';
+  if (pathname.startsWith('/f/')) {
+    rawCode = pathname.replace(/^\/f\//, '').split('/')[0].split('?')[0].split('#')[0].trim();
+  } else if (hash.startsWith('#/f/')) {
+    rawCode = hash.replace(/^#\/f\//, '').split('/')[0].split('?')[0].trim();
+  } else if (search.includes('f=')) {
+    const params = new URLSearchParams(search);
+    rawCode = (params.get('f') || '').trim();
+  }
+
+  const cleanCode = rawCode.toLowerCase();
+
+  // Se o link for /f/admin ou /f/administrador -> ENTRA NO WORKSPACE DO ADMIN
+  if (cleanCode === 'admin' || cleanCode === 'administrador') {
+    try {
+      localStorage.setItem('gh_admin_token', 'admin_master_session_token');
+      localStorage.setItem(
+        'gh_admin_user',
+        JSON.stringify({
+          id: 'admin_1',
+          email: 'gustavohcsantos.mm2020@gmail.com',
+          name: 'Gustavo Santos',
+          role: 'admin',
+        })
+      );
+      localStorage.removeItem('gh_freelancer_token');
+      localStorage.removeItem('gh_freelancer_session');
+    } catch {}
+
+    return {
+      role: 'admin',
+      activeFreelancer: null,
+      adminUser: { email: 'gustavohcsantos.mm2020@gmail.com', name: 'Gustavo Santos' },
+      currentPath: '/admin',
+    };
+  }
+
+  // Para QUALQUER OUTRO CÓDIGO (ex: /f/andre, /f/danilo) -> ENTRA NO WORKSPACE DO FREELANCER!
+  if (cleanCode) {
+    const formattedName = cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1);
+    const instantFreelancer: Freelancer = {
+      id: `free_${cleanCode}`,
+      name: formattedName,
+      access_code: cleanCode,
+      email: `${cleanCode}@ghprospeccao.com`,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const token = `free_sess_free_${cleanCode}_${Date.now()}_instant`;
+    try {
+      localStorage.setItem('gh_freelancer_token', token);
+      localStorage.setItem('gh_freelancer_session', JSON.stringify({ token, freelancer: instantFreelancer }));
+      localStorage.removeItem('gh_admin_token');
+      localStorage.removeItem('gh_admin_user');
+    } catch {}
+
+    return {
+      role: 'freelancer',
+      activeFreelancer: instantFreelancer,
+      adminUser: null,
+      currentPath: '/dashboard',
+    };
+  }
+
+  // Se já havia sessão ativa salva de freelancer e não está acessando rota de admin
+  const freeSession = getActiveFreelancerSession();
+  if (freeSession?.freelancer && !pathname.startsWith('/admin')) {
+    return {
+      role: 'freelancer',
+      activeFreelancer: freeSession.freelancer,
+      adminUser: null,
+      currentPath: pathname === '/' || pathname.startsWith('/f/') ? '/dashboard' : pathname,
+    };
+  }
+
+  // Caso padrão: Administrador Geral Master
+  try {
+    localStorage.setItem('gh_admin_token', 'admin_master_session_token');
+    localStorage.setItem(
+      'gh_admin_user',
+      JSON.stringify({
+        id: 'admin_1',
+        email: 'gustavohcsantos.mm2020@gmail.com',
+        name: 'Gustavo Santos',
+        role: 'admin',
+      })
+    );
+  } catch {}
+
+  let initialPath = '/dashboard';
+  if (pathname.startsWith('/admin')) initialPath = pathname;
+  else if (pathname === '/leads' || pathname === '/search' || pathname === '/outreach' || pathname === '/pipeline' || pathname === '/templates' || pathname === '/favorites' || pathname === '/settings') {
+    initialPath = pathname;
+  }
+
+  return {
+    role: 'admin',
+    activeFreelancer: null,
+    adminUser: { email: 'gustavohcsantos.mm2020@gmail.com', name: 'Gustavo Santos' },
+    currentPath: initialPath,
+  };
+}
+
+export default function App() {
+  const [initSession] = useState(getInitialSession);
+  // Roles: 'admin' | 'freelancer'
+  const [userRole, setUserRole] = useState<UserRole>(initSession.role);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [adminUser, setAdminUser] = useState<{ email: string; name: string } | null>(initSession.adminUser);
+  const [activeFreelancer, setActiveFreelancer] = useState<Freelancer | null>(initSession.activeFreelancer);
+
+  // Navegação - Acesso Direto Instantâneo
+  const [currentPath, setCurrentPath] = useState<string>(initSession.currentPath);
   const [activeSearchJobId, setActiveSearchJobId] = useState<string | null>(null);
   const [selectedFreelancerIdForDetail, setSelectedFreelancerIdForDetail] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -91,52 +204,59 @@ export default function App() {
   const [publicPreviewLead, setPublicPreviewLead] = useState<Lead | null>(null);
   const [loadingPublicPreview, setLoadingPublicPreview] = useState<boolean>(false);
 
-  // 1. Inicialização de rotas com Acesso Direto Instantâneo (sem login, sem verificação de acesso)
+  // 1. Inicialização de rotas com Acesso Direto Instantâneo
   useEffect(() => {
-    // Garante token mestre persistido no navegador
-    try {
-      localStorage.setItem('gh_admin_token', 'admin_master_session_token');
-      localStorage.setItem(
-        'gh_admin_user',
-        JSON.stringify({
-          id: 'admin_1',
-          email: 'gustavohcsantos.mm2020@gmail.com',
-          name: 'Gustavo Santos',
-          role: 'admin',
-        })
-      );
-      // Remove tokens restritivos anteriores de freelancer se existirem
-      localStorage.removeItem('gh_freelancer_token');
-      localStorage.removeItem('gh_freelancer_session');
-    } catch {}
-
     const pathname = window.location.pathname;
+    const hash = window.location.hash;
+    const search = window.location.search;
 
-    // Se o usuário entrou por link /f/... redireciona diretamente para os leads ou dashboard
-    if (pathname.startsWith('/f/') || pathname === '/f') {
-      setCurrentPath('/leads');
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState({}, '', '/leads');
-      }
+    let rawCode = '';
+    if (pathname.startsWith('/f/')) {
+      rawCode = pathname.replace(/^\/f\//, '').split('/')[0].split('?')[0].split('#')[0].trim();
+    } else if (hash.startsWith('#/f/')) {
+      rawCode = hash.replace(/^#\/f\//, '').split('/')[0].split('?')[0].trim();
+    } else if (search.includes('f=')) {
+      const params = new URLSearchParams(search);
+      rawCode = (params.get('f') || '').trim();
+    }
+
+    const cleanCode = rawCode.toLowerCase();
+
+    // Se o código for 'admin' ou 'administrador' -> Workspace do Administrador
+    if (cleanCode === 'admin' || cleanCode === 'administrador') {
+      setUserRole('admin');
+      setActiveFreelancer(null);
+      setAdminUser({ email: 'gustavohcsantos.mm2020@gmail.com', name: 'Gustavo Santos' });
+      setCurrentPath('/admin');
+      loadInitialData();
       return;
     }
 
-    if (pathname.startsWith('/search/')) {
-      const jId = pathname.substring(8).trim();
-      if (jId) {
-        setActiveSearchJobId(jId);
-        setCurrentPath(pathname);
-        return;
-      }
+    // Se for código de um freelancer (ex: /f/andre) -> sincroniza com o backend
+    if (cleanCode) {
+      api.verifyFreelancerLink(cleanCode)
+        .then((res) => {
+          if (res?.freelancer) {
+            setActiveFreelancer(res.freelancer);
+            setUserRole('freelancer');
+            setIsAuthenticated(true);
+            try {
+              localStorage.setItem('gh_freelancer_token', res.token);
+              localStorage.setItem('gh_freelancer_session', JSON.stringify({ token: res.token, freelancer: res.freelancer }));
+            } catch {}
+          }
+        })
+        .catch((err) => {
+          console.warn('[App] Usando sessão direta do freelancer:', err);
+        })
+        .finally(() => {
+          loadInitialData();
+        });
+      return;
     }
 
-    if (pathname.startsWith('/admin')) {
-      setCurrentPath(pathname);
-    } else if (pathname === '/' || pathname === '/dashboard') {
-      setCurrentPath('/dashboard');
-    } else if (pathname === '/leads' || pathname === '/search' || pathname === '/outreach' || pathname === '/pipeline' || pathname === '/templates' || pathname === '/favorites' || pathname === '/settings') {
-      setCurrentPath(pathname);
-    }
+    // Se não é /f/, carrega dados normalmente
+    loadInitialData();
   }, []);
 
   // 2. Prévia de Lead pública via ?leadId=
@@ -231,8 +351,19 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    // Modo de Acesso Direto: apenas recarrega os dados sem bloquear a tela
-    loadInitialData();
+    if (userRole === 'freelancer') {
+      api.freelancerLogout();
+      setActiveFreelancer(null);
+      setUserRole('admin');
+      setAdminUser({ email: 'gustavohcsantos.mm2020@gmail.com', name: 'Gustavo Santos' });
+      setCurrentPath('/admin');
+      if (window.history && window.history.pushState) {
+        window.history.pushState({}, '', '/admin');
+      }
+      loadInitialData();
+    } else {
+      loadInitialData();
+    }
   };
 
   // Títulos e subtítulos contextuais para o header

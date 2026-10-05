@@ -26,16 +26,33 @@ import {
 
 export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extraHeaders };
-  headers['Authorization'] = 'Bearer admin_master_session_token';
+  if (typeof window === 'undefined') return headers;
+
+  const freelancerToken = localStorage.getItem('gh_freelancer_token');
+  if (freelancerToken) {
+    headers['Authorization'] = `Bearer ${freelancerToken}`;
+    return headers;
+  }
+
+  let adminToken = localStorage.getItem('gh_admin_token') || 'admin_master_session_token';
+  headers['Authorization'] = `Bearer ${adminToken}`;
   return headers;
 }
 
 export function isFreelancerMode(): boolean {
-  return false;
+  if (typeof window === 'undefined') return false;
+  return Boolean(localStorage.getItem('gh_freelancer_token'));
 }
 
 export function getActiveFreelancerSession(): { token: string; freelancer: Freelancer } | null {
-  return null;
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('gh_freelancer_session');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 export const api = {
@@ -315,7 +332,9 @@ export const api = {
   // Dashboard
   async getDashboardStats(): Promise<DashboardStats> {
     try {
-      const res = await fetch('/api/dashboard/stats');
+      const res = await fetch('/api/dashboard/stats', {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (data && typeof data.totalLeads === 'number') {
@@ -327,7 +346,12 @@ export const api = {
     }
 
     // Se o backend retornou 0 (ou falhou na Vercel), busca os dados reais diretamente do Firestore
-    const leads = await fetchAllLeadsFromFirestore();
+    const allLeads = await fetchAllLeadsFromFirestore();
+    let leads = allLeads;
+    const session = getActiveFreelancerSession();
+    if (session?.freelancer?.id) {
+      leads = leads.filter((l) => l.freelancer_id === session.freelancer.id);
+    }
     if (leads && leads.length > 0) {
       return computeStatsFromLeads(leads);
     }
@@ -426,7 +450,9 @@ export const api = {
       const query = new URLSearchParams();
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
       const url = `/api/niches${query.toString() ? '?' + query.toString() : ''}`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -439,6 +465,10 @@ export const api = {
 
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
+    const session = getActiveFreelancerSession();
+    if (session?.freelancer?.id) {
+      leads = leads.filter((l) => l.freelancer_id === session.freelancer.id);
+    }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
     }
@@ -458,7 +488,9 @@ export const api = {
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
       if (params?.niche && params.niche !== 'ALL') query.set('niche', params.niche);
       const url = `/api/states-summary${query.toString() ? '?' + query.toString() : ''}`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -471,6 +503,10 @@ export const api = {
 
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
+    const session = getActiveFreelancerSession();
+    if (session?.freelancer?.id) {
+      leads = leads.filter((l) => l.freelancer_id === session.freelancer.id);
+    }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
     }
@@ -522,7 +558,9 @@ export const api = {
       if (params.page) query.set('page', String(params.page));
       if (params.limit !== undefined) query.set('limit', String(params.limit));
 
-      const res = await fetch(`/api/leads?${query.toString()}`);
+      const res = await fetch(`/api/leads?${query.toString()}`, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.leads) && typeof data.total === 'number') {
@@ -534,7 +572,12 @@ export const api = {
     }
 
     const allLeads = await fetchAllLeadsFromFirestore();
-    return filterLeadsList(allLeads, params);
+    const session = getActiveFreelancerSession();
+    const effectiveParams = { ...params };
+    if (session?.freelancer?.id && !(effectiveParams as any).freelancer_id) {
+      (effectiveParams as any).freelancer_id = session.freelancer.id;
+    }
+    return filterLeadsList(allLeads, effectiveParams);
   },
 
   async getLeadById(id: string): Promise<{ lead: Lead; notes: LeadNote[]; place?: Place }> {
@@ -644,7 +687,9 @@ export const api = {
   // Pipeline
   async getPipeline(): Promise<Record<PipelineStatus, Lead[]>> {
     try {
-      const res = await fetch('/api/pipeline');
+      const res = await fetch('/api/pipeline', {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const board = await res.json();
         const total = Object.values(board).reduce((acc: number, list: unknown) => acc + ((list as unknown[])?.length || 0), 0);
@@ -657,6 +702,11 @@ export const api = {
     }
 
     const allLeads = await fetchAllLeadsFromFirestore();
+    let leads = allLeads;
+    const session = getActiveFreelancerSession();
+    if (session?.freelancer?.id) {
+      leads = leads.filter((l) => l.freelancer_id === session.freelancer.id);
+    }
     const board: Record<PipelineStatus, Lead[]> = {
       'NOVO': [],
       'PRÉVIA CRIADA': [],
@@ -672,7 +722,7 @@ export const api = {
       'NAO_INTERESSADO': [],
       'SEM_RESPOSTA': [],
     };
-    for (const l of allLeads) {
+    for (const l of leads) {
       const st = (l.pipeline_status || 'NOVO') as PipelineStatus;
       if (board[st]) board[st].push(l);
       else board['NOVO'].push(l);
@@ -690,7 +740,7 @@ export const api = {
     try {
       const res = await fetch('/api/pipeline/move', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ leadId, toStatus }),
       });
       if (res.ok) {
@@ -718,7 +768,7 @@ export const api = {
   }): Promise<{ job: SearchJob; estimatedQueries: number; totalCities: number; totalAreas: number }> {
     const res = await fetch('/api/search-jobs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -731,7 +781,9 @@ export const api = {
 
   async getSearchJobs(): Promise<SearchJob[]> {
     try {
-      const res = await fetch('/api/search-jobs');
+      const res = await fetch('/api/search-jobs', {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) return data;

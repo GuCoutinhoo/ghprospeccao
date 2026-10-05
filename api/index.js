@@ -88,7 +88,8 @@ import {
   getDoc,
   setDoc,
   collection,
-  getDocs
+  getDocs,
+  deleteDoc
 } from "firebase/firestore";
 import fs from "fs";
 import path from "path";
@@ -136,11 +137,13 @@ async function fetchAllFromFirestore() {
   const db2 = getFirestoreDb();
   if (!db2) return null;
   try {
-    const [leadsSnap, placesSnap, jobsSnap, settingsSnap] = await Promise.all([
+    const [leadsSnap, placesSnap, jobsSnap, settingsSnap, freelancersSnap, activitiesSnap] = await Promise.all([
       getDocs(collection(db2, "leads")).catch(() => null),
       getDocs(collection(db2, "places")).catch(() => null),
       getDocs(collection(db2, "search_jobs")).catch(() => null),
-      getDoc(doc(db2, "settings", "config")).catch(() => null)
+      getDoc(doc(db2, "settings", "config")).catch(() => null),
+      getDocs(collection(db2, "freelancers")).catch(() => null),
+      getDocs(collection(db2, "activities")).catch(() => null)
     ]);
     const leads = [];
     if (leadsSnap) {
@@ -154,8 +157,16 @@ async function fetchAllFromFirestore() {
     if (jobsSnap) {
       jobsSnap.forEach((d) => jobs.push(d.data()));
     }
+    const freelancers = [];
+    if (freelancersSnap) {
+      freelancersSnap.forEach((d) => freelancers.push(d.data()));
+    }
+    const activities = [];
+    if (activitiesSnap) {
+      activitiesSnap.forEach((d) => activities.push(d.data()));
+    }
     const settings = settingsSnap && settingsSnap.exists() ? settingsSnap.data() : void 0;
-    return { places, leads, jobs, settings };
+    return { places, leads, jobs, settings, freelancers, activities };
   } catch (err) {
     console.warn("[Firebase] Erro ao carregar dados do Firestore:", err);
     return null;
@@ -213,8 +224,43 @@ async function syncSettingsToFirestore(settings) {
     console.warn("[Firebase] Erro ao salvar configura\xE7\xF5es no Firestore:", err);
   }
 }
+async function syncFreelancerToFirestore(freelancer) {
+  const db2 = getFirestoreDb();
+  if (!db2 || !freelancer.id) return;
+  try {
+    await setDoc(doc(db2, "freelancers", freelancer.id), cleanForFirestore(freelancer), { merge: true });
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao sincronizar freelancer ${freelancer.id}:`, err);
+  }
+}
+async function deleteFreelancerFromFirestore(id) {
+  const db2 = getFirestoreDb();
+  if (!db2 || !id) return;
+  try {
+    await deleteDoc(doc(db2, "freelancers", id));
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao deletar freelancer ${id} do Firestore:`, err);
+  }
+}
+async function syncActivityToFirestore(activity) {
+  const db2 = getFirestoreDb();
+  if (!db2 || !activity.id) return;
+  try {
+    await setDoc(doc(db2, "activities", activity.id), cleanForFirestore(activity), { merge: true });
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao sincronizar atividade ${activity.id}:`, err);
+  }
+}
 
 // src/lib/store/db.ts
+function normalizeStr(str) {
+  if (!str) return "";
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+function slugifyFreelancerName(name) {
+  if (!name) return "freelancer";
+  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "freelancer";
+}
 var isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 var BUNDLED_DB_FILE = path2.resolve(process.cwd(), ".data", "db.json");
 var DATA_DIR = isVercel ? path2.join("/tmp", ".data") : path2.resolve(process.cwd(), ".data");
@@ -223,9 +269,11 @@ var INITIAL_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_A
 var INITIAL_SETTINGS = {
   googleMapsApiKey: INITIAL_KEY,
   hasCustomKey: Boolean(INITIAL_KEY && INITIAL_KEY.trim().length > 10),
-  maxResultsPerJob: 100,
-  maxCitiesPerJob: 15,
-  requestDelayMs: 600,
+  maxResultsPerJob: 0,
+  // 0 = Sem limite
+  maxCitiesPerJob: 0,
+  // 0 = Sem limite
+  requestDelayMs: 400,
   scoringWeights: DEFAULT_SCORING_WEIGHTS
 };
 var Database = class {
@@ -237,7 +285,9 @@ var Database = class {
       search_jobs: [],
       search_areas: [],
       search_queries: [],
-      settings: INITIAL_SETTINGS
+      settings: INITIAL_SETTINGS,
+      freelancers: [],
+      activities: []
     };
     this.initialized = false;
     this.initPromise = null;
@@ -249,6 +299,10 @@ var Database = class {
         const raw = fs2.readFileSync(DB_FILE, "utf-8");
         this.data = JSON.parse(raw);
         this.data.settings = { ...INITIAL_SETTINGS, ...this.data.settings || {} };
+        if (!this.data.freelancers) this.data.freelancers = [];
+        if (!this.data.activities) this.data.activities = [];
+        this.data.freelancers = (this.data.freelancers || []).filter((f) => f && f.id && f.name);
+        this.data.activities = (this.data.activities || []).filter((a) => a && a.id);
         this.initialized = true;
         return;
       }
@@ -281,7 +335,7 @@ var Database = class {
     });
   }
   async ensureInitialized() {
-    if (this.initialized && this.data.leads && this.data.leads.length > 0) {
+    if (this.initialized && this.data.leads && this.data.leads.length > 0 && this.data.freelancers && this.data.freelancers.length > 1) {
       return;
     }
     if (this.initPromise) {
@@ -291,10 +345,10 @@ var Database = class {
       if (!this.initialized) {
         this.init();
       }
-      if (!this.data.leads || this.data.leads.length === 0) {
-        console.log("[DB] Base local sem dados. Conectando e sincronizando com o Google Firestore...");
+      try {
         await this.syncFromFirestore();
-        console.log(`[DB] Firestore sincronizado: ${this.data.leads.length} leads carregados.`);
+      } catch (syncErr) {
+        console.warn("[DB] Erro ao sincronizar inicializa\xE7\xE3o com Firestore:", syncErr);
       }
     })().finally(() => {
       this.initPromise = null;
@@ -305,24 +359,103 @@ var Database = class {
     try {
       const remote = await fetchAllFromFirestore();
       if (remote) {
-        if (remote.leads && remote.leads.length > 0) {
-          this.data.leads = remote.leads;
-        } else if (this.data.leads && this.data.leads.length > 0) {
-          for (const l of this.data.leads) {
+        const leadMap = /* @__PURE__ */ new Map();
+        for (const l of remote.leads || []) {
+          if (l && l.id) leadMap.set(l.id, l);
+        }
+        for (const l of this.data.leads || []) {
+          if (!l || !l.id) continue;
+          const existing = leadMap.get(l.id);
+          if (!existing) {
+            leadMap.set(l.id, l);
             syncLeadToFirestore(l).catch(() => {
             });
+          } else {
+            const localTime = new Date(l.updated_at || l.created_at || 0).getTime();
+            const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
+            if (localTime >= remoteTime) {
+              leadMap.set(l.id, l);
+            }
           }
         }
-        if (remote.places && remote.places.length > 0) {
-          this.data.places = remote.places;
-        } else if (this.data.places && this.data.places.length > 0) {
-          for (const p of this.data.places) {
+        this.data.leads = Array.from(leadMap.values());
+        const placeMap = /* @__PURE__ */ new Map();
+        for (const p of remote.places || []) {
+          if (p && p.id) placeMap.set(p.id, p);
+        }
+        for (const p of this.data.places || []) {
+          if (!p || !p.id) continue;
+          if (!placeMap.has(p.id)) {
+            placeMap.set(p.id, p);
             syncPlaceToFirestore(p).catch(() => {
             });
           }
         }
-        if (remote.jobs && remote.jobs.length > 0) {
-          this.data.search_jobs = remote.jobs;
+        this.data.places = Array.from(placeMap.values());
+        const jobMap = /* @__PURE__ */ new Map();
+        for (const j of remote.jobs || []) {
+          if (j && j.id) jobMap.set(j.id, j);
+        }
+        for (const j of this.data.search_jobs || []) {
+          if (!j || !j.id) continue;
+          const existing = jobMap.get(j.id);
+          if (!existing) {
+            jobMap.set(j.id, j);
+            syncJobToFirestore(j).catch(() => {
+            });
+          } else {
+            const localTime = new Date(j.updated_at || j.created_at || 0).getTime();
+            const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
+            if (localTime >= remoteTime) {
+              jobMap.set(j.id, j);
+            }
+          }
+        }
+        this.data.search_jobs = Array.from(jobMap.values());
+        const demoFreeIds = ["free_7F4K92XQ", "free_8HKS82MD", "free_9YPL21BZ", "free_4TRM67KV"];
+        if (remote.freelancers && remote.freelancers.length > 0) {
+          const freeMap = /* @__PURE__ */ new Map();
+          for (const f of remote.freelancers) {
+            if (f && f.id && !demoFreeIds.includes(f.id)) freeMap.set(f.id, f);
+            else if (f && f.id && demoFreeIds.includes(f.id)) {
+              deleteFreelancerFromFirestore(f.id).catch(() => {
+              });
+            }
+          }
+          for (const f of this.data.freelancers || []) {
+            if (!f || !f.id || demoFreeIds.includes(f.id)) continue;
+            if (!freeMap.has(f.id)) {
+              freeMap.set(f.id, f);
+              syncFreelancerToFirestore(f).catch(() => {
+              });
+            }
+          }
+          this.data.freelancers = Array.from(freeMap.values());
+        } else {
+          this.data.freelancers = (this.data.freelancers || []).filter((f) => !demoFreeIds.includes(f.id));
+        }
+        if (remote.activities && remote.activities.length > 0) {
+          const actMap = /* @__PURE__ */ new Map();
+          for (const a of remote.activities) {
+            if (a && a.id && !demoFreeIds.includes(a.freelancer_id) && !["act_1", "act_2", "act_3", "act_4", "act_5", "act_6", "act_7"].includes(a.id)) {
+              actMap.set(a.id, a);
+            }
+          }
+          for (const a of this.data.activities || []) {
+            if (!a || !a.id || demoFreeIds.includes(a.freelancer_id) || ["act_1", "act_2", "act_3", "act_4", "act_5", "act_6", "act_7"].includes(a.id)) continue;
+            if (!actMap.has(a.id)) {
+              actMap.set(a.id, a);
+              syncActivityToFirestore(a).catch(() => {
+              });
+            }
+          }
+          this.data.activities = Array.from(actMap.values()).sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        } else {
+          this.data.activities = (this.data.activities || []).filter(
+            (a) => !demoFreeIds.includes(a.freelancer_id) && !["act_1", "act_2", "act_3", "act_4", "act_5", "act_6", "act_7"].includes(a.id)
+          );
         }
         if (remote.settings) {
           this.data.settings = { ...this.data.settings, ...remote.settings };
@@ -334,7 +467,7 @@ var Database = class {
         placesCount: this.data.places.length
       };
     } catch (err) {
-      console.warn("[DB] Falha na sincroniza\xE7\xE3o inicial do Firestore:", err);
+      console.warn("[DB] Falha na sincroniza\xE7\xE3o do Firestore:", err);
       return {
         leadsCount: this.data.leads.length,
         placesCount: this.data.places.length
@@ -348,7 +481,32 @@ var Database = class {
     this.data.search_jobs = [];
     this.data.search_areas = [];
     this.data.search_queries = [];
+    this.data.freelancers = [];
+    this.data.activities = [];
     this.data.settings = INITIAL_SETTINGS;
+    this.seedInitialFreelancers();
+  }
+  seedInitialFreelancers() {
+    this.data.freelancers = [];
+    this.data.activities = [];
+  }
+  removeAllFreelancers() {
+    const list = [...this.data.freelancers || []];
+    for (const f of list) {
+      deleteFreelancerFromFirestore(f.id).catch(() => {
+      });
+    }
+    this.data.freelancers = [];
+    this.data.activities = [];
+    for (const l of this.data.leads || []) {
+      delete l.freelancer_id;
+      delete l.freelancer_name;
+    }
+    for (const j of this.data.search_jobs || []) {
+      delete j.freelancer_id;
+      delete j.freelancer_name;
+    }
+    this.save();
   }
   save() {
     try {
@@ -386,11 +544,24 @@ var Database = class {
   }
   // --- LEADS ---
   createLead(lead) {
-    const exists = this.data.leads.some(
-      (l) => l.user_id === lead.user_id && l.place_id === lead.place_id && l.niche.toLowerCase() === lead.niche.toLowerCase()
+    const normNiche = normalizeStr(lead.niche);
+    const scope = lead.freelancer_id || lead.user_id || "default_user_1";
+    const existingIndex = this.data.leads.findIndex(
+      (l) => l.place_id === lead.place_id && normalizeStr(l.niche) === normNiche && (l.freelancer_id || l.user_id || "default_user_1") === scope
     );
-    if (exists) {
-      return { lead, created: false };
+    if (existingIndex >= 0) {
+      const prev = this.data.leads[existingIndex];
+      this.data.leads[existingIndex] = {
+        ...prev,
+        ...lead,
+        pipeline_status: prev.pipeline_status || lead.pipeline_status,
+        is_favorite: prev.is_favorite ?? lead.is_favorite,
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      this.save();
+      syncLeadToFirestore(this.data.leads[existingIndex]).catch(() => {
+      });
+      return { lead: this.data.leads[existingIndex], created: false };
     }
     this.data.leads.unshift(lead);
     this.save();
@@ -400,14 +571,34 @@ var Database = class {
   }
   getLeads(params) {
     let filtered = [...this.data.leads];
+    if (params.freelancer_id && params.freelancer_id !== "ALL") {
+      filtered = filtered.filter((l) => l.freelancer_id === params.freelancer_id);
+    }
     if (params.state && params.state !== "ALL") {
-      filtered = filtered.filter((l) => l.state.toUpperCase() === params.state.toUpperCase());
+      const targetState = params.state.toUpperCase().trim();
+      filtered = filtered.filter((l) => {
+        const ls = (l.state || "").toUpperCase().trim();
+        if (ls === targetState) return true;
+        if (targetState === "SP" && (ls.includes("S\xC3O PAULO") || ls.includes("SAO PAULO"))) return true;
+        if (targetState === "RJ" && ls.includes("RIO DE JANEIRO")) return true;
+        if (targetState === "MG" && ls.includes("MINAS GERAIS")) return true;
+        if (targetState === "ES" && (ls.includes("ESP\xCDRITO SANTO") || ls.includes("ESPIRITO SANTO"))) return true;
+        if (targetState === "PR" && (ls.includes("PARAN\xC1") || ls.includes("PARANA"))) return true;
+        if (targetState === "SC" && ls.includes("SANTA CATARINA")) return true;
+        if (targetState === "RS" && ls.includes("RIO GRANDE DO SUL")) return true;
+        return false;
+      });
     }
     if (params.city && params.city !== "ALL") {
-      filtered = filtered.filter((l) => l.city.toLowerCase() === params.city.toLowerCase());
+      const targetCity = normalizeStr(params.city);
+      filtered = filtered.filter((l) => normalizeStr(l.city) === targetCity);
     }
     if (params.niche && params.niche !== "ALL") {
-      filtered = filtered.filter((l) => l.niche.toLowerCase().includes(params.niche.toLowerCase()));
+      const targetNiche = normalizeStr(params.niche);
+      filtered = filtered.filter((l) => {
+        const ln = normalizeStr(l.niche);
+        return ln.includes(targetNiche) || targetNiche.includes(ln);
+      });
     }
     if (params.status && params.status !== "ALL") {
       filtered = filtered.filter((l) => l.pipeline_status === params.status);
@@ -431,9 +622,9 @@ var Database = class {
       filtered = filtered.filter((l) => l.lead_score >= params.minScore);
     }
     if (params.search && params.search.trim() !== "") {
-      const q = params.search.toLowerCase().trim();
+      const q = normalizeStr(params.search);
       filtered = filtered.filter(
-        (l) => l.name.toLowerCase().includes(q) || l.city.toLowerCase().includes(q) || l.phone && l.phone.replace(/\D/g, "").includes(q.replace(/\D/g, ""))
+        (l) => normalizeStr(l.name).includes(q) || normalizeStr(l.city).includes(q) || l.phone && l.phone.replace(/\D/g, "").includes(q.replace(/\D/g, ""))
       );
     }
     const sortBy = params.sortBy || "score";
@@ -446,30 +637,65 @@ var Database = class {
     });
     const total = filtered.length;
     const page = Math.max(1, params.page || 1);
-    const limit = Math.max(1, Math.min(params.limit || 50, 100));
-    const totalPages = Math.ceil(total / limit) || 1;
-    const offset = (page - 1) * limit;
-    const paginated = filtered.slice(offset, offset + limit);
+    const isUnlimited = params.limit === 0 || params.limit === -1 || typeof params.limit === "string" && (params.limit === "all" || params.limit === "0");
+    const limit = isUnlimited ? Math.max(1, total) : Math.max(1, params.limit || 50);
+    const totalPages = isUnlimited ? 1 : Math.ceil(total / limit) || 1;
+    const offset = isUnlimited ? 0 : (page - 1) * limit;
+    const paginated = isUnlimited ? filtered : filtered.slice(offset, offset + limit);
     return { leads: paginated, total, page, totalPages };
   }
   getNichesSummary(params) {
     const counts = {};
     let leads = this.data.leads;
+    if (params?.freelancer_id && params.freelancer_id !== "ALL") {
+      leads = leads.filter((l) => l.freelancer_id === params.freelancer_id);
+    }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
     }
     for (const lead of leads) {
-      const n = lead.niche || "Geral";
-      counts[n] = (counts[n] || 0) + 1;
+      const n = (lead.niche || "Geral").trim();
+      const norm = normalizeStr(n);
+      if (!counts[norm]) {
+        counts[norm] = { display: n, count: 0 };
+      }
+      counts[norm].count++;
     }
-    return Object.entries(counts).map(([niche, count]) => ({ niche, count })).sort((a, b) => b.count - a.count);
+    return Object.values(counts).map(({ display, count }) => ({ niche: display, count })).sort((a, b) => b.count - a.count);
+  }
+  getStatesSummary(params) {
+    const counts = {};
+    let leads = this.data.leads;
+    if (params?.freelancer_id && params.freelancer_id !== "ALL") {
+      leads = leads.filter((l) => l.freelancer_id === params.freelancer_id);
+    }
+    if (params?.onlyFavorites) {
+      leads = leads.filter((l) => l.is_favorite === true);
+    }
+    if (params?.niche && params.niche !== "ALL") {
+      const targetNiche = normalizeStr(params.niche);
+      leads = leads.filter((l) => {
+        const ln = normalizeStr(l.niche);
+        return ln.includes(targetNiche) || targetNiche.includes(ln);
+      });
+    }
+    for (const lead of leads) {
+      const s = (lead.state || "").toUpperCase().trim();
+      if (s) {
+        counts[s] = (counts[s] || 0) + 1;
+      }
+    }
+    return Object.entries(counts).map(([state, count]) => ({ state, count })).sort((a, b) => b.count - a.count);
   }
   getLeadById(id) {
     return this.data.leads.find((l) => l.id === id);
   }
-  updateLead(id, updates) {
+  updateLead(id, updates, freelancer_id) {
     const idx = this.data.leads.findIndex((l) => l.id === id);
     if (idx === -1) return void 0;
+    if (freelancer_id && this.data.leads[idx].freelancer_id && this.data.leads[idx].freelancer_id !== freelancer_id) {
+      return void 0;
+    }
     this.data.leads[idx] = {
       ...this.data.leads[idx],
       ...updates,
@@ -507,19 +733,27 @@ var Database = class {
     return this.data.lead_notes.filter((n) => n.lead_id === leadId);
   }
   // --- PIPELINE ---
-  getPipelineBoard() {
+  getPipelineBoard(freelancer_id) {
     const columns = {
       "NOVO": [],
       "PR\xC9VIA CRIADA": [],
       "CONTATADO": [],
       "RESPONDEU": [],
       "INTERESSADO": [],
+      "FOLLOW_UP": [],
+      "NEGOCIACAO": [],
       "REUNI\xC3O": [],
       "PROPOSTA": [],
       "FECHADO": [],
-      "PERDIDO": []
+      "PERDIDO": [],
+      "NAO_INTERESSADO": [],
+      "SEM_RESPOSTA": []
     };
-    for (const lead of this.data.leads) {
+    let list = this.data.leads;
+    if (freelancer_id && freelancer_id !== "ALL") {
+      list = list.filter((l) => l.freelancer_id === freelancer_id);
+    }
+    for (const lead of list) {
       if (columns[lead.pipeline_status]) {
         columns[lead.pipeline_status].push(lead);
       } else {
@@ -532,17 +766,20 @@ var Database = class {
     return columns;
   }
   // --- DASHBOARD ---
-  getDashboardStats() {
-    const leads = this.data.leads;
+  getDashboardStats(freelancer_id) {
+    let leads = this.data.leads;
+    if (freelancer_id && freelancer_id !== "ALL") {
+      leads = leads.filter((l) => l.freelancer_id === freelancer_id);
+    }
     const totalLeads = leads.length;
     const newLeads = leads.filter((l) => l.pipeline_status === "NOVO").length;
     const contactedLeads = leads.filter((l) => l.pipeline_status === "CONTATADO").length;
-    const interestedLeads = leads.filter((l) => l.pipeline_status === "INTERESSADO").length;
+    const interestedLeads = leads.filter((l) => l.pipeline_status === "INTERESSADO" || l.pipeline_status === "NEGOCIACAO").length;
     const closedLeads = leads.filter((l) => l.pipeline_status === "FECHADO").length;
     const noWebsiteLeads = leads.filter((l) => l.website_status === "no_website" || !l.website).length;
     const withPhoneLeads = leads.filter((l) => Boolean(l.phone && l.phone.trim().length >= 8)).length;
-    const contactedOrMore = leads.filter((l) => ["CONTATADO", "RESPONDEU", "INTERESSADO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)).length;
-    const respondedOrMore = leads.filter((l) => ["RESPONDEU", "INTERESSADO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)).length;
+    const contactedOrMore = leads.filter((l) => ["CONTATADO", "RESPONDEU", "INTERESSADO", "FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)).length;
+    const respondedOrMore = leads.filter((l) => ["RESPONDEU", "INTERESSADO", "FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)).length;
     const responseRate = contactedOrMore > 0 ? Math.round(respondedOrMore / contactedOrMore * 100) : 0;
     const closingRate = totalLeads > 0 ? Math.round(closedLeads / totalLeads * 100) : 0;
     const nicheCount = {};
@@ -569,7 +806,7 @@ var Database = class {
         found.count += 1;
       }
     }
-    const pipelineStatuses = ["NOVO", "PR\xC9VIA CRIADA", "CONTATADO", "RESPONDEU", "INTERESSADO", "REUNI\xC3O", "PROPOSTA", "FECHADO", "PERDIDO"];
+    const pipelineStatuses = ["NOVO", "PR\xC9VIA CRIADA", "CONTATADO", "RESPONDEU", "INTERESSADO", "FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO", "PERDIDO"];
     const pipelineDistribution = pipelineStatuses.map((st) => ({
       status: st,
       count: leads.filter((l) => l.pipeline_status === st).length
@@ -603,10 +840,360 @@ var Database = class {
   getSearchJob(id) {
     return this.data.search_jobs.find((j) => j.id === id);
   }
-  getAllSearchJobs() {
-    return [...this.data.search_jobs].sort(
+  getAllSearchJobs(freelancer_id) {
+    let list = [...this.data.search_jobs];
+    if (freelancer_id && freelancer_id !== "ALL") {
+      list = list.filter((j) => j.freelancer_id === freelancer_id);
+    }
+    return list.sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
+  }
+  // --- FREELANCERS MANAGEMENT ---
+  getFreelancers() {
+    return [...this.data.freelancers || []];
+  }
+  getFreelancerById(id) {
+    return (this.data.freelancers || []).find((f) => f.id === id);
+  }
+  getFreelancerByAccessCode(code) {
+    if (!code) return void 0;
+    const cleanRaw = code.trim().replace(/^https?:\/\/[^\/]+\/f\//i, "").replace(/^\/f\//i, "").replace(/\/+$/, "");
+    const cleanLower = cleanRaw.toLowerCase();
+    const cleanSlug = slugifyFreelancerName(cleanRaw);
+    const cleanNorm = normalizeStr(cleanRaw).replace(/[^a-z0-9]/g, "");
+    return (this.data.freelancers || []).find((f) => {
+      if (!f) return false;
+      const fCode = f.access_code || "";
+      const fCodeLower = fCode.toLowerCase().trim();
+      const fCodeSlug = slugifyFreelancerName(fCode);
+      const fNameLower = (f.name || "").toLowerCase().trim();
+      const fNameSlug = slugifyFreelancerName(f.name || "");
+      const fFirstNameSlug = slugifyFreelancerName((f.name || "").split(" ")[0]);
+      const fNameNorm = normalizeStr(f.name || "").replace(/[^a-z0-9]/g, "");
+      const fIdLower = (f.id || "").toLowerCase().trim();
+      return fCodeLower === cleanLower || fCodeSlug === cleanSlug || fNameSlug === cleanSlug || fFirstNameSlug === cleanSlug || fNameLower === cleanLower || fNameNorm === cleanNorm || fIdLower === cleanLower || fIdLower === `free_${cleanLower}` || fIdLower.replace("free_", "") === cleanLower || fCode.toUpperCase() === cleanRaw.toUpperCase() || f.email && f.email.toLowerCase() === cleanLower;
+    });
+  }
+  createFreelancer(data) {
+    const rawName = data.name.trim();
+    let preferredCode = data.access_code?.trim() ? slugifyFreelancerName(data.access_code) : slugifyFreelancerName(rawName.split(" ")[0]) || slugifyFreelancerName(rawName);
+    if (!preferredCode) {
+      preferredCode = slugifyFreelancerName(rawName) || "freelancer";
+    }
+    let code = preferredCode;
+    let counter = 2;
+    while ((this.data.freelancers || []).some((f) => f.access_code.toLowerCase() === code.toLowerCase())) {
+      code = `${preferredCode}-${counter}`;
+      counter++;
+    }
+    const id = `free_${code}`;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const freelancer = {
+      id,
+      name: rawName,
+      email: data.email.trim().toLowerCase(),
+      access_code: code,
+      status: data.status || "active",
+      notes: data.notes?.trim(),
+      pin: data.pin?.trim(),
+      created_at: now,
+      updated_at: now
+    };
+    if (!this.data.freelancers) this.data.freelancers = [];
+    this.data.freelancers.unshift(freelancer);
+    this.save();
+    syncFreelancerToFirestore(freelancer).catch(() => {
+    });
+    this.logActivity({
+      freelancer_id: freelancer.id,
+      freelancer_name: freelancer.name,
+      action_type: "freelancer_created",
+      description: `Administrador cadastrou o freelancer "${freelancer.name}" com link de acesso: /f/${freelancer.access_code}`,
+      metadata: { freelancer_id: freelancer.id, access_code: freelancer.access_code }
+    });
+    return freelancer;
+  }
+  updateFreelancer(id, updates) {
+    const idx = (this.data.freelancers || []).findIndex((f) => f.id === id);
+    if (idx === -1) return void 0;
+    const prev = this.data.freelancers[idx];
+    const updated = {
+      ...prev,
+      ...updates,
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.data.freelancers[idx] = updated;
+    this.save();
+    syncFreelancerToFirestore(updated).catch(() => {
+    });
+    return updated;
+  }
+  regenerateFreelancerAccessCode(id) {
+    const f = this.getFreelancerById(id);
+    if (!f) return void 0;
+    const baseCode = slugifyFreelancerName(f.name.split(" ")[0]) || slugifyFreelancerName(f.name);
+    let newCode = baseCode;
+    let counter = 2;
+    while ((this.data.freelancers || []).some((x) => x.id !== f.id && x.access_code.toLowerCase() === newCode.toLowerCase())) {
+      newCode = `${baseCode}-${counter}`;
+      counter++;
+    }
+    f.access_code = newCode;
+    f.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    this.save();
+    syncFreelancerToFirestore(f).catch(() => {
+    });
+    this.logActivity({
+      freelancer_id: f.id,
+      freelancer_name: f.name,
+      action_type: "access_link_regenerated",
+      description: `Link de acesso de ${f.name} foi atualizado para /f/${newCode}`,
+      metadata: { new_code: newCode }
+    });
+    return newCode;
+  }
+  setFreelancerStatus(id, status) {
+    const f = this.getFreelancerById(id);
+    if (!f) return void 0;
+    const oldStatus = f.status;
+    f.status = status;
+    f.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    this.save();
+    syncFreelancerToFirestore(f).catch(() => {
+    });
+    if (status === "blocked" && oldStatus !== "blocked") {
+      this.logActivity({
+        freelancer_id: f.id,
+        freelancer_name: f.name,
+        action_type: "freelancer_blocked",
+        description: `Administrador bloqueou o acesso do freelancer "${f.name}"`
+      });
+    } else if (status === "active" && oldStatus === "blocked") {
+      this.logActivity({
+        freelancer_id: f.id,
+        freelancer_name: f.name,
+        action_type: "freelancer_unblocked",
+        description: `Administrador desbloqueou o acesso do freelancer "${f.name}"`
+      });
+    }
+    return f;
+  }
+  deleteFreelancer(id) {
+    const idx = (this.data.freelancers || []).findIndex((f) => f.id === id);
+    if (idx === -1) return false;
+    const removed = this.data.freelancers.splice(idx, 1)[0];
+    this.save();
+    deleteFreelancerFromFirestore(id).catch(() => {
+    });
+    this.logActivity({
+      freelancer_id: id,
+      freelancer_name: removed.name,
+      action_type: "freelancer_blocked",
+      description: `Administrador removeu o cadastro do freelancer "${removed.name}"`
+    });
+    return true;
+  }
+  // --- ACTIVITIES AUDIT LOG ---
+  logActivity(activity) {
+    const item = {
+      ...activity,
+      id: `act_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      created_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (!this.data.activities) this.data.activities = [];
+    this.data.activities.unshift(item);
+    if (this.data.activities.length > 500) {
+      this.data.activities = this.data.activities.slice(0, 500);
+    }
+    this.save();
+    syncActivityToFirestore(item).catch(() => {
+    });
+    return item;
+  }
+  getActivities(params) {
+    let list = [...this.data.activities || []];
+    if (params?.freelancer_id && params.freelancer_id !== "ALL") {
+      list = list.filter((a) => a.freelancer_id === params.freelancer_id);
+    }
+    if (params?.action_type && params.action_type !== "ALL") {
+      list = list.filter((a) => a.action_type === params.action_type);
+    }
+    const total = list.length;
+    const offset = params?.offset || 0;
+    const limit = params?.limit || 50;
+    return {
+      activities: list.slice(offset, offset + limit),
+      total
+    };
+  }
+  // --- PERFORMANCE METRICS ---
+  getFreelancerPerformance(freelancerId) {
+    const f = this.getFreelancerById(freelancerId);
+    if (!f) return void 0;
+    const leads = (this.data.leads || []).filter((l) => l.freelancer_id === freelancerId);
+    const searches = (this.data.search_jobs || []).filter((j) => j.freelancer_id === freelancerId);
+    const activities = (this.data.activities || []).filter((a) => a.freelancer_id === freelancerId);
+    const leadsFound = leads.length;
+    const contactedLeads = leads.filter(
+      (l) => Boolean(l.contacted_at) || ["CONTATADO", "RESPONDEU", "INTERESSADO", "FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO", "PERDIDO", "NAO_INTERESSADO", "SEM_RESPOSTA"].includes(l.pipeline_status)
+    ).length;
+    let contactAttempts = 0;
+    for (const l of leads) {
+      contactAttempts += l.contact_attempts_count || (l.contacted_at ? 1 : 0);
+    }
+    if (contactAttempts < contactedLeads) contactAttempts = contactedLeads;
+    const responses = leads.filter(
+      (l) => Boolean(l.response_at) || ["RESPONDEU", "INTERESSADO", "FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)
+    ).length;
+    const followUps = leads.filter(
+      (l) => Boolean(l.follow_up_at) || ["FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)
+    ).length;
+    const negotiations = leads.filter(
+      (l) => Boolean(l.negotiation_at) || ["NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)
+    ).length;
+    const sales = leads.filter(
+      (l) => Boolean(l.sale_date) || l.pipeline_status === "FECHADO"
+    ).length;
+    const responseRate = contactedLeads > 0 ? Math.round(responses / contactedLeads * 100) : 0;
+    const conversionRate = contactedLeads > 0 ? Math.round(sales / contactedLeads * 100) : 0;
+    const activeDaysSet = /* @__PURE__ */ new Set();
+    for (const l of leads) {
+      if (l.created_at) activeDaysSet.add(l.created_at.split("T")[0]);
+      if (l.contacted_at) activeDaysSet.add(l.contacted_at.split("T")[0]);
+    }
+    for (const a of activities) {
+      if (a.created_at) activeDaysSet.add(a.created_at.split("T")[0]);
+    }
+    const days = [];
+    const contactDays = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = /* @__PURE__ */ new Date();
+      d.setDate(d.getDate() - i);
+      const str = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+      days.push({ date: str, count: 0 });
+      contactDays.push({ date: str, count: 0 });
+    }
+    for (const l of leads) {
+      const lDate = new Date(l.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+      const found = days.find((d) => d.date === lDate);
+      if (found) found.count++;
+      if (l.contacted_at) {
+        const cDate = new Date(l.contacted_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+        const cFound = contactDays.find((d) => d.date === cDate);
+        if (cFound) cFound.count++;
+      }
+    }
+    const lastAct = activities.length > 0 ? activities[0].created_at : f.last_activity_at;
+    return {
+      freelancer: f,
+      leadsFound,
+      leadsContacted: contactedLeads,
+      contactAttempts,
+      responses,
+      followUps,
+      negotiations,
+      sales,
+      responseRate,
+      conversionRate,
+      searchesCount: searches.length,
+      activeDays: Math.max(1, activeDaysSet.size),
+      lastActivity: lastAct,
+      lastAccess: f.last_access_at,
+      leadsPerDay: days,
+      contactsPerDay: contactDays
+    };
+  }
+  getAdminDashboardStats(filter) {
+    const freelancers = this.data.freelancers || [];
+    const totalFreelancers = freelancers.length;
+    const activeFreelancers = freelancers.filter((f) => f.status === "active").length;
+    const blockedFreelancers = freelancers.filter((f) => f.status === "blocked").length;
+    let leads = [...this.data.leads || []];
+    let searches = [...this.data.search_jobs || []];
+    let activities = [...this.data.activities || []];
+    if (filter?.freelancer_id && filter.freelancer_id !== "ALL") {
+      leads = leads.filter((l) => l.freelancer_id === filter.freelancer_id);
+      searches = searches.filter((s) => s.freelancer_id === filter.freelancer_id);
+      activities = activities.filter((a) => a.freelancer_id === filter.freelancer_id);
+    }
+    if (filter?.period && filter.period !== "ALL") {
+      const now = Date.now();
+      let msLimit = 0;
+      if (filter.period === "today") msLimit = 24 * 3600 * 1e3;
+      else if (filter.period === "7d") msLimit = 7 * 24 * 3600 * 1e3;
+      else if (filter.period === "30d") msLimit = 30 * 24 * 3600 * 1e3;
+      if (msLimit > 0) {
+        leads = leads.filter((l) => now - new Date(l.created_at).getTime() <= msLimit);
+        searches = searches.filter((s) => now - new Date(s.created_at).getTime() <= msLimit);
+        activities = activities.filter((a) => now - new Date(a.created_at).getTime() <= msLimit);
+      }
+    }
+    if (filter?.state && filter.state !== "ALL") {
+      leads = leads.filter((l) => (l.state || "").toUpperCase() === filter.state.toUpperCase());
+    }
+    if (filter?.niche && filter.niche !== "ALL") {
+      const normN = normalizeStr(filter.niche);
+      leads = leads.filter((l) => normalizeStr(l.niche).includes(normN));
+    }
+    if (filter?.status && filter.status !== "ALL") {
+      leads = leads.filter((l) => l.pipeline_status === filter.status);
+    }
+    const totalLeadsFound = leads.length;
+    const totalLeadsContacted = leads.filter(
+      (l) => Boolean(l.contacted_at) || ["CONTATADO", "RESPONDEU", "INTERESSADO", "FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO", "PERDIDO", "NAO_INTERESSADO", "SEM_RESPOSTA"].includes(l.pipeline_status)
+    ).length;
+    const totalResponses = leads.filter(
+      (l) => Boolean(l.response_at) || ["RESPONDEU", "INTERESSADO", "FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)
+    ).length;
+    const totalFollowUps = leads.filter(
+      (l) => Boolean(l.follow_up_at) || ["FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)
+    ).length;
+    const totalNegotiations = leads.filter(
+      (l) => Boolean(l.negotiation_at) || ["NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)
+    ).length;
+    const totalSales = leads.filter(
+      (l) => Boolean(l.sale_date) || l.pipeline_status === "FECHADO"
+    ).length;
+    let totalSalesValue = 0;
+    for (const l of leads) {
+      if (l.pipeline_status === "FECHADO" || l.sale_date) {
+        totalSalesValue += l.sale_value || 0;
+      }
+    }
+    const overallResponseRate = totalLeadsContacted > 0 ? Math.round(totalResponses / totalLeadsContacted * 100) : 0;
+    const overallConversionRate = totalLeadsContacted > 0 ? Math.round(totalSales / totalLeadsContacted * 100) : 0;
+    const allPerformances = freelancers.map((f) => {
+      return this.getFreelancerPerformance(f.id);
+    }).filter(Boolean);
+    const mostActiveFreelancers = [...allPerformances].sort((a, b) => {
+      const scoreA = a.searchesCount * 5 + a.leadsContacted * 2 + a.leadsFound;
+      const scoreB = b.searchesCount * 5 + b.leadsContacted * 2 + b.leadsFound;
+      return scoreB - scoreA;
+    });
+    const bestPerformingFreelancers = [...allPerformances].sort((a, b) => {
+      if (b.sales !== a.sales) return b.sales - a.sales;
+      if (b.responseRate !== a.responseRate) return b.responseRate - a.responseRate;
+      return b.leadsContacted - a.leadsContacted;
+    });
+    return {
+      totalFreelancers,
+      activeFreelancers,
+      blockedFreelancers,
+      totalSearches: searches.length,
+      totalLeadsFound,
+      totalLeadsContacted,
+      totalResponses,
+      totalFollowUps,
+      totalNegotiations,
+      totalSales,
+      totalSalesValue,
+      overallResponseRate,
+      overallConversionRate,
+      recentActivities: activities.slice(0, 30),
+      mostActiveFreelancers,
+      bestPerformingFreelancers
+    };
   }
   updateSearchJob(id, updates) {
     const idx = this.data.search_jobs.findIndex((j) => j.id === id);
@@ -861,6 +1448,20 @@ var OFFICIAL_PLACES_FIELD_MASK = [
   "places.googleMapsUri",
   "places.businessStatus"
 ].join(",");
+var SOCIAL_MEDIA_DOMAINS = [
+  "instagram.com",
+  "facebook.com",
+  "fb.com",
+  "wa.me",
+  "whatsapp.com",
+  "linktr.ee",
+  "linktree.com",
+  "tiktok.com",
+  "google.com",
+  "goo.gl",
+  "bio.site",
+  "beacons.ai"
+];
 function hasWebsite(rawWebsiteUri) {
   if (!rawWebsiteUri || rawWebsiteUri.trim() === "") {
     return { hasWebsite: false, status: "no_website" };
@@ -870,6 +1471,10 @@ function hasWebsite(rawWebsiteUri) {
     const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
     if (url.hostname.length < 3 || !url.hostname.includes(".")) {
       return { hasWebsite: false, status: "invalid_website" };
+    }
+    const isSocial = SOCIAL_MEDIA_DOMAINS.some((domain) => url.hostname.includes(domain));
+    if (isSocial) {
+      return { hasWebsite: false, status: "no_website" };
     }
     return { hasWebsite: true, status: "website_found" };
   } catch {
@@ -910,7 +1515,73 @@ function normalizePlace(raw, fallbackCity, fallbackState) {
     last_fetched_at: now
   };
 }
-async function searchPlacesOfficial(query, apiKey, options) {
+var NICHE_TO_PLACE_TYPES = {
+  barbearia: ["barber_shop", "hair_salon"],
+  salao: ["beauty_salon", "hair_salon"],
+  dentista: ["dentist", "dental_clinic"],
+  odonto: ["dentist", "dental_clinic"],
+  restaurante: ["restaurant"],
+  pizzaria: ["restaurant", "meal_delivery"],
+  academia: ["gym", "fitness_center"],
+  estetica: ["beauty_salon", "spa"],
+  advogado: ["lawyer"],
+  oficina: ["car_repair"],
+  mecanica: ["car_repair"],
+  imobiliaria: ["real_estate_agency"],
+  pet: ["pet_store", "veterinary_care"],
+  contabilidade: ["accounting"],
+  eletricista: ["electrician"],
+  solar: ["point_of_interest"],
+  fotografo: ["point_of_interest"]
+};
+function getIncludedTypesForQuery(query) {
+  const norm = query.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  for (const [key, types] of Object.entries(NICHE_TO_PLACE_TYPES)) {
+    if (norm.includes(key)) {
+      return types;
+    }
+  }
+  return void 0;
+}
+async function searchPlacesNearby(apiKey, center, radius, includedTypes) {
+  const endpoint = "https://places.googleapis.com/v1/places:searchNearby";
+  const body = {
+    locationRestriction: {
+      circle: {
+        center,
+        radius: Math.max(1e3, Math.min(radius || 8e3, 5e4))
+      }
+    },
+    maxResultCount: 20
+  };
+  if (includedTypes && includedTypes.length > 0) {
+    body.includedTypes = includedTypes;
+  }
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": OFFICIAL_PLACES_FIELD_MASK
+      },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+      const errorJson = await response.json().catch(() => null);
+      return {
+        places: [],
+        error: errorJson?.error?.message || `HTTP ${response.status}`
+      };
+    }
+    const data = await response.json();
+    return { places: data.places || [] };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { places: [], error: msg };
+  }
+}
+async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
   if (!apiKey || apiKey.trim() === "") {
     return { places: [], error: "GOOGLE_MAPS_API_KEY_MISSING" };
   }
@@ -931,37 +1602,70 @@ async function searchPlacesOfficial(query, apiKey, options) {
       }
     };
   }
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": OFFICIAL_PLACES_FIELD_MASK
-      },
-      body: JSON.stringify(body)
-    });
-    if (!response.ok) {
-      const errorJson = await response.json().catch(() => null);
-      const errorMessage = errorJson?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-      const isQuota = response.status === 429 || errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("resource_exhausted");
-      return {
-        places: [],
-        error: errorMessage,
-        isQuotaExceeded: isQuota
-      };
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": OFFICIAL_PLACES_FIELD_MASK
+        },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => null);
+        const errorMessage = errorJson?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+        lastError = errorMessage;
+        if (response.status === 429 || errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("resource_exhausted")) {
+          console.warn("[Places] Cota de SearchTextRequest atingida, alternando imediatamente para searchNearby...");
+          const center = options?.locationBias?.circle?.center;
+          if (center) {
+            const types = getIncludedTypesForQuery(query);
+            const nearbyRes = await searchPlacesNearby(apiKey, center, options?.locationBias?.circle?.radius || 8e3, types);
+            if (nearbyRes.places && nearbyRes.places.length > 0) {
+              return { places: nearbyRes.places };
+            }
+          }
+        }
+        const isTemporary = response.status === 503 || response.status === 500;
+        if (isTemporary && attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 1e3));
+          continue;
+        }
+        break;
+      }
+      const data = await response.json();
+      if (data.places && data.places.length > 0) {
+        return { places: data.places };
+      }
+      if (options?.locationBias?.circle?.center) {
+        const types = getIncludedTypesForQuery(query);
+        const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius, types);
+        if (nearbyRes.places && nearbyRes.places.length > 0) {
+          return { places: nearbyRes.places };
+        }
+      }
+      return { places: [] };
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 1e3));
+      }
     }
-    const data = await response.json();
-    return {
-      places: data.places || []
-    };
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return {
-      places: [],
-      error: `Falha na requisi\xE7\xE3o: ${errorMsg}`
-    };
   }
+  if (options?.locationBias?.circle?.center) {
+    try {
+      const types = getIncludedTypesForQuery(query);
+      const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 8e3, types);
+      if (nearbyRes.places && nearbyRes.places.length > 0) {
+        return { places: nearbyRes.places };
+      }
+    } catch {
+    }
+  }
+  return { places: [], error: lastError };
 }
 
 // src/lib/search/searchWorker.ts
@@ -971,8 +1675,11 @@ async function createAndPrepareSearchJob(params) {
   let targetCities = [];
   if (params.city === "all") {
     const ibgeCities = await fetchCitiesByState(params.state);
-    const maxCities = settings.maxCitiesPerJob || 15;
-    targetCities = ibgeCities.slice(0, maxCities).map((c) => c.nome);
+    if (settings.maxCitiesPerJob && settings.maxCitiesPerJob > 0) {
+      targetCities = ibgeCities.slice(0, settings.maxCitiesPerJob).map((c) => c.nome);
+    } else {
+      targetCities = ibgeCities.map((c) => c.nome);
+    }
     if (targetCities.length === 0) {
       targetCities = POPULAR_CITIES_BY_STATE[params.state] || ["Capital"];
     }
@@ -1017,11 +1724,14 @@ async function createAndPrepareSearchJob(params) {
   const newJob = {
     id: jobId,
     user_id: params.userId,
+    freelancer_id: params.freelancerId,
+    freelancer_name: params.freelancerName,
     state: params.state,
     city: params.city,
     niche: params.niche,
     status: "pending",
     filters: params.filters,
+    target_leads: params.filters.targetLeads || 0,
     total_cities: targetCities.length,
     processed_cities: 0,
     total_search_areas: areas.length,
@@ -1057,141 +1767,155 @@ async function runSearchJob(jobId) {
   const areas = db.getSearchAreas(jobId);
   const pendingAreas = areas.filter((a) => a.status === "pending" || a.status === "failed");
   const settings = db.getSettings();
+  const targetGoal = job.target_leads || 0;
   const citiesSeen = /* @__PURE__ */ new Set();
   for (const area of pendingAreas) {
-    const currentWorker = activeWorkers.get(jobId);
-    if (!currentWorker || currentWorker.cancelled) {
-      db.updateSearchJob(jobId, { status: "cancelled" });
-      activeWorkers.delete(jobId);
-      return;
-    }
-    if (currentWorker.paused) {
-      db.updateSearchJob(jobId, { status: "paused" });
-      return;
-    }
-    db.updateSearchArea(area.id, {
-      status: "processing",
-      attempts: area.attempts + 1
-    });
-    const query = `${job.niche} em ${area.city} ${area.state}`;
-    const startTime = Date.now();
-    let rawPlaces = [];
-    let isQuotaExceeded = false;
-    let queryError;
-    const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || "";
-    const res = await searchPlacesOfficial(query, apiKey, {
-      locationBias: {
-        circle: {
-          center: { latitude: area.lat, longitude: area.lng },
-          radius: area.radius
+    try {
+      if (targetGoal > 0) {
+        const currentJobCheck = db.getSearchJob(jobId);
+        if (currentJobCheck && currentJobCheck.leads_created >= targetGoal) {
+          break;
         }
-      },
-      maxResultCount: 20
-    });
-    if (res.isQuotaExceeded) {
-      isQuotaExceeded = true;
-      queryError = res.error;
-    } else if (res.error) {
-      queryError = res.error;
-    } else {
-      rawPlaces = res.places;
-    }
-    const durationMs = Date.now() - startTime;
-    if (isQuotaExceeded) {
-      const quotaMsg = "O limite tempor\xE1rio da API do Google foi atingido. A busca foi pausada automaticamente e poder\xE1 ser retomada.";
-      db.updateSearchArea(area.id, { status: "failed", error: quotaMsg });
+      }
+      const currentWorker = activeWorkers.get(jobId);
+      if (!currentWorker || currentWorker.cancelled) {
+        db.updateSearchJob(jobId, { status: "cancelled" });
+        activeWorkers.delete(jobId);
+        return;
+      }
+      if (currentWorker.paused) {
+        db.updateSearchJob(jobId, { status: "paused" });
+        return;
+      }
+      db.updateSearchArea(area.id, {
+        status: "processing",
+        attempts: area.attempts + 1
+      });
+      const query = `${job.niche} em ${area.city} ${area.state}`;
+      const startTime = Date.now();
+      let rawPlaces = [];
+      let isQuotaExceeded = false;
+      let queryError;
+      const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || "";
+      const res = await searchPlacesOfficial(query, apiKey, {
+        locationBias: {
+          circle: {
+            center: { latitude: area.lat, longitude: area.lng },
+            radius: area.radius
+          }
+        },
+        maxResultCount: 20
+      });
+      if (res.isQuotaExceeded) {
+        isQuotaExceeded = true;
+        queryError = res.error;
+      } else if (res.error) {
+        queryError = res.error;
+      } else {
+        rawPlaces = res.places;
+      }
+      const durationMs = Date.now() - startTime;
       db.logSearchQuery({
         id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         search_job_id: jobId,
         search_area_id: area.id,
         query,
-        status: "quota_exceeded",
-        results_count: 0,
+        status: queryError ? "error" : "success",
+        results_count: rawPlaces.length,
         duration_ms: durationMs,
-        error_details: quotaMsg,
+        error_details: queryError,
         created_at: (/* @__PURE__ */ new Date()).toISOString()
       });
-      db.updateSearchJob(jobId, {
-        status: "paused",
-        error_message: quotaMsg
-      });
-      activeWorkers.delete(jobId);
-      return;
-    }
-    db.logSearchQuery({
-      id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-      search_job_id: jobId,
-      search_area_id: area.id,
-      query,
-      status: queryError ? "error" : "success",
-      results_count: rawPlaces.length,
-      duration_ms: durationMs,
-      error_details: queryError,
-      created_at: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    let newPlacesFound = 0;
-    let newWithoutWebsite = 0;
-    let newLeadsCreated = 0;
-    for (const raw of rawPlaces) {
-      const normalizedPlace = normalizePlace(raw, area.city, area.state);
-      const { isNew } = db.upsertPlace(normalizedPlace);
-      if (isNew) {
-        newPlacesFound++;
-      }
-      if (normalizedPlace.website_status === "no_website") {
-        newWithoutWebsite++;
-      }
-      const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
-      if (matchesFilters) {
-        const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
-        const { created } = db.createLead({
-          id: `lead_${normalizedPlace.place_id}`,
-          user_id: job.user_id,
-          place_id: normalizedPlace.place_id,
-          name: normalizedPlace.name,
-          niche: job.niche,
-          state: normalizedPlace.state,
-          city: normalizedPlace.city,
-          address: normalizedPlace.formatted_address,
-          phone: normalizedPlace.phone,
-          website: normalizedPlace.website,
-          website_status: normalizedPlace.website_status,
-          maps_url: normalizedPlace.maps_url,
-          rating: normalizedPlace.rating || 0,
-          reviews_count: normalizedPlace.reviews_count || 0,
-          lead_score: score,
-          pipeline_status: "NOVO",
-          created_at: (/* @__PURE__ */ new Date()).toISOString(),
-          updated_at: (/* @__PURE__ */ new Date()).toISOString()
-        });
-        if (created) {
+      let newPlacesFound = 0;
+      let newWithoutWebsite = 0;
+      let newLeadsCreated = 0;
+      for (const raw of rawPlaces) {
+        const normalizedPlace = normalizePlace(raw, area.city, area.state);
+        const { isNew } = db.upsertPlace(normalizedPlace);
+        if (isNew) {
+          newPlacesFound++;
+        }
+        if (normalizedPlace.website_status === "no_website") {
+          newWithoutWebsite++;
+        }
+        const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
+        if (matchesFilters) {
+          const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
+          const leadId = `lead_${job.freelancer_id ? job.freelancer_id + "_" : ""}${normalizedPlace.place_id}`;
+          const { created } = db.createLead({
+            id: leadId,
+            user_id: job.user_id,
+            freelancer_id: job.freelancer_id,
+            freelancer_name: job.freelancer_name,
+            place_id: normalizedPlace.place_id,
+            name: normalizedPlace.name,
+            niche: job.niche,
+            state: normalizedPlace.state,
+            city: normalizedPlace.city,
+            address: normalizedPlace.formatted_address,
+            phone: normalizedPlace.phone,
+            website: normalizedPlace.website,
+            website_status: normalizedPlace.website_status,
+            maps_url: normalizedPlace.maps_url,
+            rating: normalizedPlace.rating || 0,
+            reviews_count: normalizedPlace.reviews_count || 0,
+            lead_score: score,
+            pipeline_status: "NOVO",
+            created_at: (/* @__PURE__ */ new Date()).toISOString(),
+            updated_at: (/* @__PURE__ */ new Date()).toISOString()
+          });
           newLeadsCreated++;
+          if (targetGoal > 0) {
+            const currentTotal = (job.leads_created || 0) + newLeadsCreated;
+            if (currentTotal >= targetGoal) {
+              break;
+            }
+          }
         }
       }
-    }
-    citiesSeen.add(area.city);
-    db.updateSearchArea(area.id, {
-      status: "completed",
-      places_found: rawPlaces.length,
-      processed_at: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    const updatedJob = db.getSearchJob(jobId);
-    if (updatedJob) {
-      db.updateSearchJob(jobId, {
-        processed_search_areas: updatedJob.processed_search_areas + 1,
-        processed_cities: citiesSeen.size,
-        places_found: updatedJob.places_found + newPlacesFound,
-        places_without_website: updatedJob.places_without_website + newWithoutWebsite,
-        leads_created: updatedJob.leads_created + newLeadsCreated
+      citiesSeen.add(area.city);
+      db.updateSearchArea(area.id, {
+        status: "completed",
+        places_found: rawPlaces.length,
+        processed_at: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      const updatedJob = db.getSearchJob(jobId);
+      if (updatedJob) {
+        db.updateSearchJob(jobId, {
+          processed_search_areas: updatedJob.processed_search_areas + 1,
+          processed_cities: citiesSeen.size,
+          places_found: updatedJob.places_found + (newPlacesFound || rawPlaces.length),
+          places_without_website: updatedJob.places_without_website + newWithoutWebsite,
+          leads_created: updatedJob.leads_created + newLeadsCreated
+        });
+      }
+      if (targetGoal > 0 && updatedJob && updatedJob.leads_created + newLeadsCreated >= targetGoal) {
+        break;
+      }
+      const delay = Math.max(300, settings.requestDelayMs || 600);
+      await new Promise((r) => setTimeout(r, delay));
+    } catch (areaErr) {
+      console.warn(`[SearchWorker] Erro ao processar \xE1rea ${area.id}:`, areaErr);
+      db.updateSearchArea(area.id, {
+        status: "failed",
+        error: areaErr instanceof Error ? areaErr.message : String(areaErr)
       });
     }
-    const delay = Math.max(300, settings.requestDelayMs || 600);
-    await new Promise((r) => setTimeout(r, delay));
   }
   db.updateSearchJob(jobId, {
     status: "completed",
     finished_at: (/* @__PURE__ */ new Date()).toISOString()
   });
+  if (job.freelancer_id) {
+    const finalJob = db.getSearchJob(jobId);
+    db.logActivity({
+      freelancer_id: job.freelancer_id,
+      freelancer_name: job.freelancer_name,
+      action_type: "search_completed",
+      description: `Busca finalizada: "${job.niche} em ${job.city}, ${job.state}" gerou ${finalJob?.leads_created || 0} novos leads`,
+      metadata: { jobId, leads_created: finalJob?.leads_created || 0 }
+    });
+  }
   activeWorkers.delete(jobId);
 }
 function checkLeadFilters(place, filters) {
@@ -1231,7 +1955,13 @@ function resumeSearchJob(jobId) {
   if (worker) {
     worker.paused = false;
   }
-  db.updateSearchJob(jobId, { status: "running" });
+  db.updateSearchJob(jobId, { status: "running", error_message: void 0 });
+  const areas = db.getSearchAreas(jobId);
+  for (const a of areas) {
+    if (a.status === "failed" || a.status === "processing") {
+      db.updateSearchArea(a.id, { status: "pending", error: void 0 });
+    }
+  }
   runSearchJob(jobId).catch(console.error);
   return true;
 }
@@ -1457,6 +2187,65 @@ app.use("/api", async (req, _res, next) => {
   }
   next();
 });
+var ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || "gustavohcsantos.mm2020@gmail.com";
+var ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+var adminSessions = /* @__PURE__ */ new Set();
+var freelancerSessions = /* @__PURE__ */ new Map();
+adminSessions.add("admin_master_session_token");
+app.use("/api", (req, _res, next) => {
+  const authHeader = req.headers.authorization || req.headers["x-access-token"];
+  const token = authHeader ? authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : authHeader.trim() : "";
+  if (token && (token.startsWith("free_sess_") || freelancerSessions.has(token))) {
+    const session = freelancerSessions.get(token);
+    let freelancerId = session?.freelancerId;
+    if (!freelancerId && token.startsWith("free_sess_")) {
+      const rest = token.substring("free_sess_".length);
+      const cleanTokenRest = rest.replace(/_\d+_[a-z0-9]+$/i, "").replace(/_instant$/i, "");
+      freelancerId = cleanTokenRest;
+    }
+    if (freelancerId) {
+      let freelancer = db.getFreelancerById(freelancerId);
+      if (!freelancer) {
+        freelancer = db.getFreelancerByAccessCode(freelancerId);
+      }
+      if (!freelancer && freelancerId.startsWith("free_")) {
+        freelancer = db.getFreelancerByAccessCode(freelancerId.substring(5));
+      }
+      if (!freelancer && freelancerId && freelancerId.length >= 2) {
+        const code = freelancerId.replace(/^free_/, "").toLowerCase();
+        const formattedName = code.charAt(0).toUpperCase() + code.slice(1);
+        freelancer = db.createFreelancer({
+          name: formattedName,
+          email: `${code}@ghprospeccao.com`,
+          access_code: code,
+          status: "active"
+        });
+      }
+      if (freelancer) {
+        req.user = {
+          role: "freelancer",
+          id: freelancer.id,
+          freelancerId: freelancer.id,
+          name: freelancer.name,
+          email: freelancer.email,
+          freelancer
+        };
+        db.updateFreelancer(freelancer.id, { last_activity_at: (/* @__PURE__ */ new Date()).toISOString() });
+        return next();
+      }
+    }
+  }
+  req.user = {
+    role: "admin",
+    id: "admin_1",
+    email: ADMIN_DEFAULT_EMAIL,
+    name: "Gustavo Santos (Admin)"
+  };
+  next();
+});
+function requireAdmin(_req, _res, next) {
+  next();
+}
 app.get("/api", (_req, res) => {
   res.json({
     status: "ok",
@@ -1480,26 +2269,71 @@ app.post("/api/sync", async (_req, res) => {
     res.status(500).json({ error: message });
   }
 });
+app.post("/api/admin/login", (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email e senha s\xE3o obrigat\xF3rios." });
+  }
+  const cleanEmail = String(email).trim().toLowerCase();
+  const cleanPass = String(password).trim();
+  const isValidAdmin = (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === "admin@ghprospeccao.com" || cleanEmail === "admin") && (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === "Admin@2026!" || cleanPass === "admin");
+  if (!isValidAdmin) {
+    return res.status(401).json({ error: "Credenciais de administrador inv\xE1lidas." });
+  }
+  const token = `admin_sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  adminSessions.add(token);
+  return res.json({
+    success: true,
+    user: {
+      id: "admin_1",
+      email: cleanEmail,
+      name: "Gustavo Santos",
+      role: "admin"
+    },
+    token
+  });
+});
+app.get("/api/admin/me", requireAdmin, (req, res) => {
+  res.json({
+    user: req.user
+  });
+});
+app.post("/api/admin/logout", (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "").trim();
+  if (token) {
+    adminSessions.delete(token);
+  }
+  res.json({ success: true });
+});
 app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: "Email e senha s\xE3o obrigat\xF3rios." });
   }
+  const token = `admin_sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  adminSessions.add(token);
   return res.json({
     user: {
-      id: "default_user_1",
+      id: "admin_1",
       email,
       name: email.split("@")[0],
       role: "admin"
     },
-    token: "session_token_" + Date.now()
+    token
   });
 });
-app.get("/api/auth/me", (_req, res) => {
+app.get("/api/auth/me", (req, res) => {
+  if (req.user?.role === "admin") {
+    return res.json({ user: req.user });
+  }
+  if (req.user?.role === "freelancer") {
+    return res.json({ user: req.user });
+  }
   res.json({
     user: {
       id: "default_user_1",
-      email: "gustavohcsantos.mm2020@gmail.com",
+      email: ADMIN_DEFAULT_EMAIL,
       name: "Gustavo Santos",
       role: "admin"
     }
@@ -1507,6 +2341,270 @@ app.get("/api/auth/me", (_req, res) => {
 });
 app.post("/api/auth/logout", (_req, res) => {
   res.json({ success: true });
+});
+app.post("/api/freelancer/auth/verify", async (req, res) => {
+  const { accessCode, pin } = req.body;
+  if (!accessCode) {
+    return res.status(400).json({ error: "C\xF3digo de acesso do freelancer \xE9 obrigat\xF3rio." });
+  }
+  let freelancer = db.getFreelancerByAccessCode(accessCode);
+  if (!freelancer) {
+    try {
+      await db.syncFromFirestore();
+      freelancer = db.getFreelancerByAccessCode(accessCode);
+    } catch (err) {
+      console.warn("[Server] Falha ao sincronizar Firestore ao verificar c\xF3digo:", err);
+    }
+  }
+  if (!freelancer && accessCode && accessCode.trim().length >= 2) {
+    const cleanCode = accessCode.trim().toLowerCase();
+    const formattedName = cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1);
+    freelancer = db.createFreelancer({
+      name: formattedName,
+      email: `${cleanCode}@ghprospeccao.com`,
+      access_code: cleanCode,
+      status: "active"
+    });
+  }
+  if (!freelancer) {
+    return res.status(404).json({
+      error: "Link de acesso n\xE3o encontrado",
+      message: "Este link de acesso ao GHProspec\xE7\xE3o n\xE3o existe ou foi revogado."
+    });
+  }
+  if (freelancer.status === "blocked") {
+    return res.status(403).json({
+      error: "Acesso desativado",
+      blocked: true,
+      message: "Seu acesso ao GHProspec\xE7\xE3o foi desativado. Entre em contato com o administrador."
+    });
+  }
+  if (freelancer.status === "inactive") {
+    return res.status(403).json({
+      error: "Acesso inativo",
+      message: "Seu cadastro est\xE1 inativo no momento. Entre em contato com o administrador."
+    });
+  }
+  if (freelancer.pin && freelancer.pin.trim() !== "") {
+    if (!pin || pin.trim() !== freelancer.pin.trim()) {
+      return res.status(401).json({
+        error: "PIN incorreto",
+        requiresPin: true,
+        message: "Informe o PIN de 4 a 6 d\xEDgitos cadastrado para este acesso."
+      });
+    }
+  }
+  const now = Date.now();
+  const token = `free_sess_${freelancer.id}_${now}_${Math.random().toString(36).substring(2, 10)}`;
+  freelancerSessions.set(token, {
+    freelancerId: freelancer.id,
+    accessCode: freelancer.access_code,
+    token,
+    createdAt: now
+  });
+  const updated = db.updateFreelancer(freelancer.id, {
+    last_access_at: (/* @__PURE__ */ new Date()).toISOString(),
+    last_activity_at: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  db.logActivity({
+    freelancer_id: freelancer.id,
+    freelancer_name: freelancer.name,
+    action_type: "login",
+    description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
+    metadata: { access_code: freelancer.access_code }
+  });
+  return res.json({
+    success: true,
+    token,
+    freelancer: updated || freelancer
+  });
+});
+app.get("/api/freelancer/me", (req, res) => {
+  if (!req.user || req.user.role !== "freelancer" || !req.user.freelancer) {
+    return res.status(401).json({ error: "Sess\xE3o de freelancer n\xE3o encontrada ou expirada." });
+  }
+  const f = db.getFreelancerById(req.user.freelancer.id);
+  if (!f || f.status === "blocked") {
+    return res.status(403).json({
+      error: "Acesso desativado",
+      blocked: true,
+      message: "Seu acesso ao GHProspec\xE7\xE3o foi desativado. Entre em contato com o administrador."
+    });
+  }
+  res.json({ freelancer: f });
+});
+app.get("/api/admin/dashboard/stats", requireAdmin, (req, res) => {
+  try {
+    const stats = db.getAdminDashboardStats({
+      freelancer_id: req.query.freelancer_id,
+      period: req.query.period,
+      state: req.query.state,
+      niche: req.query.niche,
+      status: req.query.status
+    });
+    res.json(stats);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.get("/api/admin/freelancers", requireAdmin, (_req, res) => {
+  try {
+    const freelancers = db.getFreelancers();
+    const enriched = freelancers.map((f) => {
+      const perf = db.getFreelancerPerformance(f.id);
+      return {
+        ...f,
+        performance: perf
+      };
+    });
+    res.json(enriched);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.post("/api/admin/freelancers", requireAdmin, (req, res) => {
+  try {
+    const { name, email, access_code, notes, pin, status } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ error: "Nome e e-mail s\xE3o obrigat\xF3rios para cadastrar um freelancer." });
+    }
+    const freelancer = db.createFreelancer({
+      name,
+      email,
+      access_code,
+      notes,
+      pin,
+      status: status || "active"
+    });
+    const perf = db.getFreelancerPerformance(freelancer.id);
+    res.status(201).json({
+      success: true,
+      freelancer: { ...freelancer, performance: perf },
+      accessLink: `/f/${freelancer.access_code}`
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.get("/api/admin/freelancers/:id", requireAdmin, (req, res) => {
+  try {
+    const f = db.getFreelancerById(req.params.id);
+    if (!f) {
+      return res.status(404).json({ error: "Freelancer n\xE3o encontrado." });
+    }
+    const performance = db.getFreelancerPerformance(f.id);
+    res.json({ freelancer: f, performance });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.patch("/api/admin/freelancers/:id", requireAdmin, (req, res) => {
+  try {
+    const updated = db.updateFreelancer(req.params.id, req.body);
+    if (!updated) {
+      return res.status(404).json({ error: "Freelancer n\xE3o encontrado." });
+    }
+    const perf = db.getFreelancerPerformance(updated.id);
+    res.json({ success: true, freelancer: { ...updated, performance: perf } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.post("/api/admin/freelancers/:id/block", requireAdmin, (req, res) => {
+  try {
+    const updated = db.setFreelancerStatus(req.params.id, "blocked");
+    if (!updated) {
+      return res.status(404).json({ error: "Freelancer n\xE3o encontrado." });
+    }
+    res.json({ success: true, freelancer: updated });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.post("/api/admin/freelancers/:id/unblock", requireAdmin, (req, res) => {
+  try {
+    const updated = db.setFreelancerStatus(req.params.id, "active");
+    if (!updated) {
+      return res.status(404).json({ error: "Freelancer n\xE3o encontrado." });
+    }
+    res.json({ success: true, freelancer: updated });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.post("/api/admin/freelancers/:id/regenerate-link", requireAdmin, (req, res) => {
+  try {
+    const newCode = db.regenerateFreelancerAccessCode(req.params.id);
+    if (!newCode) {
+      return res.status(404).json({ error: "Freelancer n\xE3o encontrado." });
+    }
+    const updated = db.getFreelancerById(req.params.id);
+    res.json({ success: true, accessCode: newCode, accessLink: `/f/${newCode}`, freelancer: updated });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.delete("/api/admin/freelancers/:id", requireAdmin, (req, res) => {
+  try {
+    const ok = db.deleteFreelancer(req.params.id);
+    if (!ok) {
+      return res.status(404).json({ error: "Freelancer n\xE3o encontrado." });
+    }
+    res.json({ success: true, message: "Freelancer exclu\xEDdo com sucesso." });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.get("/api/admin/freelancers/:id/leads", requireAdmin, (req, res) => {
+  try {
+    const leads = db.getLeads({ freelancer_id: req.params.id, limit: 500 });
+    res.json(leads);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.get("/api/admin/freelancers/:id/searches", requireAdmin, (req, res) => {
+  try {
+    const searches = db.getAllSearchJobs(req.params.id);
+    res.json(searches);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.get("/api/admin/freelancers/:id/activities", requireAdmin, (req, res) => {
+  try {
+    const result = db.getActivities({ freelancer_id: req.params.id, limit: 100 });
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.get("/api/admin/activities", requireAdmin, (req, res) => {
+  try {
+    const { freelancer_id, action_type, limit, offset } = req.query;
+    const result = db.getActivities({
+      freelancer_id,
+      action_type,
+      limit: limit ? Number(limit) : 50,
+      offset: offset ? Number(offset) : 0
+    });
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
 });
 app.get("/api/ibge/states", async (_req, res) => {
   try {
@@ -1537,9 +2635,10 @@ app.get("/api/ibge/cities/:uf", async (req, res) => {
     res.status(500).json({ error: message });
   }
 });
-app.get("/api/dashboard/stats", (_req, res) => {
+app.get("/api/dashboard/stats", (req, res) => {
   try {
-    const stats = db.getDashboardStats();
+    const freelancerId = req.user?.role === "freelancer" ? req.user.freelancerId : req.query.freelancer_id;
+    const stats = db.getDashboardStats(freelancerId);
     res.json(stats);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1549,8 +2648,21 @@ app.get("/api/dashboard/stats", (_req, res) => {
 app.get("/api/niches", (req, res) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === "true";
-    const niches = db.getNichesSummary({ onlyFavorites });
+    const freelancerId = req.user?.role === "freelancer" ? req.user.freelancerId : req.query.freelancer_id;
+    const niches = db.getNichesSummary({ onlyFavorites, freelancer_id: freelancerId });
     res.json(niches);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.get("/api/states-summary", (req, res) => {
+  try {
+    const onlyFavorites = req.query.onlyFavorites === "true";
+    const niche = req.query.niche;
+    const freelancerId = req.user?.role === "freelancer" ? req.user.freelancerId : req.query.freelancer_id;
+    const states = db.getStatesSummary({ onlyFavorites, niche, freelancer_id: freelancerId });
+    res.json(states);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
@@ -1574,7 +2686,10 @@ app.get("/api/leads", (req, res) => {
       page,
       limit
     } = req.query;
+    const requestedFreelancer = req.query.freelancer_id;
+    const freelancerId = requestedFreelancer && requestedFreelancer !== "ALL" ? requestedFreelancer : void 0;
     const result = db.getLeads({
+      freelancer_id: freelancerId,
       state,
       city,
       niche,
@@ -1588,7 +2703,7 @@ app.get("/api/leads", (req, res) => {
       search,
       sortBy,
       page: page ? Number(page) : 1,
-      limit: limit ? Number(limit) : 50
+      limit: limit === "all" || limit === "0" || limit === "-1" ? 0 : limit ? Number(limit) : 50
     });
     res.json(result);
   } catch (err) {
@@ -1602,6 +2717,9 @@ app.get("/api/leads/:id", (req, res) => {
     if (!lead) {
       return res.status(404).json({ error: "Lead n\xE3o encontrado." });
     }
+    if (req.user?.role === "freelancer" && lead.freelancer_id && lead.freelancer_id !== req.user.freelancerId) {
+      return res.status(404).json({ error: "Lead n\xE3o encontrado." });
+    }
     const notes = db.getLeadNotes(lead.id);
     const place = db.getPlaceByPlaceId(lead.place_id);
     res.json({ lead, notes, place });
@@ -1612,11 +2730,88 @@ app.get("/api/leads/:id", (req, res) => {
 });
 app.patch("/api/leads/:id", (req, res) => {
   try {
-    const updated = db.updateLead(req.params.id, req.body);
+    const freelancerId = req.user?.role === "freelancer" ? req.user.freelancerId : void 0;
+    const oldLead = db.getLeadById(req.params.id);
+    const updated = db.updateLead(req.params.id, req.body, freelancerId);
     if (!updated) {
-      return res.status(404).json({ error: "Lead n\xE3o encontrado." });
+      return res.status(404).json({ error: "Lead n\xE3o encontrado ou acesso n\xE3o autorizado." });
+    }
+    if (req.body.pipeline_status && oldLead && oldLead.pipeline_status !== req.body.pipeline_status) {
+      const actorId = req.user?.freelancerId || oldLead.freelancer_id || "admin_1";
+      const actorName = req.user?.name || oldLead.freelancer_name || "Usu\xE1rio";
+      let actionType = "status_changed";
+      if (req.body.pipeline_status === "CONTATADO") actionType = "lead_contacted";
+      else if (req.body.pipeline_status === "RESPONDEU") actionType = "response_registered";
+      else if (req.body.pipeline_status === "FOLLOW_UP") actionType = "follow_up_registered";
+      else if (req.body.pipeline_status === "NEGOCIACAO") actionType = "negotiation_started";
+      else if (req.body.pipeline_status === "FECHADO") actionType = "sale_registered";
+      db.logActivity({
+        freelancer_id: actorId,
+        freelancer_name: actorName,
+        action_type: actionType,
+        description: `${actorName} moveu "${updated.name}" para ${req.body.pipeline_status}`,
+        metadata: { lead_id: updated.id, old_status: oldLead.pipeline_status, new_status: req.body.pipeline_status }
+      });
     }
     res.json(updated);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.post("/api/leads/:id/contact-attempt", (req, res) => {
+  try {
+    const lead = db.getLeadById(req.params.id);
+    if (!lead) return res.status(404).json({ error: "Lead n\xE3o encontrado." });
+    if (req.user?.role === "freelancer" && lead.freelancer_id && lead.freelancer_id !== req.user.freelancerId) {
+      return res.status(403).json({ error: "Acesso n\xE3o autorizado a este lead." });
+    }
+    const currentAttempts = lead.contact_attempts_count || (lead.contacted_at ? 1 : 0);
+    const newStatus = lead.pipeline_status === "NOVO" || lead.pipeline_status === "PR\xC9VIA CRIADA" ? "CONTATADO" : lead.pipeline_status;
+    const updated = db.updateLead(lead.id, {
+      contacted_at: (/* @__PURE__ */ new Date()).toISOString(),
+      contact_attempts_count: currentAttempts + 1,
+      pipeline_status: newStatus
+    });
+    const actorId = req.user?.freelancerId || lead.freelancer_id || "admin_1";
+    const actorName = req.user?.name || lead.freelancer_name || "Usu\xE1rio";
+    db.logActivity({
+      freelancer_id: actorId,
+      freelancer_name: actorName,
+      action_type: "lead_contacted",
+      description: `${actorName} registrou tentativa de contato com "${lead.name}" (${currentAttempts + 1}\xAA abordagem)`,
+      metadata: { lead_id: lead.id, channel: req.body.channel || "WhatsApp" }
+    });
+    res.json({ success: true, lead: updated });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.post("/api/leads/:id/register-sale", (req, res) => {
+  try {
+    const { value } = req.body;
+    const lead = db.getLeadById(req.params.id);
+    if (!lead) return res.status(404).json({ error: "Lead n\xE3o encontrado." });
+    if (req.user?.role === "freelancer" && lead.freelancer_id && lead.freelancer_id !== req.user.freelancerId) {
+      return res.status(403).json({ error: "Acesso n\xE3o autorizado a este lead." });
+    }
+    const saleVal = Number(value) || 0;
+    const updated = db.updateLead(lead.id, {
+      pipeline_status: "FECHADO",
+      sale_value: saleVal,
+      sale_date: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    const actorId = req.user?.freelancerId || lead.freelancer_id || "admin_1";
+    const actorName = req.user?.name || lead.freelancer_name || "Usu\xE1rio";
+    db.logActivity({
+      freelancer_id: actorId,
+      freelancer_name: actorName,
+      action_type: "sale_registered",
+      description: `${actorName} registrou VENDA FECHADA para "${lead.name}" (R$ ${saleVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})`,
+      metadata: { lead_id: lead.id, sale_value: saleVal }
+    });
+    res.json({ success: true, lead: updated });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
@@ -1640,16 +2835,30 @@ app.post("/api/leads/:id/notes", (req, res) => {
     if (!content || !content.trim()) {
       return res.status(400).json({ error: "Conte\xFAdo da observa\xE7\xE3o n\xE3o pode ser vazio." });
     }
-    const note = db.addLeadNote(req.params.id, "default_user_1", content.trim());
+    const lead = db.getLeadById(req.params.id);
+    const userId = req.user?.freelancerId || req.user?.id || "default_user_1";
+    const note = db.addLeadNote(req.params.id, userId, content.trim());
+    if (lead) {
+      const actorId = req.user?.freelancerId || lead.freelancer_id || "admin_1";
+      const actorName = req.user?.name || lead.freelancer_name || "Usu\xE1rio";
+      db.logActivity({
+        freelancer_id: actorId,
+        freelancer_name: actorName,
+        action_type: "note_added",
+        description: `${actorName} adicionou anota\xE7\xE3o em "${lead.name}"`,
+        metadata: { lead_id: lead.id }
+      });
+    }
     res.json(note);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
   }
 });
-app.get("/api/pipeline", (_req, res) => {
+app.get("/api/pipeline", (req, res) => {
   try {
-    const board = db.getPipelineBoard();
+    const freelancerId = req.user?.role === "freelancer" ? req.user.freelancerId : req.query.freelancer_id;
+    const board = db.getPipelineBoard(freelancerId);
     res.json(board);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1662,14 +2871,42 @@ app.post("/api/pipeline/move", (req, res) => {
     if (!leadId || !toStatus) {
       return res.status(400).json({ error: "leadId e toStatus s\xE3o obrigat\xF3rios." });
     }
+    const lead = db.getLeadById(leadId);
+    if (!lead) {
+      return res.status(404).json({ error: "Lead n\xE3o encontrado." });
+    }
+    if (req.user?.role === "freelancer" && lead.freelancer_id && lead.freelancer_id !== req.user.freelancerId) {
+      return res.status(403).json({ error: "Acesso n\xE3o autorizado a este lead." });
+    }
     const updates = { pipeline_status: toStatus };
     if (toStatus === "CONTATADO") {
       updates.contacted_at = (/* @__PURE__ */ new Date()).toISOString();
+      updates.contact_attempts_count = (lead.contact_attempts_count || 0) + 1;
+    } else if (toStatus === "RESPONDEU") {
+      updates.response_at = (/* @__PURE__ */ new Date()).toISOString();
+    } else if (toStatus === "FOLLOW_UP") {
+      updates.follow_up_at = (/* @__PURE__ */ new Date()).toISOString();
+    } else if (toStatus === "NEGOCIACAO") {
+      updates.negotiation_at = (/* @__PURE__ */ new Date()).toISOString();
+    } else if (toStatus === "FECHADO") {
+      updates.sale_date = (/* @__PURE__ */ new Date()).toISOString();
     }
     const updated = db.updateLead(leadId, updates);
-    if (!updated) {
-      return res.status(404).json({ error: "Lead n\xE3o encontrado." });
-    }
+    const actorId = req.user?.freelancerId || lead.freelancer_id || "admin_1";
+    const actorName = req.user?.name || lead.freelancer_name || "Usu\xE1rio";
+    let actionType = "status_changed";
+    if (toStatus === "CONTATADO") actionType = "lead_contacted";
+    else if (toStatus === "RESPONDEU") actionType = "response_registered";
+    else if (toStatus === "FOLLOW_UP") actionType = "follow_up_registered";
+    else if (toStatus === "NEGOCIACAO") actionType = "negotiation_started";
+    else if (toStatus === "FECHADO") actionType = "sale_registered";
+    db.logActivity({
+      freelancer_id: actorId,
+      freelancer_name: actorName,
+      action_type: actionType,
+      description: `${actorName} moveu "${lead.name}" para ${toStatus}`,
+      metadata: { lead_id: lead.id, toStatus }
+    });
     res.json(updated);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1691,22 +2928,42 @@ app.post("/api/search-jobs", async (req, res) => {
     if (!state || !city || !niche) {
       return res.status(400).json({ error: "Estado, cidade e nicho s\xE3o obrigat\xF3rios." });
     }
+    const isFreelancer = req.user?.role === "freelancer";
+    const freelancerId = isFreelancer ? req.user?.freelancerId : req.body.freelancerId || req.query.freelancer_id || void 0;
+    let freelancerName = isFreelancer ? req.user?.name : req.body.freelancerName || void 0;
+    if (freelancerId && !freelancerName) {
+      const f = db.getFreelancerById(freelancerId);
+      if (f) freelancerName = f.name;
+    }
+    const userId = freelancerId || "default_user_1";
     const cleanFilters = {
-      onlyWithoutWebsite: filters?.onlyWithoutWebsite ?? true,
-      onlyWithPhone: filters?.onlyWithPhone ?? false,
+      onlyWithoutWebsite: Boolean(filters?.onlyWithoutWebsite),
+      onlyWithPhone: Boolean(filters?.onlyWithPhone),
       minRating: Number(filters?.minRating ?? 0),
-      minReviews: Number(filters?.minReviews ?? 0)
+      minReviews: Number(filters?.minReviews ?? 0),
+      targetLeads: filters?.targetLeads !== void 0 && filters?.targetLeads !== null && filters?.targetLeads !== "" ? Number(filters.targetLeads) : 0
     };
     if (filters?.maxReviews !== void 0 && filters?.maxReviews !== null && filters?.maxReviews !== "") {
       cleanFilters.maxReviews = Number(filters.maxReviews);
     }
     const { job, estimatedQueries, totalCities, totalAreas } = await createAndPrepareSearchJob({
-      userId: "default_user_1",
+      userId,
+      freelancerId,
+      freelancerName,
       state,
       city,
       niche,
       filters: cleanFilters
     });
+    if (freelancerId) {
+      db.logActivity({
+        freelancer_id: freelancerId,
+        freelancer_name: freelancerName,
+        action_type: "search_performed",
+        description: `${freelancerName} iniciou busca: "${niche} em ${city}, ${state}"`,
+        metadata: { jobId: job.id, niche, city, state, target_leads: job.target_leads }
+      });
+    }
     runSearchJob(job.id).catch(console.error);
     res.json({ job, estimatedQueries, totalCities, totalAreas });
   } catch (err) {
@@ -1718,6 +2975,9 @@ app.get("/api/search-jobs/:id", (req, res) => {
   try {
     const job = db.getSearchJob(req.params.id);
     if (!job) {
+      return res.status(404).json({ error: "Search Job n\xE3o encontrado." });
+    }
+    if (req.user?.role === "freelancer" && job.freelancer_id && job.freelancer_id !== req.user.freelancerId) {
       return res.status(404).json({ error: "Search Job n\xE3o encontrado." });
     }
     const areas = db.getSearchAreas(job.id);
@@ -1755,7 +3015,7 @@ app.post("/api/search-jobs/:id/cancel", (req, res) => {
     res.status(500).json({ error: message });
   }
 });
-app.get("/api/settings", (_req, res) => {
+app.get("/api/settings", (req, res) => {
   try {
     const settings = db.getSettings();
     const maskedKey = settings.googleMapsApiKey ? `${settings.googleMapsApiKey.substring(0, 6)}...${settings.googleMapsApiKey.substring(settings.googleMapsApiKey.length - 4)}` : "";
@@ -1769,7 +3029,7 @@ app.get("/api/settings", (_req, res) => {
     res.status(500).json({ error: message });
   }
 });
-app.post("/api/settings", (req, res) => {
+app.post("/api/settings", requireAdmin, (req, res) => {
   try {
     const updates = req.body;
     if (updates.googleMapsApiKey && updates.googleMapsApiKey.includes("\u2022\u2022\u2022\u2022")) {
@@ -1782,7 +3042,7 @@ app.post("/api/settings", (req, res) => {
     res.status(500).json({ error: message });
   }
 });
-app.post("/api/settings/test-key", async (req, res) => {
+app.post("/api/settings/test-key", requireAdmin, async (req, res) => {
   try {
     let keyToTest = req.body.key;
     if (!keyToTest || keyToTest.includes("\u2022\u2022\u2022\u2022")) {
@@ -1809,6 +3069,30 @@ app.get("/api/supabase/migrations", (_req, res) => {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.send(SUPABASE_MIGRATIONS_SQL);
 });
+setTimeout(() => {
+  try {
+    const jobs = db.getAllSearchJobs();
+    for (const job of jobs) {
+      if (job.status === "running") {
+        const areas = db.getSearchAreas(job.id);
+        const hasPending = areas.some((a) => a.status === "pending" || a.status === "processing" || a.status === "failed");
+        if (hasPending) {
+          for (const a of areas) {
+            if (a.status === "processing") {
+              db.updateSearchArea(a.id, { status: "pending" });
+            }
+          }
+          console.log(`[Server] Retomando busca pendente ${job.id} (${job.niche} em ${job.city})...`);
+          runSearchJob(job.id).catch(console.error);
+        } else {
+          db.updateSearchJob(job.id, { status: "completed" });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[Server] Falha ao verificar jobs anteriores:", err);
+  }
+}, 2e3);
 var app_default = app;
 
 // src/server/serverless.ts

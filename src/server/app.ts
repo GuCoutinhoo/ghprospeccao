@@ -70,8 +70,54 @@ declare global {
   }
 }
 
-// Middleware para resolução de identidade do usuário - ACESSO DIRETO SEM RESTRIÇÕES
+// Middleware para resolução de identidade do usuário
 app.use('/api', (req: Request, _res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization || (req.headers['x-access-token'] as string);
+  const token = authHeader ? (authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim()) : '';
+
+  if (token && (token.startsWith('free_sess_') || freelancerSessions.has(token))) {
+    const session = freelancerSessions.get(token);
+    let freelancerId = session?.freelancerId;
+    if (!freelancerId && token.startsWith('free_sess_')) {
+      const rest = token.substring('free_sess_'.length);
+      const cleanTokenRest = rest.replace(/_\d+_[a-z0-9]+$/i, '').replace(/_instant$/i, '');
+      freelancerId = cleanTokenRest;
+    }
+
+    if (freelancerId) {
+      let freelancer = db.getFreelancerById(freelancerId);
+      if (!freelancer) {
+        freelancer = db.getFreelancerByAccessCode(freelancerId);
+      }
+      if (!freelancer && freelancerId.startsWith('free_')) {
+        freelancer = db.getFreelancerByAccessCode(freelancerId.substring(5));
+      }
+      if (!freelancer && freelancerId && freelancerId.length >= 2) {
+        const code = freelancerId.replace(/^free_/, '').toLowerCase();
+        const formattedName = code.charAt(0).toUpperCase() + code.slice(1);
+        freelancer = db.createFreelancer({
+          name: formattedName,
+          email: `${code}@ghprospeccao.com`,
+          access_code: code,
+          status: 'active',
+        });
+      }
+      if (freelancer) {
+        req.user = {
+          role: 'freelancer',
+          id: freelancer.id,
+          freelancerId: freelancer.id,
+          name: freelancer.name,
+          email: freelancer.email,
+          freelancer,
+        };
+        db.updateFreelancer(freelancer.id, { last_activity_at: new Date().toISOString() });
+        return next();
+      }
+    }
+  }
+
+  // Padrão: Admin
   req.user = {
     role: 'admin',
     id: 'admin_1',
@@ -218,6 +264,18 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     } catch (err) {
       console.warn('[Server] Falha ao sincronizar Firestore ao verificar código:', err);
     }
+  }
+
+  // Auto-criação suave se o código foi digitado na URL (ex: /f/andre) e ainda não constava
+  if (!freelancer && accessCode && accessCode.trim().length >= 2) {
+    const cleanCode = accessCode.trim().toLowerCase();
+    const formattedName = cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1);
+    freelancer = db.createFreelancer({
+      name: formattedName,
+      email: `${cleanCode}@ghprospeccao.com`,
+      access_code: cleanCode,
+      status: 'active',
+    });
   }
 
   if (!freelancer) {

@@ -260,21 +260,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center justify-between rounded-lg p-2 bg-neutral-50/80">
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="h-7 w-7 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                GS
+                {isAdmin ? 'GS' : (freelancer?.name ? freelancer.name.substring(0, 2).toUpperCase() : 'FR')}
               </div>
               <div className="overflow-hidden">
                 <div className="text-xs font-semibold text-neutral-900 truncate">
-                  Gustavo Santos
+                  {isAdmin ? 'Gustavo Santos' : (freelancer?.name || 'Freelancer')}
                 </div>
                 <div className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Acesso Direto Liberado
+                  {isAdmin ? 'Administrador Geral' : 'Workspace Ativo'}
                 </div>
               </div>
             </div>
-            <span className="text-[10px] font-mono font-bold bg-neutral-200 text-neutral-700 px-1.5 py-0.5 rounded">
-              Livre
-            </span>
+            {!isAdmin ? (
+              <button
+                type="button"
+                onClick={onLogout}
+                title="Sair do workspace do freelancer e ir para o Painel Geral"
+                className="text-[10px] font-semibold text-neutral-600 hover:text-neutral-900 bg-neutral-200 hover:bg-neutral-300 px-2 py-1 rounded transition-colors cursor-pointer"
+              >
+                Painel Geral
+              </button>
+            ) : (
+              <span className="text-[10px] font-mono font-bold bg-neutral-200 text-neutral-700 px-1.5 py-0.5 rounded">
+                Livre
+              </span>
+            )}
           </div>
         </div>
       </aside>
