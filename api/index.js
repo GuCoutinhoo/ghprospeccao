@@ -2637,7 +2637,12 @@ app.get("/api/ibge/cities/:uf", async (req, res) => {
 });
 app.get("/api/dashboard/stats", (req, res) => {
   try {
-    const freelancerId = req.user?.role === "freelancer" ? req.user.freelancerId : req.query.freelancer_id;
+    let freelancerId = void 0;
+    if (req.user?.role === "freelancer" && req.user.freelancerId) {
+      freelancerId = req.user.freelancerId;
+    } else if (req.query.freelancer_id && req.query.freelancer_id !== "ALL") {
+      freelancerId = req.query.freelancer_id;
+    }
     const stats = db.getDashboardStats(freelancerId);
     res.json(stats);
   } catch (err) {
@@ -2648,7 +2653,12 @@ app.get("/api/dashboard/stats", (req, res) => {
 app.get("/api/niches", (req, res) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === "true";
-    const freelancerId = req.user?.role === "freelancer" ? req.user.freelancerId : req.query.freelancer_id;
+    let freelancerId = void 0;
+    if (req.user?.role === "freelancer" && req.user.freelancerId) {
+      freelancerId = req.user.freelancerId;
+    } else if (req.query.freelancer_id && req.query.freelancer_id !== "ALL") {
+      freelancerId = req.query.freelancer_id;
+    }
     const niches = db.getNichesSummary({ onlyFavorites, freelancer_id: freelancerId });
     res.json(niches);
   } catch (err) {
@@ -2660,7 +2670,12 @@ app.get("/api/states-summary", (req, res) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === "true";
     const niche = req.query.niche;
-    const freelancerId = req.user?.role === "freelancer" ? req.user.freelancerId : req.query.freelancer_id;
+    let freelancerId = void 0;
+    if (req.user?.role === "freelancer" && req.user.freelancerId) {
+      freelancerId = req.user.freelancerId;
+    } else if (req.query.freelancer_id && req.query.freelancer_id !== "ALL") {
+      freelancerId = req.query.freelancer_id;
+    }
     const states = db.getStatesSummary({ onlyFavorites, niche, freelancer_id: freelancerId });
     res.json(states);
   } catch (err) {
@@ -2686,8 +2701,12 @@ app.get("/api/leads", (req, res) => {
       page,
       limit
     } = req.query;
-    const requestedFreelancer = req.query.freelancer_id;
-    const freelancerId = requestedFreelancer && requestedFreelancer !== "ALL" ? requestedFreelancer : void 0;
+    let freelancerId = void 0;
+    if (req.user?.role === "freelancer" && req.user.freelancerId) {
+      freelancerId = req.user.freelancerId;
+    } else if (req.query.freelancer_id && req.query.freelancer_id !== "ALL") {
+      freelancerId = req.query.freelancer_id;
+    }
     const result = db.getLeads({
       freelancer_id: freelancerId,
       state,

@@ -189,6 +189,7 @@ export function computeStatsFromLeads(leads: Lead[]): DashboardStats {
 export function filterLeadsList(
   leads: Lead[],
   params: {
+    freelancer_id?: string;
     state?: string;
     city?: string;
     niche?: string;
@@ -206,6 +207,10 @@ export function filterLeadsList(
   }
 ): { leads: Lead[]; total: number; page: number; totalPages: number } {
   let filtered = [...leads];
+
+  if (params.freelancer_id && params.freelancer_id !== 'ALL') {
+    filtered = filtered.filter((l) => l.freelancer_id === params.freelancer_id);
+  }
 
   if (params.state && params.state !== 'ALL') {
     const targetState = params.state.toUpperCase().trim();

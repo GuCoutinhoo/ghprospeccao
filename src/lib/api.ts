@@ -330,9 +330,14 @@ export const api = {
   },
 
   // Dashboard
-  async getDashboardStats(): Promise<DashboardStats> {
+  async getDashboardStats(freelancer_id?: string): Promise<DashboardStats> {
     try {
-      const res = await fetch('/api/dashboard/stats', {
+      const session = getActiveFreelancerSession();
+      const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+      const url = targetFreelancerId && targetFreelancerId !== 'ALL'
+        ? `/api/dashboard/stats?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+        : '/api/dashboard/stats';
+      const res = await fetch(url, {
         headers: getAuthHeaders(),
       });
       if (res.ok) {
@@ -349,8 +354,9 @@ export const api = {
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
     const session = getActiveFreelancerSession();
-    if (session?.freelancer?.id) {
-      leads = leads.filter((l) => l.freelancer_id === session.freelancer.id);
+    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
+      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
     if (leads && leads.length > 0) {
       return computeStatsFromLeads(leads);
@@ -445,10 +451,13 @@ export const api = {
   },
 
   // Leads & Niches
-  async getNiches(params?: { onlyFavorites?: boolean }): Promise<{ niche: string; count: number }[]> {
+  async getNiches(params?: { onlyFavorites?: boolean; freelancer_id?: string }): Promise<{ niche: string; count: number }[]> {
     try {
+      const session = getActiveFreelancerSession();
+      const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
       const query = new URLSearchParams();
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
+      if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
       const url = `/api/niches${query.toString() ? '?' + query.toString() : ''}`;
       const res = await fetch(url, {
         headers: getAuthHeaders(),
@@ -466,8 +475,9 @@ export const api = {
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
     const session = getActiveFreelancerSession();
-    if (session?.freelancer?.id) {
-      leads = leads.filter((l) => l.freelancer_id === session.freelancer.id);
+    const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
+    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
+      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -482,11 +492,14 @@ export const api = {
       .sort((a, b) => b.count - a.count);
   },
 
-  async getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string }): Promise<{ state: string; count: number }[]> {
+  async getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string; freelancer_id?: string }): Promise<{ state: string; count: number }[]> {
     try {
+      const session = getActiveFreelancerSession();
+      const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
       const query = new URLSearchParams();
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
       if (params?.niche && params.niche !== 'ALL') query.set('niche', params.niche);
+      if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
       const url = `/api/states-summary${query.toString() ? '?' + query.toString() : ''}`;
       const res = await fetch(url, {
         headers: getAuthHeaders(),
@@ -504,8 +517,9 @@ export const api = {
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
     const session = getActiveFreelancerSession();
-    if (session?.freelancer?.id) {
-      leads = leads.filter((l) => l.freelancer_id === session.freelancer.id);
+    const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
+    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
+      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -526,6 +540,7 @@ export const api = {
   },
 
   async getLeads(params: {
+    freelancer_id?: string;
     state?: string;
     city?: string;
     niche?: string;
@@ -542,10 +557,13 @@ export const api = {
     limit?: number;
   }): Promise<{ leads: Lead[]; total: number; page: number; totalPages: number }> {
     try {
+      const session = getActiveFreelancerSession();
+      const targetFreelancerId = params.freelancer_id || session?.freelancer?.id;
       const query = new URLSearchParams();
       if (params.state) query.set('state', params.state);
       if (params.city) query.set('city', params.city);
       if (params.niche) query.set('niche', params.niche);
+      if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
       if (params.onlyWithoutWebsite) query.set('onlyWithoutWebsite', 'true');
       if (params.onlyWithPhone) query.set('onlyWithPhone', 'true');
       if (params.onlyFavorites) query.set('onlyFavorites', 'true');
@@ -574,8 +592,9 @@ export const api = {
     const allLeads = await fetchAllLeadsFromFirestore();
     const session = getActiveFreelancerSession();
     const effectiveParams = { ...params };
-    if (session?.freelancer?.id && !(effectiveParams as any).freelancer_id) {
-      (effectiveParams as any).freelancer_id = session.freelancer.id;
+    const targetFreelancerId = effectiveParams.freelancer_id || session?.freelancer?.id;
+    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
+      (effectiveParams as any).freelancer_id = targetFreelancerId;
     }
     return filterLeadsList(allLeads, effectiveParams);
   },
@@ -685,9 +704,14 @@ export const api = {
   },
 
   // Pipeline
-  async getPipeline(): Promise<Record<PipelineStatus, Lead[]>> {
+  async getPipeline(freelancer_id?: string): Promise<Record<PipelineStatus, Lead[]>> {
     try {
-      const res = await fetch('/api/pipeline', {
+      const session = getActiveFreelancerSession();
+      const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+      const url = targetFreelancerId && targetFreelancerId !== 'ALL'
+        ? `/api/pipeline?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+        : '/api/pipeline';
+      const res = await fetch(url, {
         headers: getAuthHeaders(),
       });
       if (res.ok) {
@@ -704,8 +728,9 @@ export const api = {
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
     const session = getActiveFreelancerSession();
-    if (session?.freelancer?.id) {
-      leads = leads.filter((l) => l.freelancer_id === session.freelancer.id);
+    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
+      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
     const board: Record<PipelineStatus, Lead[]> = {
       'NOVO': [],
