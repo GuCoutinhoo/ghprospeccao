@@ -51,6 +51,19 @@ function slugifyFreelancerName(name?: string | null): string {
     .replace(/^-+|-+$/g, '') || 'freelancer';
 }
 
+export function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
+  if (!leadFid || !targetFid) return false;
+  if (targetFid === 'ALL') return true;
+  const lf = leadFid.toLowerCase().trim();
+  const tf = targetFid.toLowerCase().trim();
+  if (lf === tf) return true;
+  const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
+  const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
+  return cleanLf === cleanTf;
+}
+
+const deletedFreelancerCodes = new Set<string>();
+
 function generateAccessCode(): string {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   let result = '';
@@ -194,10 +207,16 @@ class Database {
     try {
       const remote = await fetchAllFromFirestore();
       if (remote) {
-        // MERGE LEADS de forma segura (sem sobrescrever leads recém-criados localmente)
+        // MERGE LEADS de forma segura (sem sobrescrever leads recém-criados localmente e sem reviver leads de workspaces deletados)
         const leadMap = new Map<string, Lead>();
         for (const l of remote.leads || []) {
-          if (l && l.id) leadMap.set(l.id, l);
+          if (!l || !l.id) continue;
+          const fid = (l.freelancer_id || '').toLowerCase().trim();
+          if (fid && (deletedFreelancerCodes.has(fid) || deletedFreelancerCodes.has(`free_${fid}`))) {
+            deleteLeadFromFirestore(l.id).catch(() => {});
+            continue;
+          }
+          leadMap.set(l.id, l);
         }
         for (const l of this.data.leads || []) {
           if (!l || !l.id) continue;
@@ -436,7 +455,7 @@ class Database {
     let filtered = [...this.data.leads];
 
     if (params.freelancer_id && params.freelancer_id !== 'ALL') {
-      filtered = filtered.filter((l) => l.freelancer_id === params.freelancer_id);
+      filtered = filtered.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
     }
 
     if (params.state && params.state !== 'ALL') {
@@ -530,7 +549,7 @@ class Database {
     const counts: Record<string, { display: string; count: number }> = {};
     let leads = this.data.leads;
     if (params?.freelancer_id && params.freelancer_id !== 'ALL') {
-      leads = leads.filter((l) => l.freelancer_id === params.freelancer_id);
+      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -552,7 +571,7 @@ class Database {
     const counts: Record<string, number> = {};
     let leads = this.data.leads;
     if (params?.freelancer_id && params.freelancer_id !== 'ALL') {
-      leads = leads.filter((l) => l.freelancer_id === params.freelancer_id);
+      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -646,7 +665,7 @@ class Database {
 
     let list = this.data.leads;
     if (freelancer_id && freelancer_id !== 'ALL') {
-      list = list.filter((l) => l.freelancer_id === freelancer_id);
+      list = list.filter((l) => matchesFreelancerId(l.freelancer_id, freelancer_id));
     }
 
     // Ordenar leads por score decrescente dentro de cada coluna
@@ -669,7 +688,7 @@ class Database {
   public getDashboardStats(freelancer_id?: string): DashboardStats {
     let leads = this.data.leads;
     if (freelancer_id && freelancer_id !== 'ALL') {
-      leads = leads.filter((l) => l.freelancer_id === freelancer_id);
+      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, freelancer_id));
     }
     const totalLeads = leads.length;
     const newLeads = leads.filter((l) => l.pipeline_status === 'NOVO').length;
@@ -851,24 +870,65 @@ class Database {
     const now = new Date().toISOString();
 
     // Garante que o novo workspace comece 100% LIMPO (zero leads herdados de criações anteriores)
-    const codesToClean = [id, code, `free_${code}`];
-    const oldLeads = (this.data.leads || []).filter((l) => codesToClean.includes(l.freelancer_id || ''));
+    deletedFreelancerCodes.delete(code.toLowerCase());
+    deletedFreelancerCodes.delete(id.toLowerCase());
+
+    const rawCodesToClean = [
+      id,
+      code,
+      `free_${code}`,
+      slugifyFreelancerName(rawName),
+      `free_${slugifyFreelancerName(rawName)}`,
+    ].filter(Boolean) as string[];
+    const codesToClean = rawCodesToClean.map((c) => c.toLowerCase());
+
+    const oldLeads = (this.data.leads || []).filter(
+      (l) =>
+        matchesFreelancerId(l.freelancer_id, id) ||
+        matchesFreelancerId(l.freelancer_id, code) ||
+        codesToClean.includes((l.freelancer_id || '').toLowerCase())
+    );
     for (const l of oldLeads) {
       deleteLeadFromFirestore(l.id).catch(() => {});
     }
-    this.data.leads = (this.data.leads || []).filter((l) => !codesToClean.includes(l.freelancer_id || ''));
+    this.data.leads = (this.data.leads || []).filter(
+      (l) =>
+        !matchesFreelancerId(l.freelancer_id, id) &&
+        !matchesFreelancerId(l.freelancer_id, code) &&
+        !codesToClean.includes((l.freelancer_id || '').toLowerCase())
+    );
 
-    const oldJobs = (this.data.search_jobs || []).filter((j) => codesToClean.includes(j.freelancer_id || ''));
+    const oldJobs = (this.data.search_jobs || []).filter(
+      (j) =>
+        matchesFreelancerId(j.freelancer_id, id) ||
+        matchesFreelancerId(j.freelancer_id, code) ||
+        codesToClean.includes((j.freelancer_id || '').toLowerCase())
+    );
     for (const j of oldJobs) {
       deleteJobFromFirestore(j.id).catch(() => {});
     }
-    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !codesToClean.includes(j.freelancer_id || ''));
+    this.data.search_jobs = (this.data.search_jobs || []).filter(
+      (j) =>
+        !matchesFreelancerId(j.freelancer_id, id) &&
+        !matchesFreelancerId(j.freelancer_id, code) &&
+        !codesToClean.includes((j.freelancer_id || '').toLowerCase())
+    );
 
-    const oldActivities = (this.data.activities || []).filter((a) => codesToClean.includes(a.freelancer_id || ''));
+    const oldActivities = (this.data.activities || []).filter(
+      (a) =>
+        matchesFreelancerId(a.freelancer_id, id) ||
+        matchesFreelancerId(a.freelancer_id, code) ||
+        codesToClean.includes((a.freelancer_id || '').toLowerCase())
+    );
     for (const a of oldActivities) {
       deleteActivityFromFirestore(a.id).catch(() => {});
     }
-    this.data.activities = (this.data.activities || []).filter((a) => !codesToClean.includes(a.freelancer_id || ''));
+    this.data.activities = (this.data.activities || []).filter(
+      (a) =>
+        !matchesFreelancerId(a.freelancer_id, id) &&
+        !matchesFreelancerId(a.freelancer_id, code) &&
+        !codesToClean.includes((a.freelancer_id || '').toLowerCase())
+    );
 
     const freelancer: Freelancer = {
       id,
@@ -975,28 +1035,70 @@ class Database {
     const idx = (this.data.freelancers || []).findIndex((f) => f.id === id);
     if (idx === -1) return false;
     const removed = this.data.freelancers.splice(idx, 1)[0];
-    const codes = [id, removed.access_code, `free_${removed.access_code}`].filter(Boolean);
+    const rawCodes = [
+      id,
+      removed.access_code,
+      `free_${removed.access_code}`,
+      slugifyFreelancerName(removed.name),
+      `free_${slugifyFreelancerName(removed.name)}`,
+    ].filter(Boolean) as string[];
+
+    const codes = rawCodes.map((c) => c.toLowerCase());
+    for (const c of codes) {
+      deletedFreelancerCodes.add(c);
+      deletedFreelancerCodes.add(`free_${c}`);
+    }
 
     // 1. Remove e deleta TODOS os leads vinculados a este freelancer/workspace (localmente e no Firestore)
-    const leadsToDelete = (this.data.leads || []).filter((l) => codes.includes(l.freelancer_id || ''));
+    const leadsToDelete = (this.data.leads || []).filter(
+      (l) =>
+        matchesFreelancerId(l.freelancer_id, id) ||
+        matchesFreelancerId(l.freelancer_id, removed.access_code) ||
+        codes.includes((l.freelancer_id || '').toLowerCase())
+    );
     for (const lead of leadsToDelete) {
       deleteLeadFromFirestore(lead.id).catch(() => {});
     }
-    this.data.leads = (this.data.leads || []).filter((l) => !codes.includes(l.freelancer_id || ''));
+    this.data.leads = (this.data.leads || []).filter(
+      (l) =>
+        !matchesFreelancerId(l.freelancer_id, id) &&
+        !matchesFreelancerId(l.freelancer_id, removed.access_code) &&
+        !codes.includes((l.freelancer_id || '').toLowerCase())
+    );
 
     // 2. Remove e deleta todas as buscas vinculadas a este freelancer/workspace
-    const jobsToDelete = (this.data.search_jobs || []).filter((j) => codes.includes(j.freelancer_id || ''));
+    const jobsToDelete = (this.data.search_jobs || []).filter(
+      (j) =>
+        matchesFreelancerId(j.freelancer_id, id) ||
+        matchesFreelancerId(j.freelancer_id, removed.access_code) ||
+        codes.includes((j.freelancer_id || '').toLowerCase())
+    );
     for (const job of jobsToDelete) {
       deleteJobFromFirestore(job.id).catch(() => {});
     }
-    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !codes.includes(j.freelancer_id || ''));
+    this.data.search_jobs = (this.data.search_jobs || []).filter(
+      (j) =>
+        !matchesFreelancerId(j.freelancer_id, id) &&
+        !matchesFreelancerId(j.freelancer_id, removed.access_code) &&
+        !codes.includes((j.freelancer_id || '').toLowerCase())
+    );
 
     // 3. Remove e deleta atividades vinculadas a este freelancer
-    const activitiesToDelete = (this.data.activities || []).filter((a) => codes.includes(a.freelancer_id || ''));
+    const activitiesToDelete = (this.data.activities || []).filter(
+      (a) =>
+        matchesFreelancerId(a.freelancer_id, id) ||
+        matchesFreelancerId(a.freelancer_id, removed.access_code) ||
+        codes.includes((a.freelancer_id || '').toLowerCase())
+    );
     for (const act of activitiesToDelete) {
       deleteActivityFromFirestore(act.id).catch(() => {});
     }
-    this.data.activities = (this.data.activities || []).filter((a) => !codes.includes(a.freelancer_id || ''));
+    this.data.activities = (this.data.activities || []).filter(
+      (a) =>
+        !matchesFreelancerId(a.freelancer_id, id) &&
+        !matchesFreelancerId(a.freelancer_id, removed.access_code) &&
+        !codes.includes((a.freelancer_id || '').toLowerCase())
+    );
 
     this.save();
     deleteFreelancerFromFirestore(id).catch(() => {});
@@ -1017,25 +1119,56 @@ class Database {
   public cleanFreelancerWorkspace(id: string): { leadsRemoved: number } {
     const f = this.getFreelancerById(id) || this.getFreelancerByAccessCode(id);
     const code = f?.access_code || id;
-    const codes = [id, code, `free_${code}`, f?.id].filter(Boolean) as string[];
+    const rawCodes = [id, code, `free_${code}`, f?.id, slugifyFreelancerName(f?.name)].filter(Boolean) as string[];
+    const codes = rawCodes.map((c) => c.toLowerCase());
 
-    const leadsToDelete = (this.data.leads || []).filter((l) => codes.includes(l.freelancer_id || ''));
+    const leadsToDelete = (this.data.leads || []).filter(
+      (l) =>
+        matchesFreelancerId(l.freelancer_id, id) ||
+        matchesFreelancerId(l.freelancer_id, code) ||
+        codes.includes((l.freelancer_id || '').toLowerCase())
+    );
     for (const lead of leadsToDelete) {
       deleteLeadFromFirestore(lead.id).catch(() => {});
     }
-    this.data.leads = (this.data.leads || []).filter((l) => !codes.includes(l.freelancer_id || ''));
+    this.data.leads = (this.data.leads || []).filter(
+      (l) =>
+        !matchesFreelancerId(l.freelancer_id, id) &&
+        !matchesFreelancerId(l.freelancer_id, code) &&
+        !codes.includes((l.freelancer_id || '').toLowerCase())
+    );
 
-    const jobsToDelete = (this.data.search_jobs || []).filter((j) => codes.includes(j.freelancer_id || ''));
+    const jobsToDelete = (this.data.search_jobs || []).filter(
+      (j) =>
+        matchesFreelancerId(j.freelancer_id, id) ||
+        matchesFreelancerId(j.freelancer_id, code) ||
+        codes.includes((j.freelancer_id || '').toLowerCase())
+    );
     for (const job of jobsToDelete) {
       deleteJobFromFirestore(job.id).catch(() => {});
     }
-    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !codes.includes(j.freelancer_id || ''));
+    this.data.search_jobs = (this.data.search_jobs || []).filter(
+      (j) =>
+        !matchesFreelancerId(j.freelancer_id, id) &&
+        !matchesFreelancerId(j.freelancer_id, code) &&
+        !codes.includes((j.freelancer_id || '').toLowerCase())
+    );
 
-    const activitiesToDelete = (this.data.activities || []).filter((a) => codes.includes(a.freelancer_id || ''));
+    const activitiesToDelete = (this.data.activities || []).filter(
+      (a) =>
+        matchesFreelancerId(a.freelancer_id, id) ||
+        matchesFreelancerId(a.freelancer_id, code) ||
+        codes.includes((a.freelancer_id || '').toLowerCase())
+    );
     for (const act of activitiesToDelete) {
       deleteActivityFromFirestore(act.id).catch(() => {});
     }
-    this.data.activities = (this.data.activities || []).filter((a) => !codes.includes(a.freelancer_id || ''));
+    this.data.activities = (this.data.activities || []).filter(
+      (a) =>
+        !matchesFreelancerId(a.freelancer_id, id) &&
+        !matchesFreelancerId(a.freelancer_id, code) &&
+        !codes.includes((a.freelancer_id || '').toLowerCase())
+    );
 
     this.save();
     return { leadsRemoved: leadsToDelete.length };

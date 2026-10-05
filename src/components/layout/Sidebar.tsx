@@ -55,16 +55,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   // Ferramentas de Prospecção
-  const prospectingItems = [
-    { label: isAdmin ? 'Dashboard Geral' : 'Meu Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Buscar Leads', path: '/search', icon: Search },
-    { label: isAdmin ? 'Base de Leads' : 'Meus Leads', path: '/leads', icon: Users },
-    { label: 'Esteira Relâmpago', path: '/outreach', icon: Zap, badge: '⚡ 1-Click' },
-    { label: 'Modelos de Abordagem', path: '/templates', icon: MessageSquareQuote, badge: 'Copy' },
-    { label: 'Favoritos', path: '/favorites', icon: Heart },
-    { label: 'Pipeline Comercial', path: '/pipeline', icon: KanbanSquare },
-    ...(isAdmin ? [{ label: 'Configurações', path: '/settings', icon: Settings }] : []),
-  ];
+  const prospectingItems = isAdmin
+    ? [
+        { label: 'Dashboard Geral', path: '/dashboard', icon: LayoutDashboard },
+        { label: 'Buscar Leads', path: '/search', icon: Search },
+        { label: 'Base de Leads', path: '/leads', icon: Users },
+        { label: 'Esteira Relâmpago', path: '/outreach', icon: Zap, badge: '⚡ 1-Click' },
+        { label: 'Modelos de Abordagem', path: '/templates', icon: MessageSquareQuote, badge: 'Copy' },
+        { label: 'Favoritos', path: '/favorites', icon: Heart },
+        { label: 'Pipeline Comercial', path: '/pipeline', icon: KanbanSquare },
+        { label: 'Configurações', path: '/settings', icon: Settings },
+      ]
+    : [
+        { label: 'Meus Leads', path: '/leads', icon: Users },
+        { label: 'Buscar Leads', path: '/search', icon: Search },
+        { label: 'Esteira Relâmpago', path: '/outreach', icon: Zap, badge: '⚡ 1-Click' },
+        { label: 'Pipeline Comercial', path: '/pipeline', icon: KanbanSquare },
+        { label: 'Favoritos', path: '/favorites', icon: Heart },
+        { label: 'Modelos de Abordagem', path: '/templates', icon: MessageSquareQuote, badge: 'Copy' },
+        { label: 'Meu Dashboard', path: '/dashboard', icon: LayoutDashboard },
+      ];
 
   const handleNav = (path: string) => {
     onNavigate(path);

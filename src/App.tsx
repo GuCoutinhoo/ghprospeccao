@@ -131,7 +131,7 @@ function getInitialSession(): {
       role: 'freelancer',
       activeFreelancer: instantFreelancer,
       adminUser: null,
-      currentPath: '/dashboard',
+      currentPath: '/leads',
     };
   }
 
@@ -142,7 +142,7 @@ function getInitialSession(): {
       role: 'freelancer',
       activeFreelancer: freeSession.freelancer,
       adminUser: null,
-      currentPath: pathname === '/' || pathname.startsWith('/f/') ? '/dashboard' : pathname,
+      currentPath: pathname === '/' || pathname.startsWith('/f/') || pathname === '/dashboard' ? '/leads' : pathname,
     };
   }
 
@@ -232,14 +232,16 @@ export default function App() {
       return;
     }
 
-    // Se for código de um freelancer (ex: /f/andre) -> sincroniza com o backend
+    // Se for código de um freelancer (ex: /f/andre) -> sincroniza com o backend e abre direto em /leads
     if (cleanCode) {
+      setCurrentPath('/leads');
       api.verifyFreelancerLink(cleanCode)
         .then((res) => {
           if (res?.freelancer) {
             setActiveFreelancer(res.freelancer);
             setUserRole('freelancer');
             setIsAuthenticated(true);
+            setCurrentPath('/leads');
             try {
               localStorage.setItem('gh_freelancer_token', res.token);
               localStorage.setItem('gh_freelancer_session', JSON.stringify({ token: res.token, freelancer: res.freelancer }));
@@ -585,6 +587,8 @@ export default function App() {
               initialNicheFilter={leadsNicheFilter}
               initialStateFilter={leadsStateFilter}
               onStartSpeedOutreach={() => handleNavigate('/outreach')}
+              userRole={userRole}
+              activeFreelancer={activeFreelancer}
             />
           )}
 

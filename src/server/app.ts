@@ -586,10 +586,10 @@ app.get('/api/ibge/cities/:uf', async (req: Request, res: Response) => {
 app.get('/api/dashboard/stats', (req: Request, res: Response) => {
   try {
     let freelancerId: string | undefined = undefined;
-    if (req.user?.role === 'freelancer' && req.user.freelancerId) {
-      freelancerId = req.user.freelancerId;
-    } else if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
+    if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
       freelancerId = req.query.freelancer_id as string;
+    } else if (req.user?.role === 'freelancer') {
+      freelancerId = req.user.freelancerId || req.user.id;
     }
     const stats = db.getDashboardStats(freelancerId);
     res.json(stats);
@@ -604,10 +604,10 @@ app.get('/api/niches', (req: Request, res: Response) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === 'true';
     let freelancerId: string | undefined = undefined;
-    if (req.user?.role === 'freelancer' && req.user.freelancerId) {
-      freelancerId = req.user.freelancerId;
-    } else if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
+    if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
       freelancerId = req.query.freelancer_id as string;
+    } else if (req.user?.role === 'freelancer') {
+      freelancerId = req.user.freelancerId || req.user.id;
     }
     const niches = db.getNichesSummary({ onlyFavorites, freelancer_id: freelancerId });
     res.json(niches);
@@ -622,10 +622,10 @@ app.get('/api/states-summary', (req: Request, res: Response) => {
     const onlyFavorites = req.query.onlyFavorites === 'true';
     const niche = req.query.niche as string;
     let freelancerId: string | undefined = undefined;
-    if (req.user?.role === 'freelancer' && req.user.freelancerId) {
-      freelancerId = req.user.freelancerId;
-    } else if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
+    if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
       freelancerId = req.query.freelancer_id as string;
+    } else if (req.user?.role === 'freelancer') {
+      freelancerId = req.user.freelancerId || req.user.id;
     }
     const states = db.getStatesSummary({ onlyFavorites, niche, freelancer_id: freelancerId });
     res.json(states);
@@ -654,12 +654,12 @@ app.get('/api/leads', (req: Request, res: Response) => {
       limit,
     } = req.query;
 
-    // Se o usuário logado for freelancer, ISOLA ESTRITAMENTE para o seu workspace
+    // Se o usuário logado for freelancer ou se foi passado freelancer_id, ISOLA ESTRITAMENTE para o seu workspace
     let freelancerId: string | undefined = undefined;
-    if (req.user?.role === 'freelancer' && req.user.freelancerId) {
-      freelancerId = req.user.freelancerId;
-    } else if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
+    if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
       freelancerId = req.query.freelancer_id as string;
+    } else if (req.user?.role === 'freelancer') {
+      freelancerId = req.user.freelancerId || req.user.id;
     }
 
     const result = db.getLeads({
@@ -861,9 +861,12 @@ app.post('/api/leads/:id/notes', (req: Request, res: Response) => {
 // 7. PIPELINE (COM ISOLAMENTO)
 app.get('/api/pipeline', (req: Request, res: Response) => {
   try {
-    const freelancerId = req.user?.role === 'freelancer'
-      ? req.user.freelancerId
-      : (req.query.freelancer_id as string);
+    let freelancerId: string | undefined = undefined;
+    if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
+      freelancerId = req.query.freelancer_id as string;
+    } else if (req.user?.role === 'freelancer') {
+      freelancerId = req.user.freelancerId || req.user.id;
+    }
 
     const board = db.getPipelineBoard(freelancerId);
     res.json(board);

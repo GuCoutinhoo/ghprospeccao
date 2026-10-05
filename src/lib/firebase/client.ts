@@ -186,6 +186,17 @@ export function computeStatsFromLeads(leads: Lead[]): DashboardStats {
   };
 }
 
+function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
+  if (!leadFid || !targetFid) return false;
+  if (targetFid === 'ALL') return true;
+  const lf = leadFid.toLowerCase().trim();
+  const tf = targetFid.toLowerCase().trim();
+  if (lf === tf) return true;
+  const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
+  const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
+  return cleanLf === cleanTf;
+}
+
 export function filterLeadsList(
   leads: Lead[],
   params: {
@@ -209,7 +220,7 @@ export function filterLeadsList(
   let filtered = [...leads];
 
   if (params.freelancer_id && params.freelancer_id !== 'ALL') {
-    filtered = filtered.filter((l) => l.freelancer_id === params.freelancer_id);
+    filtered = filtered.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
   }
 
   if (params.state && params.state !== 'ALL') {

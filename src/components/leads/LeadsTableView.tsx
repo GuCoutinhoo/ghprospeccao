@@ -33,7 +33,7 @@ import {
   Layers,
   Heart,
 } from 'lucide-react';
-import { Lead, PipelineStatus } from '../../types';
+import { Lead, PipelineStatus, UserRole, Freelancer } from '../../types';
 import { api } from '../../lib/api';
 import { getScoreColorClass } from '../../lib/scoring/leadScore';
 import { formatBrazilianPhone, getWhatsAppUrl } from '../../utils/whatsapp';
@@ -74,6 +74,8 @@ interface LeadsTableViewProps {
   initialNicheFilter?: string;
   initialStateFilter?: string;
   onStartSpeedOutreach?: () => void;
+  userRole?: UserRole;
+  activeFreelancer?: Freelancer | null;
 }
 
 function getNicheIcon(niche: string) {
@@ -92,7 +94,13 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   initialNicheFilter,
   initialStateFilter,
   onStartSpeedOutreach,
+  userRole = 'admin',
+  activeFreelancer,
 }) => {
+  const effectiveFreelancerId = userRole === 'freelancer'
+    ? (activeFreelancer?.id || (activeFreelancer?.access_code ? `free_${activeFreelancer.access_code}` : undefined))
+    : undefined;
+
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [total, setTotal] = useState<number>(0);
@@ -144,16 +152,16 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     loadLeads();
     loadNiches();
     loadStates();
-  }, [page, pageSize, stateFilter, cityFilter, nicheFilter, statusFilter, onlyWithoutWebsite, onlyWithPhone, onlyFavorites, minScore, sortBy]);
+  }, [effectiveFreelancerId, page, pageSize, stateFilter, cityFilter, nicheFilter, statusFilter, onlyWithoutWebsite, onlyWithPhone, onlyFavorites, minScore, sortBy]);
 
   // Carrega contagem global no início
   useEffect(() => {
-    api.getLeads({ limit: 1 }).then((res) => {
+    api.getLeads({ freelancer_id: effectiveFreelancerId, limit: 1 }).then((res) => {
       if (res && typeof res.total === 'number') {
         setTotalOverallLeads(res.total);
       }
     }).catch(() => {});
-  }, []);
+  }, [effectiveFreelancerId]);
 
   // Monitora se há buscas rodando em segundo plano e recarrega em tempo real
   useEffect(() => {
@@ -189,11 +197,11 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, []);
+  }, [effectiveFreelancerId]);
 
   const loadNiches = async () => {
     try {
-      const data = await api.getNiches({ onlyFavorites });
+      const data = await api.getNiches({ onlyFavorites, freelancer_id: effectiveFreelancerId });
       setNiches(data);
     } catch (err) {
       console.error('Erro ao carregar categorias:', err);
@@ -205,6 +213,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
       const data = await api.getStatesSummary({
         onlyFavorites,
         niche: nicheFilter !== 'ALL' ? nicheFilter : undefined,
+        freelancer_id: effectiveFreelancerId,
       });
       setStatesSummary(data);
     } catch (err) {
@@ -216,6 +225,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     setLoading(true);
     try {
       const data = await api.getLeads({
+        freelancer_id: effectiveFreelancerId,
         state: stateFilter,
         city: cityFilter,
         niche: nicheFilter,
