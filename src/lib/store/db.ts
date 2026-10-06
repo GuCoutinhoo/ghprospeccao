@@ -168,6 +168,7 @@ class Database {
   };
 
   private initialized = false;
+  private firestoreHydrated = false;
   private initPromise: Promise<void> | null = null;
 
   constructor() {
@@ -227,7 +228,7 @@ class Database {
   }
 
   public async ensureInitialized(): Promise<void> {
-    if (this.initialized && this.data.leads && this.data.leads.length > 0 && this.data.freelancers && this.data.freelancers.length > 1) {
+    if (this.firestoreHydrated) {
       return;
     }
     if (this.initPromise) {
@@ -240,6 +241,7 @@ class Database {
       }
       try {
         await this.syncFromFirestore();
+        this.firestoreHydrated = true;
       } catch (syncErr) {
         console.warn('[DB] Erro ao sincronizar inicialização com Firestore:', syncErr);
       }
@@ -254,87 +256,12 @@ class Database {
     try {
       const remote = await fetchAllFromFirestore();
       if (remote) {
-        // MERGE LEADS de forma segura (sem sobrescrever leads recém-criados localmente e sem reviver leads de workspaces deletados)
-        const leadMap = new Map<string, Lead>();
-        for (const l of remote.leads || []) {
-          if (!l || !l.id) continue;
-          const fid = (l.freelancer_id || '').toLowerCase().trim();
-          const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
-          const targetFreelancer = (this.data.freelancers || []).find(
-            (f) => f.id.toLowerCase() === fid || f.access_code.toLowerCase() === cleanFid
-          );
-
-          // Se pertence a um freelancer que foi deletado ou não existe mais
-          if (fid && !targetFreelancer && (deletedFreelancerCodes.has(fid) || deletedFreelancerCodes.has(`free_${fid}`))) {
-            deleteLeadFromFirestore(l.id).catch(() => {});
-            continue;
-          }
-
-          // Se o freelancer existe, mas o lead foi criado ANTES do workspace atual ser criado:
-          // Trata-se de um lead órfão da workspace anterior de mesmo nome que foi excluída!
-          if (targetFreelancer && targetFreelancer.created_at && l.created_at) {
-            const leadTime = new Date(l.created_at).getTime();
-            const freeTime = new Date(targetFreelancer.created_at).getTime();
-            if (leadTime < freeTime - 2000) {
-              deleteLeadFromFirestore(l.id).catch(() => {});
-              continue;
-            }
-          }
-
-          leadMap.set(l.id, l);
+        // 1. MERGE SETTINGS
+        if (remote.settings) {
+          this.data.settings = { ...this.data.settings, ...remote.settings };
         }
-        for (const l of this.data.leads || []) {
-          if (!l || !l.id) continue;
-          const existing = leadMap.get(l.id);
-          if (!existing) {
-            leadMap.set(l.id, l);
-            syncLeadToFirestore(l).catch(() => {});
-          } else {
-            const localTime = new Date(l.updated_at || l.created_at || 0).getTime();
-            const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
-            if (localTime >= remoteTime) {
-              leadMap.set(l.id, l);
-            }
-          }
-        }
-        this.data.leads = Array.from(leadMap.values());
 
-        // MERGE PLACES
-        const placeMap = new Map<string, Place>();
-        for (const p of remote.places || []) {
-          if (p && p.id) placeMap.set(p.id, p);
-        }
-        for (const p of this.data.places || []) {
-          if (!p || !p.id) continue;
-          if (!placeMap.has(p.id)) {
-            placeMap.set(p.id, p);
-            syncPlaceToFirestore(p).catch(() => {});
-          }
-        }
-        this.data.places = Array.from(placeMap.values());
-
-        // MERGE JOBS
-        const jobMap = new Map<string, SearchJob>();
-        for (const j of remote.jobs || []) {
-          if (j && j.id) jobMap.set(j.id, j);
-        }
-        for (const j of this.data.search_jobs || []) {
-          if (!j || !j.id) continue;
-          const existing = jobMap.get(j.id);
-          if (!existing) {
-            jobMap.set(j.id, j);
-            syncJobToFirestore(j).catch(() => {});
-          } else {
-            const localTime = new Date(j.updated_at || j.created_at || 0).getTime();
-            const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
-            if (localTime >= remoteTime) {
-              jobMap.set(j.id, j);
-            }
-          }
-        }
-        this.data.search_jobs = Array.from(jobMap.values());
-
-        // MERGE FREELANCERS
+        // 2. MERGE FREELANCERS (ANTES dos leads para que os vínculos e acessos estejam atualizados)
         const demoFreeIds = ['free_7F4K92XQ', 'free_8HKS82MD', 'free_9YPL21BZ', 'free_4TRM67KV'];
         if (remote.freelancers && remote.freelancers.length > 0) {
           const freeMap = new Map<string, Freelancer>();
@@ -356,7 +283,64 @@ class Database {
           this.data.freelancers = (this.data.freelancers || []).filter((f) => !demoFreeIds.includes(f.id));
         }
 
-        // MERGE ACTIVITIES
+        // 3. MERGE LEADS (SEM deleção acidental na sincronização)
+        const leadMap = new Map<string, Lead>();
+        for (const l of remote.leads || []) {
+          if (!l || !l.id) continue;
+          leadMap.set(l.id, l);
+        }
+        for (const l of this.data.leads || []) {
+          if (!l || !l.id) continue;
+          const existing = leadMap.get(l.id);
+          if (!existing) {
+            leadMap.set(l.id, l);
+            syncLeadToFirestore(l).catch(() => {});
+          } else {
+            const localTime = new Date(l.updated_at || l.created_at || 0).getTime();
+            const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
+            if (localTime >= remoteTime) {
+              leadMap.set(l.id, l);
+            }
+          }
+        }
+        this.data.leads = Array.from(leadMap.values());
+
+        // 4. MERGE PLACES
+        const placeMap = new Map<string, Place>();
+        for (const p of remote.places || []) {
+          if (p && p.id) placeMap.set(p.id, p);
+        }
+        for (const p of this.data.places || []) {
+          if (!p || !p.id) continue;
+          if (!placeMap.has(p.id)) {
+            placeMap.set(p.id, p);
+            syncPlaceToFirestore(p).catch(() => {});
+          }
+        }
+        this.data.places = Array.from(placeMap.values());
+
+        // 5. MERGE JOBS
+        const jobMap = new Map<string, SearchJob>();
+        for (const j of remote.jobs || []) {
+          if (j && j.id) jobMap.set(j.id, j);
+        }
+        for (const j of this.data.search_jobs || []) {
+          if (!j || !j.id) continue;
+          const existing = jobMap.get(j.id);
+          if (!existing) {
+            jobMap.set(j.id, j);
+            syncJobToFirestore(j).catch(() => {});
+          } else {
+            const localTime = new Date(j.updated_at || j.created_at || 0).getTime();
+            const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
+            if (localTime >= remoteTime) {
+              jobMap.set(j.id, j);
+            }
+          }
+        }
+        this.data.search_jobs = Array.from(jobMap.values());
+
+        // 6. MERGE ACTIVITIES
         if (remote.activities && remote.activities.length > 0) {
           const actMap = new Map<string, Activity>();
           for (const a of remote.activities) {
@@ -380,20 +364,18 @@ class Database {
           );
         }
 
-        if (remote.settings) {
-          this.data.settings = { ...this.data.settings, ...remote.settings };
-        }
+        this.firestoreHydrated = true;
         this.save();
       }
       return {
-        leadsCount: this.data.leads.length,
-        placesCount: this.data.places.length,
+        leadsCount: (this.data.leads || []).length,
+        placesCount: (this.data.places || []).length,
       };
     } catch (err) {
-      console.warn('[DB] Falha na sincronização do Firestore:', err);
+      console.warn('[DB] Erro ao sincronizar com Firestore:', err);
       return {
-        leadsCount: this.data.leads.length,
-        placesCount: this.data.places.length,
+        leadsCount: (this.data.leads || []).length,
+        placesCount: (this.data.places || []).length,
       };
     }
   }
@@ -934,53 +916,9 @@ class Database {
     const id = `free_${code}`;
     const now = new Date().toISOString();
 
-    // Garante que o novo workspace comece 100% LIMPO e ZERADO
     // Remove qualquer rastro no Set de excluídos para não bloquear o novo cadastro
     deletedFreelancerCodes.delete(code.toLowerCase());
     deletedFreelancerCodes.delete(id.toLowerCase());
-
-    const rawCodesToClean = [
-      id,
-      code,
-      `free_${code}`,
-      slugifyFreelancerName(rawName),
-      `free_${slugifyFreelancerName(rawName)}`,
-    ].filter(Boolean) as string[];
-    const codesToClean = rawCodesToClean.map((c) => c.toLowerCase());
-
-    // 2. PURGA COMPLETA NO FIRESTORE antes de criar: qualquer resquício de leads, buscas ou atividades
-    try {
-      await deleteFreelancerAndAllDataFromFirestore(id, code, rawName);
-    } catch (err) {
-      console.warn('[DB] Erro na pré-purga de dados do Firestore para novo workspace:', err);
-    }
-
-    // 3. PURGA LOCAL: limpa qualquer lead antigo da memória/disco
-    this.data.leads = (this.data.leads || []).filter(
-      (l) =>
-        !matchesFreelancerId(l.freelancer_id, id) &&
-        !matchesFreelancerId(l.freelancer_id, code) &&
-        !matchesFreelancerId(l.user_id, id) &&
-        !matchesFreelancerId(l.user_id, code) &&
-        !codesToClean.includes((l.freelancer_id || '').toLowerCase()) &&
-        !codesToClean.includes((l.user_id || '').toLowerCase()) &&
-        (l.freelancer_name || '').toLowerCase() !== rawName.toLowerCase()
-    );
-
-    this.data.search_jobs = (this.data.search_jobs || []).filter(
-      (j) =>
-        !matchesFreelancerId(j.freelancer_id, id) &&
-        !matchesFreelancerId(j.freelancer_id, code) &&
-        !codesToClean.includes((j.freelancer_id || '').toLowerCase())
-    );
-
-    this.data.activities = (this.data.activities || []).filter(
-      (a) =>
-        !matchesFreelancerId(a.freelancer_id, id) &&
-        !matchesFreelancerId(a.freelancer_id, code) &&
-        !codesToClean.includes((a.freelancer_id || '').toLowerCase()) &&
-        (a.freelancer_name || '').toLowerCase() !== rawName.toLowerCase()
-    );
 
     const freelancer: Freelancer = {
       id,

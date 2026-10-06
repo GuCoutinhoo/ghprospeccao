@@ -92,15 +92,16 @@ app.use('/api', async (req: Request, _res: Response, next: NextFunction) => {
       if (!freelancer && freelancerId.startsWith('free_')) {
         freelancer = db.getFreelancerByAccessCode(freelancerId.substring(5));
       }
-      if (!freelancer && freelancerId && freelancerId.length >= 2) {
-        const code = freelancerId.replace(/^free_/, '').toLowerCase();
-        const formattedName = code.charAt(0).toUpperCase() + code.slice(1);
-        freelancer = await db.createFreelancer({
-          name: formattedName,
-          email: `${code}@ghprospeccao.com`,
-          access_code: code,
-          status: 'active',
-        });
+      if (!freelancer) {
+        try {
+          await db.syncFromFirestore();
+        } catch (syncErr) {
+          console.warn('[Server] Falha ao sincronizar com Firestore na autenticação:', syncErr);
+        }
+        freelancer =
+          db.getFreelancerById(freelancerId) ||
+          db.getFreelancerByAccessCode(freelancerId) ||
+          (freelancerId.startsWith('free_') ? db.getFreelancerByAccessCode(freelancerId.substring(5)) : undefined);
       }
       if (freelancer) {
         req.user = {
@@ -114,6 +115,12 @@ app.use('/api', async (req: Request, _res: Response, next: NextFunction) => {
         db.updateFreelancer(freelancer.id, { last_activity_at: new Date().toISOString() });
         return next();
       }
+
+      // Se mesmo após o Firestore o freelancer não existir, NUNCA cria e NUNCA apaga nada
+      return _res.status(401).json({
+        error: 'Sessão inválida',
+        message: 'Acesso do freelancer não encontrado ou revogado.',
+      });
     }
   }
 
@@ -264,18 +271,6 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     } catch (err) {
       console.warn('[Server] Falha ao sincronizar Firestore ao verificar código:', err);
     }
-  }
-
-  // Auto-criação suave se o código foi digitado na URL (ex: /f/andre) e ainda não constava
-  if (!freelancer && accessCode && accessCode.trim().length >= 2) {
-    const cleanCode = accessCode.trim().toLowerCase();
-    const formattedName = cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1);
-    freelancer = await db.createFreelancer({
-      name: formattedName,
-      email: `${cleanCode}@ghprospeccao.com`,
-      access_code: cleanCode,
-      status: 'active',
-    });
   }
 
   if (!freelancer) {
@@ -1015,14 +1010,12 @@ app.post('/api/search-jobs', async (req: Request, res: Response) => {
     if (freelancerId) {
       let f = db.getFreelancerById(freelancerId) || db.getFreelancerByAccessCode(freelancerId.replace(/^free_/, ''));
       if (!f) {
-        const cleanCode = freelancerId.replace(/^free_/, '').toLowerCase();
-        const fName = freelancerName || (cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1));
-        f = await db.createFreelancer({
-          name: fName,
-          email: `${cleanCode}@ghprospeccao.com`,
-          access_code: cleanCode,
-          status: 'active',
-        });
+        try {
+          await db.syncFromFirestore();
+        } catch (syncErr) {
+          console.warn('[Server] Falha ao sincronizar Firestore em search/start:', syncErr);
+        }
+        f = db.getFreelancerById(freelancerId) || db.getFreelancerByAccessCode(freelancerId.replace(/^free_/, ''));
       }
       if (f) {
         freelancerId = f.id;
