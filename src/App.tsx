@@ -115,17 +115,23 @@ function getInitialSession(): {
   // Para QUALQUER OUTRO CÓDIGO (ex: /f/andre, /f/danilo) -> ENTRA NO WORKSPACE DO FREELANCER!
   if (cleanCode) {
     const formattedName = cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1);
+    const existingSession = getActiveFreelancerSession();
+    const existingCreatedAt =
+      (existingSession?.freelancer?.access_code?.toLowerCase() === cleanCode || existingSession?.freelancer?.id === `free_${cleanCode}`)
+        ? existingSession.freelancer.created_at
+        : new Date().toISOString();
+
     const instantFreelancer: Freelancer = {
       id: `free_${cleanCode}`,
       name: formattedName,
       access_code: cleanCode,
       email: `${cleanCode}@ghprospeccao.com`,
       status: 'active',
-      created_at: new Date().toISOString(),
+      created_at: existingCreatedAt,
       updated_at: new Date().toISOString(),
     };
 
-    const token = `free_sess_free_${cleanCode}_${Date.now()}_instant`;
+    const token = existingSession?.token || `free_sess_free_${cleanCode}_${Date.now()}_instant`;
     try {
       localStorage.setItem('gh_freelancer_token', token);
       localStorage.setItem('gh_freelancer_session', JSON.stringify({ token, freelancer: instantFreelancer }));
@@ -587,6 +593,8 @@ export default function App() {
             <SearchFormView
               onJobStarted={handleJobStarted}
               onSelectExistingJob={handleSelectExistingJob}
+              userRole={userRole}
+              activeFreelancer={activeFreelancer}
             />
           )}
 

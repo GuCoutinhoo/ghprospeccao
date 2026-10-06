@@ -199,8 +199,15 @@ export function matchesFreelancerId(leadFid: string | undefined | null, targetFi
   if (lf === tf) return true;
   const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
   const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
-  // Isolamento estrito por workspace (não misturar usuários ou workspaces distintos)
-  return cleanLf === cleanTf;
+  if (cleanLf === cleanTf) return true;
+
+  // Permite equivalência entre variações com e sem sufixo numérico de demonstração (ex: demonstracao e demonstracao-02 / demonstracao-2)
+  const baseLf = cleanLf.replace(/[-_]0*(\d+)$/, '');
+  const baseTf = cleanTf.replace(/[-_]0*(\d+)$/, '');
+  if (baseLf && baseTf && baseLf === baseTf && (baseLf.includes('demonstra') || baseLf.includes('demo'))) {
+    return true;
+  }
+  return false;
 }
 
 const NICHE_SYNONYMS: Record<string, string[]> = {
@@ -265,25 +272,7 @@ export function filterLeadsList(
   let filtered = [...leads];
 
   if (params.freelancer_id && params.freelancer_id !== 'ALL') {
-    let freeCreatedAt: number | null = null;
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('gh_freelancer_session') : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.freelancer?.created_at && matchesFreelancerId(parsed.freelancer.id, params.freelancer_id)) {
-          freeCreatedAt = new Date(parsed.freelancer.created_at).getTime();
-        }
-      }
-    } catch {}
-
-    filtered = filtered.filter((l) => {
-      if (!matchesFreelancerId(l.freelancer_id, params.freelancer_id)) return false;
-      if (freeCreatedAt && l.created_at) {
-        const leadTime = new Date(l.created_at).getTime();
-        if (leadTime < freeCreatedAt - 2000) return false;
-      }
-      return true;
-    });
+    filtered = filtered.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
   }
 
   if (params.state && params.state !== 'ALL') {

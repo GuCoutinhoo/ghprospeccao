@@ -838,11 +838,17 @@ export const api = {
     return { id: leadId, ...updates } as Lead;
   },
 
+  invalidateLeadsCache() {
+    invalidateLeadsCache();
+  },
+
   // Search Jobs
   async createSearchJob(payload: {
     state: string;
     city: string;
     niche: string;
+    freelancerId?: string;
+    freelancerName?: string;
     filters: {
       onlyWithoutWebsite: boolean;
       onlyWithPhone: boolean;
@@ -852,10 +858,20 @@ export const api = {
       targetLeads?: number;
     };
   }): Promise<{ job: SearchJob; estimatedQueries: number; totalCities: number; totalAreas: number }> {
-    const res = await fetch('/api/search-jobs', {
+    const session = getActiveFreelancerSession();
+    const effectiveFreelancerId = payload.freelancerId || session?.freelancer?.id;
+    const effectiveFreelancerName = payload.freelancerName || session?.freelancer?.name;
+    const fullPayload = {
+      ...payload,
+      freelancerId: effectiveFreelancerId,
+      freelancerName: effectiveFreelancerName,
+    };
+    const query = effectiveFreelancerId ? `?freelancer_id=${encodeURIComponent(effectiveFreelancerId)}` : '';
+
+    const res = await fetch(`/api/search-jobs${query}`, {
       method: 'POST',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(fullPayload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

@@ -1009,11 +1009,25 @@ app.post('/api/search-jobs', async (req: Request, res: Response) => {
     }
 
     const isFreelancer = req.user?.role === 'freelancer';
-    const freelancerId = isFreelancer ? req.user?.freelancerId : (req.body.freelancerId || (req.query.freelancer_id as string) || undefined);
-    let freelancerName = isFreelancer ? req.user?.name : (req.body.freelancerName || undefined);
-    if (freelancerId && !freelancerName) {
-      const f = db.getFreelancerById(freelancerId);
-      if (f) freelancerName = f.name;
+    let freelancerId = req.body.freelancerId || (req.query.freelancer_id as string) || (isFreelancer ? req.user?.freelancerId : undefined);
+    let freelancerName = req.body.freelancerName || (req.query.freelancer_name as string) || (isFreelancer ? req.user?.name : undefined);
+
+    if (freelancerId) {
+      let f = db.getFreelancerById(freelancerId) || db.getFreelancerByAccessCode(freelancerId.replace(/^free_/, ''));
+      if (!f) {
+        const cleanCode = freelancerId.replace(/^free_/, '').toLowerCase();
+        const fName = freelancerName || (cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1));
+        f = await db.createFreelancer({
+          name: fName,
+          email: `${cleanCode}@ghprospeccao.com`,
+          access_code: cleanCode,
+          status: 'active',
+        });
+      }
+      if (f) {
+        freelancerId = f.id;
+        freelancerName = f.name;
+      }
     }
     const userId = freelancerId || 'default_user_1';
 

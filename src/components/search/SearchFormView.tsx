@@ -21,13 +21,15 @@ import {
   Sparkles,
   CheckCircle2,
 } from 'lucide-react';
-import { IBGEState, IBGECity, SearchJob } from '../../types';
+import { IBGEState, IBGECity, SearchJob, UserRole, Freelancer } from '../../types';
 import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from '../../lib/ibge/ibgeService';
-import { api } from '../../lib/api';
+import { api, getActiveFreelancerSession } from '../../lib/api';
 
 interface SearchFormViewProps {
   onJobStarted: (jobId: string) => void;
   onSelectExistingJob: (jobId: string) => void;
+  userRole?: UserRole;
+  activeFreelancer?: Freelancer | null;
 }
 
 const NICHE_PRESETS = [
@@ -50,6 +52,8 @@ const NICHE_PRESETS = [
 export const SearchFormView: React.FC<SearchFormViewProps> = ({
   onJobStarted,
   onSelectExistingJob,
+  userRole = 'admin',
+  activeFreelancer,
 }) => {
   const [states, setStates] = useState<IBGEState[]>(BRAZILIAN_STATES);
   const [selectedState, setSelectedState] = useState<string>('SP');
@@ -144,10 +148,20 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
 
     setIsSubmitting(true);
     try {
+      const session = getActiveFreelancerSession();
+      const effectiveFreelancerId = userRole === 'freelancer'
+        ? (activeFreelancer?.id || (activeFreelancer?.access_code ? `free_${activeFreelancer.access_code}` : session?.freelancer?.id))
+        : session?.freelancer?.id;
+      const effectiveFreelancerName = userRole === 'freelancer'
+        ? (activeFreelancer?.name || session?.freelancer?.name)
+        : session?.freelancer?.name;
+
       const res = await api.createSearchJob({
         state: selectedState,
         city: selectedCity,
         niche: activeNiche,
+        freelancerId: effectiveFreelancerId,
+        freelancerName: effectiveFreelancerName,
         filters: {
           onlyWithoutWebsite,
           onlyWithPhone,

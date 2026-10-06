@@ -190,14 +190,20 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
           )}
 
           <button
-            onClick={() => onViewLeads(undefined, undefined)}
+            onClick={() => {
+              api.invalidateLeadsCache();
+              onViewLeads(undefined, undefined);
+            }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-neutral-700 bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors shadow-2xs cursor-pointer"
           >
             <span>Ver Todos os Leads</span>
           </button>
 
           <button
-            onClick={() => onViewLeads(job.niche, job.state)}
+            onClick={() => {
+              api.invalidateLeadsCache();
+              onViewLeads(job.niche, job.state);
+            }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors shadow-xs cursor-pointer"
           >
             <span>Ver Leads da Busca ({job.leads_created})</span>
