@@ -28,19 +28,29 @@ export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Recor
   const headers: Record<string, string> = { ...extraHeaders };
   if (typeof window === 'undefined') return headers;
 
+  const adminToken = localStorage.getItem('gh_admin_token');
+  const adminUser = localStorage.getItem('gh_admin_user');
   const freelancerToken = localStorage.getItem('gh_freelancer_token');
+
+  // Se o usuário está autenticado como administrador mestre, sempre prioriza token de admin
+  if (adminToken && adminUser) {
+    headers['Authorization'] = `Bearer ${adminToken}`;
+    return headers;
+  }
+
   if (freelancerToken) {
     headers['Authorization'] = `Bearer ${freelancerToken}`;
     return headers;
   }
 
-  let adminToken = localStorage.getItem('gh_admin_token') || 'admin_master_session_token';
-  headers['Authorization'] = `Bearer ${adminToken}`;
+  headers['Authorization'] = `Bearer ${adminToken || 'admin_master_session_token'}`;
   return headers;
 }
 
 export function isFreelancerMode(): boolean {
   if (typeof window === 'undefined') return false;
+  const adminUser = localStorage.getItem('gh_admin_user');
+  if (adminUser) return false;
   return Boolean(localStorage.getItem('gh_freelancer_token'));
 }
 
@@ -332,8 +342,9 @@ export const api = {
   // Dashboard
   async getDashboardStats(freelancer_id?: string): Promise<DashboardStats> {
     try {
+      const isFree = isFreelancerMode();
       const session = getActiveFreelancerSession();
-      const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+      const targetFreelancerId = freelancer_id || (isFree ? session?.freelancer?.id : undefined);
       const url = targetFreelancerId && targetFreelancerId !== 'ALL'
         ? `/api/dashboard/stats?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
         : '/api/dashboard/stats';
@@ -353,8 +364,9 @@ export const api = {
     // Se o backend retornou 0 (ou falhou na Vercel), busca os dados reais diretamente do Firestore
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
+    const isFree = isFreelancerMode();
     const session = getActiveFreelancerSession();
-    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+    const targetFreelancerId = freelancer_id || (isFree ? session?.freelancer?.id : undefined);
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
       leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
@@ -453,8 +465,9 @@ export const api = {
   // Leads & Niches
   async getNiches(params?: { onlyFavorites?: boolean; freelancer_id?: string }): Promise<{ niche: string; count: number }[]> {
     try {
+      const isFree = isFreelancerMode();
       const session = getActiveFreelancerSession();
-      const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
+      const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
       const query = new URLSearchParams();
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
       if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
@@ -474,8 +487,9 @@ export const api = {
 
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
+    const isFree = isFreelancerMode();
     const session = getActiveFreelancerSession();
-    const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
+    const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
       leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
@@ -494,8 +508,9 @@ export const api = {
 
   async getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string; freelancer_id?: string }): Promise<{ state: string; count: number }[]> {
     try {
+      const isFree = isFreelancerMode();
       const session = getActiveFreelancerSession();
-      const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
+      const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
       const query = new URLSearchParams();
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
       if (params?.niche && params.niche !== 'ALL') query.set('niche', params.niche);
@@ -516,8 +531,9 @@ export const api = {
 
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
+    const isFree = isFreelancerMode();
     const session = getActiveFreelancerSession();
-    const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
+    const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
       leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
@@ -557,8 +573,9 @@ export const api = {
     limit?: number;
   }): Promise<{ leads: Lead[]; total: number; page: number; totalPages: number }> {
     try {
+      const isFree = isFreelancerMode();
       const session = getActiveFreelancerSession();
-      const targetFreelancerId = params.freelancer_id || session?.freelancer?.id;
+      const targetFreelancerId = params.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
       const query = new URLSearchParams();
       if (params.state) query.set('state', params.state);
       if (params.city) query.set('city', params.city);
@@ -590,9 +607,10 @@ export const api = {
     }
 
     const allLeads = await fetchAllLeadsFromFirestore();
+    const isFree = isFreelancerMode();
     const session = getActiveFreelancerSession();
     const effectiveParams = { ...params };
-    const targetFreelancerId = effectiveParams.freelancer_id || session?.freelancer?.id;
+    const targetFreelancerId = effectiveParams.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
       (effectiveParams as any).freelancer_id = targetFreelancerId;
     }

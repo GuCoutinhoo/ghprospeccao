@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search,
   Filter,
@@ -73,6 +73,7 @@ interface LeadsTableViewProps {
   onSelectLead: (lead: Lead) => void;
   initialNicheFilter?: string;
   initialStateFilter?: string;
+  onClearInitialFilters?: () => void;
   onStartSpeedOutreach?: () => void;
   userRole?: UserRole;
   activeFreelancer?: Freelancer | null;
@@ -93,6 +94,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   onSelectLead,
   initialNicheFilter,
   initialStateFilter,
+  onClearInitialFilters,
   onStartSpeedOutreach,
   userRole = 'admin',
   activeFreelancer,
@@ -137,22 +139,145 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Ref sempre atualizada com os filtros vigentes para evitar closures defasadas
+  const latestFiltersRef = useRef({
+    effectiveFreelancerId,
+    stateFilter,
+    cityFilter,
+    nicheFilter,
+    statusFilter,
+    onlyWithoutWebsite,
+    onlyWithPhone,
+    onlyFavorites,
+    minScore,
+    search,
+    sortBy,
+    page,
+    pageSize,
+  });
+
+  latestFiltersRef.current = {
+    effectiveFreelancerId,
+    stateFilter,
+    cityFilter,
+    nicheFilter,
+    statusFilter,
+    onlyWithoutWebsite,
+    onlyWithPhone,
+    onlyFavorites,
+    minScore,
+    search,
+    sortBy,
+    page,
+    pageSize,
+  };
+
+  const requestIdRef = useRef(0);
+
+  const loadLeads = useCallback(async (silent = false) => {
+    const thisRequestId = ++requestIdRef.current;
+    if (!silent) {
+      setLoading(true);
+    }
+    const current = latestFiltersRef.current;
+
+    try {
+      const data = await api.getLeads({
+        freelancer_id: current.effectiveFreelancerId,
+        state: current.stateFilter,
+        city: current.cityFilter,
+        niche: current.nicheFilter,
+        status: current.statusFilter,
+        onlyWithoutWebsite: current.onlyWithoutWebsite,
+        onlyWithPhone: current.onlyWithPhone,
+        onlyFavorites: current.onlyFavorites,
+        minScore: current.minScore > 0 ? current.minScore : undefined,
+        search: current.search,
+        sortBy: current.sortBy,
+        page: current.page,
+        limit: current.pageSize,
+      });
+
+      // Se uma requisição mais recente já disparou, descarta a resposta defasada
+      if (thisRequestId !== requestIdRef.current) return;
+
+      setLeads(data.leads || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.totalPages || 1);
+    } catch (err) {
+      if (thisRequestId === requestIdRef.current) {
+        console.error('Erro ao carregar leads:', err);
+      }
+    } finally {
+      if (thisRequestId === requestIdRef.current && !silent) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  const loadNiches = useCallback(async () => {
+    try {
+      const current = latestFiltersRef.current;
+      const data = await api.getNiches({
+        onlyFavorites: current.onlyFavorites,
+        freelancer_id: current.effectiveFreelancerId,
+      });
+      setNiches(data);
+    } catch (err) {
+      console.error('Erro ao carregar categorias:', err);
+    }
+  }, []);
+
+  const loadStates = useCallback(async () => {
+    try {
+      const current = latestFiltersRef.current;
+      const data = await api.getStatesSummary({
+        onlyFavorites: current.onlyFavorites,
+        niche: current.nicheFilter !== 'ALL' ? current.nicheFilter : undefined,
+        freelancer_id: current.effectiveFreelancerId,
+      });
+      setStatesSummary(data);
+    } catch (err) {
+      console.error('Erro ao carregar estados:', err);
+    }
+  }, []);
+
   // Sincroniza quando filtros iniciais forem passados (ex: ao vir da busca)
   useEffect(() => {
-    setNicheFilter(initialNicheFilter || 'ALL');
-    setPage(1);
+    if (initialNicheFilter && initialNicheFilter !== 'ALL') {
+      setNicheFilter(initialNicheFilter);
+      setPage(1);
+    }
   }, [initialNicheFilter]);
 
   useEffect(() => {
-    setStateFilter(initialStateFilter || 'ALL');
-    setPage(1);
+    if (initialStateFilter && initialStateFilter !== 'ALL') {
+      setStateFilter(initialStateFilter);
+      setPage(1);
+    }
   }, [initialStateFilter]);
 
   useEffect(() => {
-    loadLeads();
+    loadLeads(false);
     loadNiches();
     loadStates();
-  }, [effectiveFreelancerId, page, pageSize, stateFilter, cityFilter, nicheFilter, statusFilter, onlyWithoutWebsite, onlyWithPhone, onlyFavorites, minScore, sortBy]);
+  }, [
+    effectiveFreelancerId,
+    page,
+    pageSize,
+    stateFilter,
+    cityFilter,
+    nicheFilter,
+    statusFilter,
+    onlyWithoutWebsite,
+    onlyWithPhone,
+    onlyFavorites,
+    minScore,
+    sortBy,
+    loadLeads,
+    loadNiches,
+    loadStates,
+  ]);
 
   // Carrega contagem global no início
   useEffect(() => {
@@ -163,7 +288,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     }).catch(() => {});
   }, [effectiveFreelancerId]);
 
-  // Monitora se há buscas rodando em segundo plano e recarrega em tempo real
+  // Monitora se há buscas rodando em segundo plano e recarrega silenciosamente em tempo real
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
 
@@ -173,13 +298,14 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         const active = jobs.find((j) => j.status === 'running' || j.status === 'pending');
         if (active) {
           setRunningJob(active);
-          loadLeads();
+          // Atualização silenciosa: não desmonta cards nem ativa tela cheia de loading
+          loadLeads(true);
           loadNiches();
           loadStates();
         } else {
           setRunningJob((prev: any) => {
             if (prev) {
-              loadLeads();
+              loadLeads(true);
               loadNiches();
               loadStates();
             }
@@ -192,63 +318,12 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     };
 
     checkRunningJobs();
-    interval = setInterval(checkRunningJobs, 3000);
+    interval = setInterval(checkRunningJobs, 4000);
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [effectiveFreelancerId]);
-
-  const loadNiches = async () => {
-    try {
-      const data = await api.getNiches({ onlyFavorites, freelancer_id: effectiveFreelancerId });
-      setNiches(data);
-    } catch (err) {
-      console.error('Erro ao carregar categorias:', err);
-    }
-  };
-
-  const loadStates = async () => {
-    try {
-      const data = await api.getStatesSummary({
-        onlyFavorites,
-        niche: nicheFilter !== 'ALL' ? nicheFilter : undefined,
-        freelancer_id: effectiveFreelancerId,
-      });
-      setStatesSummary(data);
-    } catch (err) {
-      console.error('Erro ao carregar estados:', err);
-    }
-  };
-
-  const loadLeads = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getLeads({
-        freelancer_id: effectiveFreelancerId,
-        state: stateFilter,
-        city: cityFilter,
-        niche: nicheFilter,
-        status: statusFilter,
-        onlyWithoutWebsite,
-        onlyWithPhone,
-        onlyFavorites,
-        minScore: minScore > 0 ? minScore : undefined,
-        search,
-        sortBy,
-        page,
-        limit: pageSize,
-      });
-
-      setLeads(data.leads);
-      setTotal(data.total);
-      setTotalPages(data.totalPages);
-    } catch (err) {
-      console.error('Erro ao carregar leads:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [effectiveFreelancerId, loadLeads, loadNiches, loadStates]);
 
   const handleToggleFavorite = async (e: React.MouseEvent, leadId: string) => {
     e.stopPropagation();
@@ -339,6 +414,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     setMinScore(0);
     setSearch('');
     setPage(1);
+    onClearInitialFilters?.();
   };
 
   return (
@@ -367,7 +443,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
           </div>
           <button
             type="button"
-            onClick={loadLeads}
+            onClick={() => loadLeads(false)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-900 bg-white border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs self-start sm:self-auto shrink-0"
           >
             <RotateCw className="h-3.5 w-3.5" />
@@ -679,6 +755,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                 setCityFilter('ALL');
                 setOnlyFavorites(false);
                 setPage(1);
+                onClearInitialFilters?.();
               }}
               className="text-[11px] font-medium text-neutral-500 hover:text-neutral-900 underline cursor-pointer"
             >
@@ -739,7 +816,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                loadLeads();
+                loadLeads(false);
                 loadNiches();
                 loadStates();
               }}

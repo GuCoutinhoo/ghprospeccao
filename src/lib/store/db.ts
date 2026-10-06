@@ -52,8 +52,8 @@ function slugifyFreelancerName(name?: string | null): string {
 }
 
 export function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
-  if (!leadFid || !targetFid) return false;
-  if (targetFid === 'ALL') return true;
+  if (!targetFid || targetFid === 'ALL') return true;
+  if (!leadFid) return true; // Estabelecimentos da base comum/global permanecem acessíveis
   const lf = leadFid.toLowerCase().trim();
   const tf = targetFid.toLowerCase().trim();
   if (lf === tf) return true;
@@ -526,7 +526,7 @@ class Database {
       const targetNiche = normalizeStr(params.niche);
       filtered = filtered.filter((l) => {
         const ln = normalizeStr(l.niche);
-        return ln.includes(targetNiche) || targetNiche.includes(ln);
+        return ln.includes(targetNiche) || targetNiche.includes(ln) || matchesNicheSemantics(ln, targetNiche);
       });
     }
 
@@ -623,7 +623,7 @@ class Database {
       const targetNiche = normalizeStr(params.niche);
       leads = leads.filter((l) => {
         const ln = normalizeStr(l.niche);
-        return ln.includes(targetNiche) || targetNiche.includes(ln);
+        return ln.includes(targetNiche) || targetNiche.includes(ln) || matchesNicheSemantics(ln, targetNiche);
       });
     }
     for (const lead of leads) {

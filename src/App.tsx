@@ -586,6 +586,10 @@ export default function App() {
               onSelectLead={(lead) => setSelectedLead(lead)}
               initialNicheFilter={leadsNicheFilter}
               initialStateFilter={leadsStateFilter}
+              onClearInitialFilters={() => {
+                setLeadsNicheFilter(undefined);
+                setLeadsStateFilter(undefined);
+              }}
               onStartSpeedOutreach={() => handleNavigate('/outreach')}
               userRole={userRole}
               activeFreelancer={activeFreelancer}

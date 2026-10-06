@@ -289,8 +289,8 @@ function slugifyFreelancerName(name) {
   return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "freelancer";
 }
 function matchesFreelancerId(leadFid, targetFid) {
-  if (!leadFid || !targetFid) return false;
-  if (targetFid === "ALL") return true;
+  if (!targetFid || targetFid === "ALL") return true;
+  if (!leadFid) return true;
   const lf = leadFid.toLowerCase().trim();
   const tf = targetFid.toLowerCase().trim();
   if (lf === tf) return true;
@@ -679,7 +679,7 @@ var Database = class {
       const targetNiche = normalizeStr(params.niche);
       filtered = filtered.filter((l) => {
         const ln = normalizeStr(l.niche);
-        return ln.includes(targetNiche) || targetNiche.includes(ln);
+        return ln.includes(targetNiche) || targetNiche.includes(ln) || matchesNicheSemantics(ln, targetNiche);
       });
     }
     if (params.status && params.status !== "ALL") {
@@ -758,7 +758,7 @@ var Database = class {
       const targetNiche = normalizeStr(params.niche);
       leads = leads.filter((l) => {
         const ln = normalizeStr(l.niche);
-        return ln.includes(targetNiche) || targetNiche.includes(ln);
+        return ln.includes(targetNiche) || targetNiche.includes(ln) || matchesNicheSemantics(ln, targetNiche);
       });
     }
     for (const lead of leads) {
