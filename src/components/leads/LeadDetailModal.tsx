@@ -32,6 +32,7 @@ import {
   Flame,
   Award,
   Maximize2,
+  Trash2,
 } from 'lucide-react';
 import { Lead, LeadNote, PipelineStatus } from '../../types';
 import { api } from '../../lib/api';
@@ -48,6 +49,7 @@ interface LeadDetailModalProps {
   leadId: string;
   onClose: () => void;
   onLeadUpdated: (updated: Lead) => void;
+  onDeleteLead?: (leadId: string) => void;
 }
 
 const PIPELINE_STATUSES: PipelineStatus[] = [
@@ -82,6 +84,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   leadId,
   onClose,
   onLeadUpdated,
+  onDeleteLead,
 }) => {
   const [lead, setLead] = useState<Lead | null>(null);
   const [notes, setNotes] = useState<LeadNote[]>([]);
@@ -239,6 +242,21 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
     setTimeout(() => setCopiedAddress(false), 2000);
   };
 
+  const handleDeleteLead = async () => {
+    if (!lead) return;
+    if (!confirm(`Deseja excluir permanentemente o lead "${lead.name}"? Todos os dados vinculados a ele serão apagados por completo do banco de dados e do Google Firestore.`)) {
+      return;
+    }
+    try {
+      await api.deleteLead(lead.id);
+      if (onDeleteLead) onDeleteLead(lead.id);
+      onClose();
+    } catch (err) {
+      console.error('Erro ao excluir lead:', err);
+      alert('Falha ao excluir lead.');
+    }
+  };
+
   if (loading && !lead) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 backdrop-blur-xs p-4">
@@ -325,6 +343,16 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                 <span>{lead.is_favorite ? 'Favoritado' : 'Favoritar'}</span>
               </button>
 
+              <button
+                type="button"
+                onClick={handleDeleteLead}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 cursor-pointer shadow-xs"
+                title="Excluir lead permanentemente"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Excluir</span>
+              </button>
+
               <span
                 className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-white text-neutral-900 shadow-sm`}
               >
@@ -332,7 +360,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
               </span>
               <button
                 onClick={onClose}
-                className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+                className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 aria-label="Fechar"
               >
                 <X className="h-5 w-5" />

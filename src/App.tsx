@@ -69,7 +69,10 @@ function getInitialSession(): {
   const hash = window.location.hash;
   const search = window.location.search;
 
-  // Extrai código de acesso por pathname (/f/andre), hash (#/f/andre) ou query (?f=andre)
+  const systemRoutes = ['admin', 'dashboard', 'leads', 'search', 'outreach', 'pipeline', 'templates', 'favorites', 'settings', 'preview', 'api', 'login', 'audit'];
+  const firstSegment = pathname.replace(/^\//, '').split('/')[0].split('?')[0].split('#')[0].trim().toLowerCase();
+
+  // Extrai código de acesso por pathname (/f/andre ou /andre), hash (#/f/andre) ou query (?f=andre)
   let rawCode = '';
   if (pathname.startsWith('/f/')) {
     rawCode = pathname.replace(/^\/f\//, '').split('/')[0].split('?')[0].split('#')[0].trim();
@@ -78,6 +81,8 @@ function getInitialSession(): {
   } else if (search.includes('f=')) {
     const params = new URLSearchParams(search);
     rawCode = (params.get('f') || '').trim();
+  } else if (firstSegment && !systemRoutes.includes(firstSegment)) {
+    rawCode = firstSegment;
   }
 
   const cleanCode = rawCode.toLowerCase();
@@ -212,6 +217,9 @@ export default function App() {
     const hash = window.location.hash;
     const search = window.location.search;
 
+    const systemRoutes = ['admin', 'dashboard', 'leads', 'search', 'outreach', 'pipeline', 'templates', 'favorites', 'settings', 'preview', 'api', 'login', 'audit'];
+    const firstSegment = pathname.replace(/^\//, '').split('/')[0].split('?')[0].split('#')[0].trim().toLowerCase();
+
     let rawCode = '';
     if (pathname.startsWith('/f/')) {
       rawCode = pathname.replace(/^\/f\//, '').split('/')[0].split('?')[0].split('#')[0].trim();
@@ -220,6 +228,8 @@ export default function App() {
     } else if (search.includes('f=')) {
       const params = new URLSearchParams(search);
       rawCode = (params.get('f') || '').trim();
+    } else if (firstSegment && !systemRoutes.includes(firstSegment)) {
+      rawCode = firstSegment;
     }
 
     const cleanCode = rawCode.toLowerCase();
@@ -643,6 +653,10 @@ export default function App() {
           onClose={() => setSelectedLead(null)}
           onLeadUpdated={(updated) => {
             setSelectedLead(updated);
+            loadInitialData();
+          }}
+          onDeleteLead={() => {
+            setSelectedLead(null);
             loadInitialData();
           }}
         />

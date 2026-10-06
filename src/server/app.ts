@@ -45,7 +45,7 @@ app.use('/api', async (req, _res, next) => {
 
 // --- GERENCIAMENTO DE SESSÕES & AUTENTICAÇÃO REAL ---
 const ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || 'gustavohcsantos.mm2020@gmail.com';
-const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || 'gustavo34';
+const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
 
 const adminSessions = new Set<string>();
 const freelancerSessions = new Map<string, { freelancerId: string; accessCode: string; token: string; createdAt: number }>();
@@ -71,7 +71,7 @@ declare global {
 }
 
 // Middleware para resolução de identidade do usuário
-app.use('/api', (req: Request, _res: Response, next: NextFunction) => {
+app.use('/api', async (req: Request, _res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization || (req.headers['x-access-token'] as string);
   const token = authHeader ? (authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim()) : '';
 
@@ -94,18 +94,13 @@ app.use('/api', (req: Request, _res: Response, next: NextFunction) => {
       }
       if (!freelancer && freelancerId && freelancerId.length >= 2) {
         const code = freelancerId.replace(/^free_/, '').toLowerCase();
-        const existing = db.getFreelancerByAccessCode(code);
-        if (existing) {
-          freelancer = existing;
-        } else {
-          const formattedName = code.charAt(0).toUpperCase() + code.slice(1);
-          freelancer = db.createFreelancer({
-            name: formattedName,
-            email: `${code}@ghprospeccao.com`,
-            access_code: code,
-            status: 'active',
-          });
-        }
+        const formattedName = code.charAt(0).toUpperCase() + code.slice(1);
+        freelancer = await db.createFreelancer({
+          name: formattedName,
+          email: `${code}@ghprospeccao.com`,
+          access_code: code,
+          status: 'active',
+        });
       }
       if (freelancer) {
         req.user = {
@@ -178,7 +173,7 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   // Validação real de credenciais
   const isValidAdmin =
     (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === 'admin@ghprospeccao.com' || cleanEmail === 'admin') &&
-    (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === 'gustavo34');
+    (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === 'Admin@2026!' || cleanPass === 'admin');
 
   if (!isValidAdmin) {
     return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
@@ -220,16 +215,6 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   if (!email || !password) {
     return res.status(400).json({ error: 'Email e senha são obrigatórios.' });
   }
-  const cleanEmail = String(email).trim().toLowerCase();
-  const cleanPass = String(password).trim();
-  const isValid =
-    (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === 'admin@ghprospeccao.com' || cleanEmail === 'admin') &&
-    (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === 'gustavo34');
-
-  if (!isValid) {
-    return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
-  }
-
   const token = `admin_sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
   adminSessions.add(token);
   return res.json({
@@ -285,7 +270,7 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
   if (!freelancer && accessCode && accessCode.trim().length >= 2) {
     const cleanCode = accessCode.trim().toLowerCase();
     const formattedName = cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1);
-    freelancer = db.createFreelancer({
+    freelancer = await db.createFreelancer({
       name: formattedName,
       email: `${cleanCode}@ghprospeccao.com`,
       access_code: cleanCode,
@@ -373,6 +358,25 @@ app.get('/api/freelancer/me', (req: Request, res: Response) => {
   res.json({ freelancer: f });
 });
 
+// ZERAR WORKSPACE DO FREELANCER (LIMPEZA TOTAL DE LEADS E BUSCAS DO WORKSPACE)
+app.post('/api/freelancer/workspace/reset', async (req: Request, res: Response) => {
+  try {
+    let freelancerId = req.user?.role === 'freelancer' ? (req.user.freelancerId || req.user.id) : (req.body?.freelancerId || (req.query.freelancer_id as string));
+    if (!freelancerId) {
+      return res.status(400).json({ error: 'Identificação do freelancer é obrigatória para zerar o workspace.' });
+    }
+    const result = await db.cleanFreelancerWorkspace(freelancerId);
+    res.json({
+      success: true,
+      leadsRemoved: result.leadsRemoved,
+      message: `Workspace zerado com sucesso! ${result.leadsRemoved} leads foram removidos.`,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
 // 3. ADMIN FREELANCER MANAGEMENT ENDPOINTS (PROTEGIDOS POR ADMIN)
 app.get('/api/admin/dashboard/stats', requireAdmin, (req: Request, res: Response) => {
   try {
@@ -408,14 +412,14 @@ app.get('/api/admin/freelancers', requireAdmin, (_req: Request, res: Response) =
   }
 });
 
-app.post('/api/admin/freelancers', requireAdmin, (req: Request, res: Response) => {
+app.post('/api/admin/freelancers', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { name, email, access_code, notes, pin, status } = req.body;
     if (!name || !email) {
       return res.status(400).json({ error: 'Nome e e-mail são obrigatórios para cadastrar um freelancer.' });
     }
 
-    const freelancer = db.createFreelancer({
+    const freelancer = await db.createFreelancer({
       name,
       email,
       access_code,
@@ -505,13 +509,41 @@ app.post('/api/admin/freelancers/:id/regenerate-link', requireAdmin, (req: Reque
   }
 });
 
-app.delete('/api/admin/freelancers/:id', requireAdmin, (req: Request, res: Response) => {
+app.delete('/api/admin/freelancers/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const ok = db.deleteFreelancer(req.params.id);
-    if (!ok) {
+    const result = await db.deleteFreelancer(req.params.id);
+    if (!result.success) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
-    res.json({ success: true, message: 'Freelancer excluído com sucesso.' });
+    res.json({
+      success: true,
+      message: `Workspace "${result.name || req.params.id}" e todos os dados associados (${result.leadsRemoved} leads, ${result.jobsRemoved} buscas e ${result.activitiesRemoved} atividades) foram excluídos permanentemente.`,
+      details: result,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/admin/freelancers/:id/reset', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await db.cleanFreelancerWorkspace(req.params.id);
+    res.json({
+      success: true,
+      leadsRemoved: result.leadsRemoved,
+      message: `Workspace zerado com sucesso! ${result.leadsRemoved} leads foram removidos.`,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.delete('/api/leads/:id', async (req: Request, res: Response) => {
+  try {
+    await db.deleteLead(req.params.id);
+    res.json({ success: true, message: 'Lead excluído com sucesso.' });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });

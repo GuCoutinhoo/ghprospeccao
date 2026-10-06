@@ -242,6 +242,105 @@ async function deleteFreelancerFromFirestore(id) {
     console.warn(`[Firebase] Erro ao deletar freelancer ${id} do Firestore:`, err);
   }
 }
+async function deleteFreelancerAndAllDataFromFirestore(freelancerId, accessCode, name) {
+  const db2 = getFirestoreDb();
+  if (!db2) return { leadsDeleted: 0, jobsDeleted: 0, activitiesDeleted: 0 };
+  const rawIdentifiers = [
+    freelancerId,
+    accessCode,
+    `free_${accessCode}`,
+    freelancerId?.replace(/^free_/, ""),
+    name,
+    name?.toLowerCase()
+  ].filter(Boolean);
+  const normIdentifiers = Array.from(
+    new Set(rawIdentifiers.map((s) => s.toLowerCase().trim()))
+  );
+  let leadsDeleted = 0;
+  let jobsDeleted = 0;
+  let activitiesDeleted = 0;
+  try {
+    const leadsSnap = await getDocs(collection(db2, "leads")).catch(() => null);
+    if (leadsSnap) {
+      const deletePromises = [];
+      leadsSnap.forEach((d) => {
+        const data = d.data();
+        const fid = (data.freelancer_id || "").toLowerCase().trim();
+        const uid = (data.user_id || "").toLowerCase().trim();
+        const fname = (data.freelancer_name || "").toLowerCase().trim();
+        const docId = d.id.toLowerCase();
+        const matches = normIdentifiers.some((id) => fid === id || fid === `free_${id}` || id.startsWith("free_") && fid === id.substring(5)) || normIdentifiers.some((id) => uid === id || uid === `free_${id}` || id.startsWith("free_") && uid === id.substring(5)) || name && fname === name.toLowerCase().trim() || accessCode && docId.includes(accessCode.toLowerCase().trim()) && docId.startsWith("lead_");
+        if (matches) {
+          leadsDeleted++;
+          deletePromises.push(deleteDoc(d.ref).catch(() => {
+          }));
+        }
+      });
+      await Promise.all(deletePromises);
+    }
+    const jobsSnap = await getDocs(collection(db2, "search_jobs")).catch(() => null);
+    if (jobsSnap) {
+      const deletePromises = [];
+      jobsSnap.forEach((d) => {
+        const data = d.data();
+        const fid = (data.freelancer_id || "").toLowerCase().trim();
+        if (normIdentifiers.some((id) => fid === id || fid === `free_${id}`)) {
+          jobsDeleted++;
+          deletePromises.push(deleteDoc(d.ref).catch(() => {
+          }));
+        }
+      });
+      await Promise.all(deletePromises);
+    }
+    const actSnap = await getDocs(collection(db2, "activities")).catch(() => null);
+    if (actSnap) {
+      const deletePromises = [];
+      actSnap.forEach((d) => {
+        const data = d.data();
+        const fid = (data.freelancer_id || "").toLowerCase().trim();
+        const fname = (data.freelancer_name || "").toLowerCase().trim();
+        if (normIdentifiers.some((id) => fid === id || fid === `free_${id}`) || name && fname === name.toLowerCase().trim()) {
+          activitiesDeleted++;
+          deletePromises.push(deleteDoc(d.ref).catch(() => {
+          }));
+        }
+      });
+      await Promise.all(deletePromises);
+    }
+    const freePromises = [];
+    if (freelancerId) {
+      freePromises.push(deleteDoc(doc(db2, "freelancers", freelancerId)).catch(() => {
+      }));
+      const cleanFid = freelancerId.replace(/^free_/, "");
+      if (cleanFid !== freelancerId) {
+        freePromises.push(deleteDoc(doc(db2, "freelancers", cleanFid)).catch(() => {
+        }));
+      }
+    }
+    if (accessCode) {
+      freePromises.push(deleteDoc(doc(db2, "freelancers", accessCode)).catch(() => {
+      }));
+      freePromises.push(deleteDoc(doc(db2, "freelancers", `free_${accessCode}`)).catch(() => {
+      }));
+    }
+    const freeSnap = await getDocs(collection(db2, "freelancers")).catch(() => null);
+    if (freeSnap) {
+      freeSnap.forEach((d) => {
+        const data = d.data();
+        const dName = (data.name || "").toLowerCase().trim();
+        const dCode = (data.access_code || "").toLowerCase().trim();
+        if (name && dName === name.toLowerCase().trim() || accessCode && dCode === accessCode.toLowerCase().trim() || normIdentifiers.includes(d.id.toLowerCase())) {
+          freePromises.push(deleteDoc(d.ref).catch(() => {
+          }));
+        }
+      });
+    }
+    await Promise.all(freePromises);
+  } catch (err) {
+    console.warn("[Firebase] Erro na exclus\xE3o completa do workspace:", err);
+  }
+  return { leadsDeleted, jobsDeleted, activitiesDeleted };
+}
 async function deleteLeadFromFirestore(id) {
   const db2 = getFirestoreDb();
   if (!db2 || !id) return;
@@ -249,24 +348,6 @@ async function deleteLeadFromFirestore(id) {
     await deleteDoc(doc(db2, "leads", id));
   } catch (err) {
     console.warn(`[Firebase] Erro ao deletar lead ${id} do Firestore:`, err);
-  }
-}
-async function deleteJobFromFirestore(id) {
-  const db2 = getFirestoreDb();
-  if (!db2 || !id) return;
-  try {
-    await deleteDoc(doc(db2, "search_jobs", id));
-  } catch (err) {
-    console.warn(`[Firebase] Erro ao deletar job ${id} do Firestore:`, err);
-  }
-}
-async function deleteActivityFromFirestore(id) {
-  const db2 = getFirestoreDb();
-  if (!db2 || !id) return;
-  try {
-    await deleteDoc(doc(db2, "activities", id));
-  } catch (err) {
-    console.warn(`[Firebase] Erro ao deletar atividade ${id} do Firestore:`, err);
   }
 }
 async function syncActivityToFirestore(activity) {
@@ -435,13 +516,22 @@ var Database = class {
           if (!l || !l.id) continue;
           const fid = (l.freelancer_id || "").toLowerCase().trim();
           const cleanFid = fid.startsWith("free_") ? fid.substring(5) : fid;
-          const isFreelancerActive = (this.data.freelancers || []).some(
+          const targetFreelancer = (this.data.freelancers || []).find(
             (f) => f.id.toLowerCase() === fid || f.access_code.toLowerCase() === cleanFid
           );
-          if (fid && !isFreelancerActive && (deletedFreelancerCodes.has(fid) || deletedFreelancerCodes.has(`free_${fid}`))) {
+          if (fid && !targetFreelancer && (deletedFreelancerCodes.has(fid) || deletedFreelancerCodes.has(`free_${fid}`))) {
             deleteLeadFromFirestore(l.id).catch(() => {
             });
             continue;
+          }
+          if (targetFreelancer && targetFreelancer.created_at && l.created_at) {
+            const leadTime = new Date(l.created_at).getTime();
+            const freeTime = new Date(targetFreelancer.created_at).getTime();
+            if (leadTime < freeTime - 2e3) {
+              deleteLeadFromFirestore(l.id).catch(() => {
+              });
+              continue;
+            }
           }
           leadMap.set(l.id, l);
         }
@@ -957,7 +1047,7 @@ var Database = class {
       return fCodeLower === cleanLower || fCodeSlug === cleanSlug || fNameSlug === cleanSlug || fFirstNameSlug === cleanSlug || fNameLower === cleanLower || fNameNorm === cleanNorm || fIdLower === cleanLower || fIdLower === `free_${cleanLower}` || fIdLower.replace("free_", "") === cleanLower || fCode.toUpperCase() === cleanRaw.toUpperCase() || f.email && f.email.toLowerCase() === cleanLower;
     });
   }
-  createFreelancer(data) {
+  async createFreelancer(data) {
     const rawName = data.name.trim();
     let preferredCode = data.access_code?.trim() ? slugifyFreelancerName(data.access_code) : slugifyFreelancerName(rawName.split(" ")[0]) || slugifyFreelancerName(rawName);
     if (!preferredCode) {
@@ -981,35 +1071,19 @@ var Database = class {
       `free_${slugifyFreelancerName(rawName)}`
     ].filter(Boolean);
     const codesToClean = rawCodesToClean.map((c) => c.toLowerCase());
-    const oldLeads = (this.data.leads || []).filter(
-      (l) => matchesFreelancerId(l.freelancer_id, id) || matchesFreelancerId(l.freelancer_id, code) || codesToClean.includes((l.freelancer_id || "").toLowerCase())
-    );
-    for (const l of oldLeads) {
-      deleteLeadFromFirestore(l.id).catch(() => {
-      });
+    try {
+      await deleteFreelancerAndAllDataFromFirestore(id, code, rawName);
+    } catch (err) {
+      console.warn("[DB] Erro na pr\xE9-purga de dados do Firestore para novo workspace:", err);
     }
     this.data.leads = (this.data.leads || []).filter(
-      (l) => !matchesFreelancerId(l.freelancer_id, id) && !matchesFreelancerId(l.freelancer_id, code) && !codesToClean.includes((l.freelancer_id || "").toLowerCase())
+      (l) => !matchesFreelancerId(l.freelancer_id, id) && !matchesFreelancerId(l.freelancer_id, code) && !matchesFreelancerId(l.user_id, id) && !matchesFreelancerId(l.user_id, code) && !codesToClean.includes((l.freelancer_id || "").toLowerCase()) && !codesToClean.includes((l.user_id || "").toLowerCase()) && (l.freelancer_name || "").toLowerCase() !== rawName.toLowerCase()
     );
-    const oldJobs = (this.data.search_jobs || []).filter(
-      (j) => matchesFreelancerId(j.freelancer_id, id) || matchesFreelancerId(j.freelancer_id, code) || codesToClean.includes((j.freelancer_id || "").toLowerCase())
-    );
-    for (const j of oldJobs) {
-      deleteJobFromFirestore(j.id).catch(() => {
-      });
-    }
     this.data.search_jobs = (this.data.search_jobs || []).filter(
       (j) => !matchesFreelancerId(j.freelancer_id, id) && !matchesFreelancerId(j.freelancer_id, code) && !codesToClean.includes((j.freelancer_id || "").toLowerCase())
     );
-    const oldActivities = (this.data.activities || []).filter(
-      (a) => matchesFreelancerId(a.freelancer_id, id) || matchesFreelancerId(a.freelancer_id, code) || codesToClean.includes((a.freelancer_id || "").toLowerCase())
-    );
-    for (const a of oldActivities) {
-      deleteActivityFromFirestore(a.id).catch(() => {
-      });
-    }
     this.data.activities = (this.data.activities || []).filter(
-      (a) => !matchesFreelancerId(a.freelancer_id, id) && !matchesFreelancerId(a.freelancer_id, code) && !codesToClean.includes((a.freelancer_id || "").toLowerCase())
+      (a) => !matchesFreelancerId(a.freelancer_id, id) && !matchesFreelancerId(a.freelancer_id, code) && !codesToClean.includes((a.freelancer_id || "").toLowerCase()) && (a.freelancer_name || "").toLowerCase() !== rawName.toLowerCase()
     );
     const freelancer = {
       id,
@@ -1025,13 +1099,13 @@ var Database = class {
     if (!this.data.freelancers) this.data.freelancers = [];
     this.data.freelancers.unshift(freelancer);
     this.save();
-    syncFreelancerToFirestore(freelancer).catch(() => {
+    await syncFreelancerToFirestore(freelancer).catch(() => {
     });
     this.logActivity({
       freelancer_id: freelancer.id,
       freelancer_name: freelancer.name,
       action_type: "freelancer_created",
-      description: `Administrador cadastrou o freelancer "${freelancer.name}" com link de acesso: /f/${freelancer.access_code}`,
+      description: `Administrador cadastrou o freelancer "${freelancer.name}" com workspace zerado. Link de acesso: /f/${freelancer.access_code}`,
       metadata: { freelancer_id: freelancer.id, access_code: freelancer.access_code }
     });
     return freelancer;
@@ -1101,16 +1175,22 @@ var Database = class {
     }
     return f;
   }
-  deleteFreelancer(id) {
-    const idx = (this.data.freelancers || []).findIndex((f) => f.id === id);
-    if (idx === -1) return false;
+  async deleteFreelancer(id) {
+    const idx = (this.data.freelancers || []).findIndex(
+      (f) => f.id === id || f.access_code?.toLowerCase() === id.toLowerCase()
+    );
+    if (idx === -1) {
+      return { success: false, leadsRemoved: 0, jobsRemoved: 0, activitiesRemoved: 0 };
+    }
     const removed = this.data.freelancers.splice(idx, 1)[0];
     const rawCodes = [
       id,
+      removed.id,
       removed.access_code,
       `free_${removed.access_code}`,
       slugifyFreelancerName(removed.name),
-      `free_${slugifyFreelancerName(removed.name)}`
+      `free_${slugifyFreelancerName(removed.name)}`,
+      removed.name
     ].filter(Boolean);
     const codes = rawCodes.map((c) => c.toLowerCase());
     for (const c of codes) {
@@ -1118,89 +1198,101 @@ var Database = class {
       deletedFreelancerCodes.add(`free_${c}`);
     }
     const leadsToDelete = (this.data.leads || []).filter(
-      (l) => matchesFreelancerId(l.freelancer_id, id) || matchesFreelancerId(l.freelancer_id, removed.access_code) || codes.includes((l.freelancer_id || "").toLowerCase())
+      (l) => matchesFreelancerId(l.freelancer_id, id) || matchesFreelancerId(l.freelancer_id, removed.access_code) || matchesFreelancerId(l.user_id, id) || matchesFreelancerId(l.user_id, removed.access_code) || codes.includes((l.freelancer_id || "").toLowerCase()) || codes.includes((l.user_id || "").toLowerCase()) || (l.freelancer_name || "").toLowerCase() === removed.name.toLowerCase()
     );
-    for (const lead of leadsToDelete) {
-      deleteLeadFromFirestore(lead.id).catch(() => {
-      });
+    const leadIdsToDelete = new Set(leadsToDelete.map((l) => l.id));
+    this.data.leads = (this.data.leads || []).filter((l) => !leadIdsToDelete.has(l.id));
+    if (this.data.lead_notes) {
+      this.data.lead_notes = this.data.lead_notes.filter((n) => !leadIdsToDelete.has(n.lead_id));
     }
-    this.data.leads = (this.data.leads || []).filter(
-      (l) => !matchesFreelancerId(l.freelancer_id, id) && !matchesFreelancerId(l.freelancer_id, removed.access_code) && !codes.includes((l.freelancer_id || "").toLowerCase())
-    );
     const jobsToDelete = (this.data.search_jobs || []).filter(
       (j) => matchesFreelancerId(j.freelancer_id, id) || matchesFreelancerId(j.freelancer_id, removed.access_code) || codes.includes((j.freelancer_id || "").toLowerCase())
     );
-    for (const job of jobsToDelete) {
-      deleteJobFromFirestore(job.id).catch(() => {
-      });
-    }
-    this.data.search_jobs = (this.data.search_jobs || []).filter(
-      (j) => !matchesFreelancerId(j.freelancer_id, id) && !matchesFreelancerId(j.freelancer_id, removed.access_code) && !codes.includes((j.freelancer_id || "").toLowerCase())
-    );
+    const jobIdsToDelete = new Set(jobsToDelete.map((j) => j.id));
+    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !jobIdsToDelete.has(j.id));
     const activitiesToDelete = (this.data.activities || []).filter(
-      (a) => matchesFreelancerId(a.freelancer_id, id) || matchesFreelancerId(a.freelancer_id, removed.access_code) || codes.includes((a.freelancer_id || "").toLowerCase())
+      (a) => matchesFreelancerId(a.freelancer_id, id) || matchesFreelancerId(a.freelancer_id, removed.access_code) || codes.includes((a.freelancer_id || "").toLowerCase()) || (a.freelancer_name || "").toLowerCase() === removed.name.toLowerCase()
     );
-    for (const act of activitiesToDelete) {
-      deleteActivityFromFirestore(act.id).catch(() => {
-      });
-    }
-    this.data.activities = (this.data.activities || []).filter(
-      (a) => !matchesFreelancerId(a.freelancer_id, id) && !matchesFreelancerId(a.freelancer_id, removed.access_code) && !codes.includes((a.freelancer_id || "").toLowerCase())
-    );
+    const actIdsToDelete = new Set(activitiesToDelete.map((a) => a.id));
+    this.data.activities = (this.data.activities || []).filter((a) => !actIdsToDelete.has(a.id));
     this.save();
-    deleteFreelancerFromFirestore(id).catch(() => {
-    });
-    if (removed.access_code && removed.access_code !== id) {
-      deleteFreelancerFromFirestore(`free_${removed.access_code}`).catch(() => {
-      });
-      deleteFreelancerFromFirestore(removed.access_code).catch(() => {
-      });
+    let firestoreStats = { leadsDeleted: 0, jobsDeleted: 0, activitiesDeleted: 0 };
+    try {
+      firestoreStats = await deleteFreelancerAndAllDataFromFirestore(
+        removed.id,
+        removed.access_code,
+        removed.name
+      );
+    } catch (err) {
+      console.warn("[DB] Erro ao deletar dados do Firestore:", err);
     }
     this.logActivity({
       freelancer_id: id,
       freelancer_name: removed.name,
       action_type: "freelancer_blocked",
-      description: `Administrador removeu o cadastro e todos os dados do workspace "${removed.name}"`
+      description: `Administrador excluiu permanentemente o workspace de "${removed.name}" e todos os dados associados.`
     });
-    return true;
+    return {
+      success: true,
+      name: removed.name,
+      leadsRemoved: Math.max(leadsToDelete.length, firestoreStats.leadsDeleted),
+      jobsRemoved: Math.max(jobsToDelete.length, firestoreStats.jobsDeleted),
+      activitiesRemoved: Math.max(activitiesToDelete.length, firestoreStats.activitiesDeleted)
+    };
   }
-  cleanFreelancerWorkspace(id) {
+  async cleanFreelancerWorkspace(id) {
     const f = this.getFreelancerById(id) || this.getFreelancerByAccessCode(id);
     const code = f?.access_code || id;
-    const rawCodes = [id, code, `free_${code}`, f?.id, slugifyFreelancerName(f?.name)].filter(Boolean);
+    const name = f?.name || id;
+    const rawCodes = [id, code, `free_${code}`, f?.id, slugifyFreelancerName(name)].filter(Boolean);
     const codes = rawCodes.map((c) => c.toLowerCase());
     const leadsToDelete = (this.data.leads || []).filter(
-      (l) => matchesFreelancerId(l.freelancer_id, id) || matchesFreelancerId(l.freelancer_id, code) || codes.includes((l.freelancer_id || "").toLowerCase())
+      (l) => matchesFreelancerId(l.freelancer_id, id) || matchesFreelancerId(l.freelancer_id, code) || matchesFreelancerId(l.user_id, id) || matchesFreelancerId(l.user_id, code) || codes.includes((l.freelancer_id || "").toLowerCase()) || codes.includes((l.user_id || "").toLowerCase()) || (l.freelancer_name || "").toLowerCase() === name.toLowerCase()
     );
-    for (const lead of leadsToDelete) {
-      deleteLeadFromFirestore(lead.id).catch(() => {
-      });
+    const leadIdsToDelete = new Set(leadsToDelete.map((l) => l.id));
+    this.data.leads = (this.data.leads || []).filter((l) => !leadIdsToDelete.has(l.id));
+    if (this.data.lead_notes) {
+      this.data.lead_notes = this.data.lead_notes.filter((n) => !leadIdsToDelete.has(n.lead_id));
     }
-    this.data.leads = (this.data.leads || []).filter(
-      (l) => !matchesFreelancerId(l.freelancer_id, id) && !matchesFreelancerId(l.freelancer_id, code) && !codes.includes((l.freelancer_id || "").toLowerCase())
-    );
     const jobsToDelete = (this.data.search_jobs || []).filter(
       (j) => matchesFreelancerId(j.freelancer_id, id) || matchesFreelancerId(j.freelancer_id, code) || codes.includes((j.freelancer_id || "").toLowerCase())
     );
-    for (const job of jobsToDelete) {
-      deleteJobFromFirestore(job.id).catch(() => {
-      });
-    }
-    this.data.search_jobs = (this.data.search_jobs || []).filter(
-      (j) => !matchesFreelancerId(j.freelancer_id, id) && !matchesFreelancerId(j.freelancer_id, code) && !codes.includes((j.freelancer_id || "").toLowerCase())
-    );
+    const jobIdsToDelete = new Set(jobsToDelete.map((j) => j.id));
+    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !jobIdsToDelete.has(j.id));
     const activitiesToDelete = (this.data.activities || []).filter(
-      (a) => matchesFreelancerId(a.freelancer_id, id) || matchesFreelancerId(a.freelancer_id, code) || codes.includes((a.freelancer_id || "").toLowerCase())
+      (a) => matchesFreelancerId(a.freelancer_id, id) || matchesFreelancerId(a.freelancer_id, code) || codes.includes((a.freelancer_id || "").toLowerCase()) || (a.freelancer_name || "").toLowerCase() === name.toLowerCase()
     );
-    for (const act of activitiesToDelete) {
-      deleteActivityFromFirestore(act.id).catch(() => {
+    const actIdsToDelete = new Set(activitiesToDelete.map((a) => a.id));
+    this.data.activities = (this.data.activities || []).filter((a) => !actIdsToDelete.has(a.id));
+    this.save();
+    let firestoreStats = { leadsDeleted: 0, jobsDeleted: 0, activitiesDeleted: 0 };
+    try {
+      firestoreStats = await deleteFreelancerAndAllDataFromFirestore(
+        f?.id || id,
+        code,
+        name
+      );
+    } catch (err) {
+      console.warn("[DB] Erro ao limpar workspace do Firestore:", err);
+    }
+    if (f) {
+      await syncFreelancerToFirestore(f).catch(() => {
       });
     }
-    this.data.activities = (this.data.activities || []).filter(
-      (a) => !matchesFreelancerId(a.freelancer_id, id) && !matchesFreelancerId(a.freelancer_id, code) && !codes.includes((a.freelancer_id || "").toLowerCase())
-    );
+    return { leadsRemoved: Math.max(leadsToDelete.length, firestoreStats.leadsDeleted) };
+  }
+  async deleteLead(id) {
+    const idx = (this.data.leads || []).findIndex((l) => l.id === id);
+    if (idx !== -1) {
+      this.data.leads.splice(idx, 1);
+    }
+    if (this.data.lead_notes) {
+      this.data.lead_notes = this.data.lead_notes.filter((n) => n.lead_id !== id);
+    }
     this.save();
-    return { leadsRemoved: leadsToDelete.length };
+    await deleteLeadFromFirestore(id).catch(() => {
+    });
+    return true;
   }
   // --- ACTIVITIES AUDIT LOG ---
   logActivity(activity) {
@@ -2479,7 +2571,7 @@ var ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || "gustavo34";
 var adminSessions = /* @__PURE__ */ new Set();
 var freelancerSessions = /* @__PURE__ */ new Map();
 adminSessions.add("admin_master_session_token");
-app.use("/api", (req, _res, next) => {
+app.use("/api", async (req, _res, next) => {
   const authHeader = req.headers.authorization || req.headers["x-access-token"];
   const token = authHeader ? authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : authHeader.trim() : "";
   if (token && (token.startsWith("free_sess_") || freelancerSessions.has(token))) {
@@ -2501,7 +2593,7 @@ app.use("/api", (req, _res, next) => {
       if (!freelancer && freelancerId && freelancerId.length >= 2) {
         const code = freelancerId.replace(/^free_/, "").toLowerCase();
         const formattedName = code.charAt(0).toUpperCase() + code.slice(1);
-        freelancer = db.createFreelancer({
+        freelancer = await db.createFreelancer({
           name: formattedName,
           email: `${code}@ghprospeccao.com`,
           access_code: code,
@@ -2652,7 +2744,7 @@ app.post("/api/freelancer/auth/verify", async (req, res) => {
   if (!freelancer && accessCode && accessCode.trim().length >= 2) {
     const cleanCode = accessCode.trim().toLowerCase();
     const formattedName = cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1);
-    freelancer = db.createFreelancer({
+    freelancer = await db.createFreelancer({
       name: formattedName,
       email: `${cleanCode}@ghprospeccao.com`,
       access_code: cleanCode,
@@ -2726,6 +2818,23 @@ app.get("/api/freelancer/me", (req, res) => {
   }
   res.json({ freelancer: f });
 });
+app.post("/api/freelancer/workspace/reset", async (req, res) => {
+  try {
+    let freelancerId = req.user?.role === "freelancer" ? req.user.freelancerId || req.user.id : req.body?.freelancerId || req.query.freelancer_id;
+    if (!freelancerId) {
+      return res.status(400).json({ error: "Identifica\xE7\xE3o do freelancer \xE9 obrigat\xF3ria para zerar o workspace." });
+    }
+    const result = await db.cleanFreelancerWorkspace(freelancerId);
+    res.json({
+      success: true,
+      leadsRemoved: result.leadsRemoved,
+      message: `Workspace zerado com sucesso! ${result.leadsRemoved} leads foram removidos.`
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
 app.get("/api/admin/dashboard/stats", requireAdmin, (req, res) => {
   try {
     const stats = db.getAdminDashboardStats({
@@ -2757,13 +2866,13 @@ app.get("/api/admin/freelancers", requireAdmin, (_req, res) => {
     res.status(500).json({ error: message });
   }
 });
-app.post("/api/admin/freelancers", requireAdmin, (req, res) => {
+app.post("/api/admin/freelancers", requireAdmin, async (req, res) => {
   try {
     const { name, email, access_code, notes, pin, status } = req.body;
     if (!name || !email) {
       return res.status(400).json({ error: "Nome e e-mail s\xE3o obrigat\xF3rios para cadastrar um freelancer." });
     }
-    const freelancer = db.createFreelancer({
+    const freelancer = await db.createFreelancer({
       name,
       email,
       access_code,
@@ -2845,13 +2954,39 @@ app.post("/api/admin/freelancers/:id/regenerate-link", requireAdmin, (req, res) 
     res.status(500).json({ error: message });
   }
 });
-app.delete("/api/admin/freelancers/:id", requireAdmin, (req, res) => {
+app.delete("/api/admin/freelancers/:id", requireAdmin, async (req, res) => {
   try {
-    const ok = db.deleteFreelancer(req.params.id);
-    if (!ok) {
+    const result = await db.deleteFreelancer(req.params.id);
+    if (!result.success) {
       return res.status(404).json({ error: "Freelancer n\xE3o encontrado." });
     }
-    res.json({ success: true, message: "Freelancer exclu\xEDdo com sucesso." });
+    res.json({
+      success: true,
+      message: `Workspace "${result.name || req.params.id}" e todos os dados associados (${result.leadsRemoved} leads, ${result.jobsRemoved} buscas e ${result.activitiesRemoved} atividades) foram exclu\xEDdos permanentemente.`,
+      details: result
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.post("/api/admin/freelancers/:id/reset", requireAdmin, async (req, res) => {
+  try {
+    const result = await db.cleanFreelancerWorkspace(req.params.id);
+    res.json({
+      success: true,
+      leadsRemoved: result.leadsRemoved,
+      message: `Workspace zerado com sucesso! ${result.leadsRemoved} leads foram removidos.`
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.delete("/api/leads/:id", async (req, res) => {
+  try {
+    await db.deleteLead(req.params.id);
+    res.json({ success: true, message: "Lead exclu\xEDdo com sucesso." });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });

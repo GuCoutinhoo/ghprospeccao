@@ -25,6 +25,7 @@ import {
   syncSettingsToFirestore,
   syncFreelancerToFirestore,
   deleteFreelancerFromFirestore,
+  deleteFreelancerAndAllDataFromFirestore,
   deleteLeadFromFirestore,
   deleteJobFromFirestore,
   deleteActivityFromFirestore,
@@ -53,14 +54,13 @@ function slugifyFreelancerName(name?: string | null): string {
 
 export function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
   if (!targetFid || targetFid === 'ALL') return true;
-  if (!leadFid) return true; // Estabelecimentos da base comum/global permanecem acessíveis
+  if (!leadFid) return true;
   const lf = leadFid.toLowerCase().trim();
   const tf = targetFid.toLowerCase().trim();
   if (lf === tf) return true;
   const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
   const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
   if (cleanLf === cleanTf) return true;
-  // Trata sufixos numéricos e variações de slug como demonstracao-01, demonstracao-02, demonstracao-2
   const baseLf = cleanLf.replace(/[-_]\d+$/, '');
   const baseTf = cleanTf.replace(/[-_]\d+$/, '');
   if (baseLf === baseTf) return true;
@@ -68,38 +68,35 @@ export function matchesFreelancerId(leadFid: string | undefined | null, targetFi
   return false;
 }
 
+const NICHE_SYNONYMS: Record<string, string[]> = {
+  barbearia: ['barber', 'barbearia', 'barbeiro', 'corte masculino', 'hair_care', 'beauty_salon', 'cabelereiro', 'salao'],
+  odontologia: ['dentista', 'odonto', 'odontologica', 'odontologico', 'consultorio odontologico', 'clinica odontologica', 'dental_clinic', 'dentist'],
+  restaurante: ['restaurante', 'bistro', 'gastronomia', 'churrascaria', 'pizzaria', 'restaurant', 'food', 'lanchonete', 'hamburgueria'],
+  clinica: ['clinica', 'medico', 'consultorio', 'saude', 'hospital', 'doctor', 'health'],
+  estetica: ['estetica', 'salao de beleza', 'manicure', 'depilacao', 'spa', 'beauty_salon', 'estetica automotiva'],
+  academia: ['academia', 'fitness', 'crossfit', 'treino', 'gym', 'musculacao'],
+  advocacia: ['advogado', 'advocacia', 'juridico', 'direito', 'lawyer'],
+  contabilidade: ['contabilidade', 'contador', 'fiscal', 'accounting'],
+  mecanica: ['oficina', 'mecanica', 'auto', 'car_repair', 'oficina mecanica'],
+  imobiliaria: ['imobiliaria', 'corretor', 'imoveis', 'real_estate_agency'],
+  pet: ['pet shop', 'veterinario', 'banho e tosa', 'veterinary_care', 'pet'],
+  eletricista: ['eletricista', 'eletrica', 'solar', 'energia solar', 'energia', 'electrician'],
+};
+
 export function matchesNicheSemantics(text: string, niche: string): boolean {
   if (!text || !niche) return false;
   const normText = normalizeStr(text);
   const normNiche = normalizeStr(niche);
-
   if (normText.includes(normNiche) || normNiche.includes(normText)) {
     return true;
   }
-
-  const nicheSynonyms: Record<string, string[]> = {
-    barbearia: ['barber', 'barbearia', 'barbeiro', 'corte masculino', 'hair_care', 'beauty_salon', 'cabelereiro', 'salao'],
-    odontologia: ['dentista', 'odonto', 'odontologica', 'odontologico', 'consultorio odontologico', 'clinica odontologica', 'dental_clinic', 'dentist'],
-    restaurante: ['restaurante', 'bistro', 'gastronomia', 'churrascaria', 'pizzaria', 'restaurant', 'food', 'lanchonete', 'hamburgueria'],
-    clinica: ['clinica', 'medico', 'consultorio', 'saude', 'hospital', 'doctor', 'health'],
-    estetica: ['estetica', 'salao de beleza', 'manicure', 'depilacao', 'spa', 'beauty_salon', 'estetica automotiva'],
-    academia: ['academia', 'fitness', 'crossfit', 'treino', 'gym', 'musculacao'],
-    advocacia: ['advogado', 'advocacia', 'juridico', 'direito', 'lawyer'],
-    contabilidade: ['contabilidade', 'contador', 'fiscal', 'accounting'],
-    mecanica: ['oficina', 'mecanica', 'auto', 'car_repair', 'oficina mecanica'],
-    imobiliaria: ['imobiliaria', 'corretor', 'imoveis', 'real_estate_agency'],
-    pet: ['pet shop', 'veterinario', 'banho e tosa', 'veterinary_care', 'pet'],
-    eletricista: ['eletricista', 'eletrica', 'solar', 'energia solar', 'energia', 'electrician'],
-  };
-
-  for (const [key, synonyms] of Object.entries(nicheSynonyms)) {
+  for (const [key, synonyms] of Object.entries(NICHE_SYNONYMS)) {
     const keyMatchedByNiche = normNiche.includes(key) || key.includes(normNiche) || synonyms.some((s) => normNiche.includes(normalizeStr(s)));
     const keyMatchedByText = normText.includes(key) || key.includes(normText) || synonyms.some((s) => normText.includes(normalizeStr(s)));
     if (keyMatchedByNiche && keyMatchedByText) {
       return true;
     }
   }
-
   const nicheWords = normNiche.split(/\s+/).filter((w) => w.length > 2);
   if (nicheWords.length > 0 && nicheWords.some((word) => normText.includes(word))) {
     return true;
@@ -108,11 +105,11 @@ export function matchesNicheSemantics(text: string, niche: string): boolean {
   if (textWords.length > 0 && textWords.some((word) => normNiche.includes(word))) {
     return true;
   }
-
   return false;
 }
 
 const deletedFreelancerCodes = new Set<string>();
+const deletedLeadIds = new Set<string>();
 
 function generateAccessCode(): string {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -257,10 +254,33 @@ class Database {
     try {
       const remote = await fetchAllFromFirestore();
       if (remote) {
-        // MERGE LEADS de forma segura
+        // MERGE LEADS de forma segura (sem sobrescrever leads recém-criados localmente e sem reviver leads de workspaces deletados)
         const leadMap = new Map<string, Lead>();
         for (const l of remote.leads || []) {
           if (!l || !l.id) continue;
+          const fid = (l.freelancer_id || '').toLowerCase().trim();
+          const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
+          const targetFreelancer = (this.data.freelancers || []).find(
+            (f) => f.id.toLowerCase() === fid || f.access_code.toLowerCase() === cleanFid
+          );
+
+          // Se pertence a um freelancer que foi deletado ou não existe mais
+          if (fid && !targetFreelancer && (deletedFreelancerCodes.has(fid) || deletedFreelancerCodes.has(`free_${fid}`))) {
+            deleteLeadFromFirestore(l.id).catch(() => {});
+            continue;
+          }
+
+          // Se o freelancer existe, mas o lead foi criado ANTES do workspace atual ser criado:
+          // Trata-se de um lead órfão da workspace anterior de mesmo nome que foi excluída!
+          if (targetFreelancer && targetFreelancer.created_at && l.created_at) {
+            const leadTime = new Date(l.created_at).getTime();
+            const freeTime = new Date(targetFreelancer.created_at).getTime();
+            if (leadTime < freeTime - 2000) {
+              deleteLeadFromFirestore(l.id).catch(() => {});
+              continue;
+            }
+          }
+
           leadMap.set(l.id, l);
         }
         for (const l of this.data.leads || []) {
@@ -528,7 +548,7 @@ class Database {
       const targetNiche = normalizeStr(params.niche);
       filtered = filtered.filter((l) => {
         const ln = normalizeStr(l.niche);
-        return ln.includes(targetNiche) || targetNiche.includes(ln) || matchesNicheSemantics(ln, targetNiche);
+        return ln.includes(targetNiche) || targetNiche.includes(ln);
       });
     }
 
@@ -625,7 +645,7 @@ class Database {
       const targetNiche = normalizeStr(params.niche);
       leads = leads.filter((l) => {
         const ln = normalizeStr(l.niche);
-        return ln.includes(targetNiche) || targetNiche.includes(ln) || matchesNicheSemantics(ln, targetNiche);
+        return ln.includes(targetNiche) || targetNiche.includes(ln);
       });
     }
     for (const lead of leads) {
@@ -885,14 +905,14 @@ class Database {
     });
   }
 
-  public createFreelancer(data: {
+  public async createFreelancer(data: {
     name: string;
     email: string;
     access_code?: string;
     notes?: string;
     pin?: string;
     status?: FreelancerStatus;
-  }): Freelancer {
+  }): Promise<Freelancer> {
     const rawName = data.name.trim();
 
     // 1. Gera código de acesso amigável com base no nome cadastrado
@@ -914,8 +934,53 @@ class Database {
     const id = `free_${code}`;
     const now = new Date().toISOString();
 
+    // Garante que o novo workspace comece 100% LIMPO e ZERADO
+    // Remove qualquer rastro no Set de excluídos para não bloquear o novo cadastro
     deletedFreelancerCodes.delete(code.toLowerCase());
     deletedFreelancerCodes.delete(id.toLowerCase());
+
+    const rawCodesToClean = [
+      id,
+      code,
+      `free_${code}`,
+      slugifyFreelancerName(rawName),
+      `free_${slugifyFreelancerName(rawName)}`,
+    ].filter(Boolean) as string[];
+    const codesToClean = rawCodesToClean.map((c) => c.toLowerCase());
+
+    // 2. PURGA COMPLETA NO FIRESTORE antes de criar: qualquer resquício de leads, buscas ou atividades
+    try {
+      await deleteFreelancerAndAllDataFromFirestore(id, code, rawName);
+    } catch (err) {
+      console.warn('[DB] Erro na pré-purga de dados do Firestore para novo workspace:', err);
+    }
+
+    // 3. PURGA LOCAL: limpa qualquer lead antigo da memória/disco
+    this.data.leads = (this.data.leads || []).filter(
+      (l) =>
+        !matchesFreelancerId(l.freelancer_id, id) &&
+        !matchesFreelancerId(l.freelancer_id, code) &&
+        !matchesFreelancerId(l.user_id, id) &&
+        !matchesFreelancerId(l.user_id, code) &&
+        !codesToClean.includes((l.freelancer_id || '').toLowerCase()) &&
+        !codesToClean.includes((l.user_id || '').toLowerCase()) &&
+        (l.freelancer_name || '').toLowerCase() !== rawName.toLowerCase()
+    );
+
+    this.data.search_jobs = (this.data.search_jobs || []).filter(
+      (j) =>
+        !matchesFreelancerId(j.freelancer_id, id) &&
+        !matchesFreelancerId(j.freelancer_id, code) &&
+        !codesToClean.includes((j.freelancer_id || '').toLowerCase())
+    );
+
+    this.data.activities = (this.data.activities || []).filter(
+      (a) =>
+        !matchesFreelancerId(a.freelancer_id, id) &&
+        !matchesFreelancerId(a.freelancer_id, code) &&
+        !codesToClean.includes((a.freelancer_id || '').toLowerCase()) &&
+        (a.freelancer_name || '').toLowerCase() !== rawName.toLowerCase()
+    );
 
     const freelancer: Freelancer = {
       id,
@@ -932,13 +997,13 @@ class Database {
     if (!this.data.freelancers) this.data.freelancers = [];
     this.data.freelancers.unshift(freelancer);
     this.save();
-    syncFreelancerToFirestore(freelancer).catch(() => {});
+    await syncFreelancerToFirestore(freelancer).catch(() => {});
 
     this.logActivity({
       freelancer_id: freelancer.id,
       freelancer_name: freelancer.name,
       action_type: 'freelancer_created',
-      description: `Administrador cadastrou o freelancer "${freelancer.name}" com link de acesso: /f/${freelancer.access_code}`,
+      description: `Administrador cadastrou o freelancer "${freelancer.name}" com workspace zerado. Link de acesso: /f/${freelancer.access_code}`,
       metadata: { freelancer_id: freelancer.id, access_code: freelancer.access_code },
     });
 
@@ -1018,16 +1083,28 @@ class Database {
     return f;
   }
 
-  public deleteFreelancer(id: string): boolean {
-    const idx = (this.data.freelancers || []).findIndex((f) => f.id === id);
-    if (idx === -1) return false;
+  public async deleteFreelancer(id: string): Promise<{
+    success: boolean;
+    name?: string;
+    leadsRemoved: number;
+    jobsRemoved: number;
+    activitiesRemoved: number;
+  }> {
+    const idx = (this.data.freelancers || []).findIndex(
+      (f) => f.id === id || f.access_code?.toLowerCase() === id.toLowerCase()
+    );
+    if (idx === -1) {
+      return { success: false, leadsRemoved: 0, jobsRemoved: 0, activitiesRemoved: 0 };
+    }
     const removed = this.data.freelancers.splice(idx, 1)[0];
     const rawCodes = [
       id,
+      removed.id,
       removed.access_code,
       `free_${removed.access_code}`,
       slugifyFreelancerName(removed.name),
       `free_${slugifyFreelancerName(removed.name)}`,
+      removed.name,
     ].filter(Boolean) as string[];
 
     const codes = rawCodes.map((c) => c.toLowerCase());
@@ -1036,94 +1113,100 @@ class Database {
       deletedFreelancerCodes.add(`free_${c}`);
     }
 
-    // 1. Remove e deleta TODOS os leads vinculados a este freelancer/workspace (localmente e no Firestore)
+    // 1. Remove TODOS os leads vinculados a este freelancer no banco local
     const leadsToDelete = (this.data.leads || []).filter(
       (l) =>
         matchesFreelancerId(l.freelancer_id, id) ||
         matchesFreelancerId(l.freelancer_id, removed.access_code) ||
-        codes.includes((l.freelancer_id || '').toLowerCase())
+        matchesFreelancerId(l.user_id, id) ||
+        matchesFreelancerId(l.user_id, removed.access_code) ||
+        codes.includes((l.freelancer_id || '').toLowerCase()) ||
+        codes.includes((l.user_id || '').toLowerCase()) ||
+        (l.freelancer_name || '').toLowerCase() === removed.name.toLowerCase()
     );
-    for (const lead of leadsToDelete) {
-      deleteLeadFromFirestore(lead.id).catch(() => {});
-    }
-    this.data.leads = (this.data.leads || []).filter(
-      (l) =>
-        !matchesFreelancerId(l.freelancer_id, id) &&
-        !matchesFreelancerId(l.freelancer_id, removed.access_code) &&
-        !codes.includes((l.freelancer_id || '').toLowerCase())
-    );
+    const leadIdsToDelete = new Set(leadsToDelete.map((l) => l.id));
 
-    // 2. Remove e deleta todas as buscas vinculadas a este freelancer/workspace
+    this.data.leads = (this.data.leads || []).filter((l) => !leadIdsToDelete.has(l.id));
+
+    // Remove notas desses leads
+    if (this.data.lead_notes) {
+      this.data.lead_notes = this.data.lead_notes.filter((n) => !leadIdsToDelete.has(n.lead_id));
+    }
+
+    // 2. Remove buscas vinculadas
     const jobsToDelete = (this.data.search_jobs || []).filter(
       (j) =>
         matchesFreelancerId(j.freelancer_id, id) ||
         matchesFreelancerId(j.freelancer_id, removed.access_code) ||
         codes.includes((j.freelancer_id || '').toLowerCase())
     );
-    for (const job of jobsToDelete) {
-      deleteJobFromFirestore(job.id).catch(() => {});
-    }
-    this.data.search_jobs = (this.data.search_jobs || []).filter(
-      (j) =>
-        !matchesFreelancerId(j.freelancer_id, id) &&
-        !matchesFreelancerId(j.freelancer_id, removed.access_code) &&
-        !codes.includes((j.freelancer_id || '').toLowerCase())
-    );
+    const jobIdsToDelete = new Set(jobsToDelete.map((j) => j.id));
+    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !jobIdsToDelete.has(j.id));
 
-    // 3. Remove e deleta atividades vinculadas a este freelancer
+    // 3. Remove atividades vinculadas
     const activitiesToDelete = (this.data.activities || []).filter(
       (a) =>
         matchesFreelancerId(a.freelancer_id, id) ||
         matchesFreelancerId(a.freelancer_id, removed.access_code) ||
-        codes.includes((a.freelancer_id || '').toLowerCase())
+        codes.includes((a.freelancer_id || '').toLowerCase()) ||
+        (a.freelancer_name || '').toLowerCase() === removed.name.toLowerCase()
     );
-    for (const act of activitiesToDelete) {
-      deleteActivityFromFirestore(act.id).catch(() => {});
-    }
-    this.data.activities = (this.data.activities || []).filter(
-      (a) =>
-        !matchesFreelancerId(a.freelancer_id, id) &&
-        !matchesFreelancerId(a.freelancer_id, removed.access_code) &&
-        !codes.includes((a.freelancer_id || '').toLowerCase())
-    );
+    const actIdsToDelete = new Set(activitiesToDelete.map((a) => a.id));
+    this.data.activities = (this.data.activities || []).filter((a) => !actIdsToDelete.has(a.id));
 
     this.save();
-    deleteFreelancerFromFirestore(id).catch(() => {});
-    if (removed.access_code && removed.access_code !== id) {
-      deleteFreelancerFromFirestore(`free_${removed.access_code}`).catch(() => {});
-      deleteFreelancerFromFirestore(removed.access_code).catch(() => {});
+
+    // 4. PURGA ABSOLUTA NO FIRESTORE (Aguardada para garantir 100% de exclusão)
+    let firestoreStats = { leadsDeleted: 0, jobsDeleted: 0, activitiesDeleted: 0 };
+    try {
+      firestoreStats = await deleteFreelancerAndAllDataFromFirestore(
+        removed.id,
+        removed.access_code,
+        removed.name
+      );
+    } catch (err) {
+      console.warn('[DB] Erro ao deletar dados do Firestore:', err);
     }
 
     this.logActivity({
       freelancer_id: id,
       freelancer_name: removed.name,
       action_type: 'freelancer_blocked',
-      description: `Administrador removeu o cadastro e todos os dados do workspace "${removed.name}"`,
+      description: `Administrador excluiu permanentemente o workspace de "${removed.name}" e todos os dados associados.`,
     });
-    return true;
+
+    return {
+      success: true,
+      name: removed.name,
+      leadsRemoved: Math.max(leadsToDelete.length, firestoreStats.leadsDeleted),
+      jobsRemoved: Math.max(jobsToDelete.length, firestoreStats.jobsDeleted),
+      activitiesRemoved: Math.max(activitiesToDelete.length, firestoreStats.activitiesDeleted),
+    };
   }
 
-  public cleanFreelancerWorkspace(id: string): { leadsRemoved: number } {
+  public async cleanFreelancerWorkspace(id: string): Promise<{ leadsRemoved: number }> {
     const f = this.getFreelancerById(id) || this.getFreelancerByAccessCode(id);
     const code = f?.access_code || id;
-    const rawCodes = [id, code, `free_${code}`, f?.id, slugifyFreelancerName(f?.name)].filter(Boolean) as string[];
+    const name = f?.name || id;
+    const rawCodes = [id, code, `free_${code}`, f?.id, slugifyFreelancerName(name)].filter(Boolean) as string[];
     const codes = rawCodes.map((c) => c.toLowerCase());
 
     const leadsToDelete = (this.data.leads || []).filter(
       (l) =>
         matchesFreelancerId(l.freelancer_id, id) ||
         matchesFreelancerId(l.freelancer_id, code) ||
-        codes.includes((l.freelancer_id || '').toLowerCase())
+        matchesFreelancerId(l.user_id, id) ||
+        matchesFreelancerId(l.user_id, code) ||
+        codes.includes((l.freelancer_id || '').toLowerCase()) ||
+        codes.includes((l.user_id || '').toLowerCase()) ||
+        (l.freelancer_name || '').toLowerCase() === name.toLowerCase()
     );
-    for (const lead of leadsToDelete) {
-      deleteLeadFromFirestore(lead.id).catch(() => {});
+    const leadIdsToDelete = new Set(leadsToDelete.map((l) => l.id));
+    this.data.leads = (this.data.leads || []).filter((l) => !leadIdsToDelete.has(l.id));
+
+    if (this.data.lead_notes) {
+      this.data.lead_notes = this.data.lead_notes.filter((n) => !leadIdsToDelete.has(n.lead_id));
     }
-    this.data.leads = (this.data.leads || []).filter(
-      (l) =>
-        !matchesFreelancerId(l.freelancer_id, id) &&
-        !matchesFreelancerId(l.freelancer_id, code) &&
-        !codes.includes((l.freelancer_id || '').toLowerCase())
-    );
 
     const jobsToDelete = (this.data.search_jobs || []).filter(
       (j) =>
@@ -1131,34 +1214,52 @@ class Database {
         matchesFreelancerId(j.freelancer_id, code) ||
         codes.includes((j.freelancer_id || '').toLowerCase())
     );
-    for (const job of jobsToDelete) {
-      deleteJobFromFirestore(job.id).catch(() => {});
-    }
-    this.data.search_jobs = (this.data.search_jobs || []).filter(
-      (j) =>
-        !matchesFreelancerId(j.freelancer_id, id) &&
-        !matchesFreelancerId(j.freelancer_id, code) &&
-        !codes.includes((j.freelancer_id || '').toLowerCase())
-    );
+    const jobIdsToDelete = new Set(jobsToDelete.map((j) => j.id));
+    this.data.search_jobs = (this.data.search_jobs || []).filter((j) => !jobIdsToDelete.has(j.id));
 
     const activitiesToDelete = (this.data.activities || []).filter(
       (a) =>
         matchesFreelancerId(a.freelancer_id, id) ||
         matchesFreelancerId(a.freelancer_id, code) ||
-        codes.includes((a.freelancer_id || '').toLowerCase())
+        codes.includes((a.freelancer_id || '').toLowerCase()) ||
+        (a.freelancer_name || '').toLowerCase() === name.toLowerCase()
     );
-    for (const act of activitiesToDelete) {
-      deleteActivityFromFirestore(act.id).catch(() => {});
-    }
-    this.data.activities = (this.data.activities || []).filter(
-      (a) =>
-        !matchesFreelancerId(a.freelancer_id, id) &&
-        !matchesFreelancerId(a.freelancer_id, code) &&
-        !codes.includes((a.freelancer_id || '').toLowerCase())
-    );
+    const actIdsToDelete = new Set(activitiesToDelete.map((a) => a.id));
+    this.data.activities = (this.data.activities || []).filter((a) => !actIdsToDelete.has(a.id));
 
     this.save();
-    return { leadsRemoved: leadsToDelete.length };
+
+    // Limpa também do Firestore
+    let firestoreStats = { leadsDeleted: 0, jobsDeleted: 0, activitiesDeleted: 0 };
+    try {
+      firestoreStats = await deleteFreelancerAndAllDataFromFirestore(
+        f?.id || id,
+        code,
+        name
+      );
+    } catch (err) {
+      console.warn('[DB] Erro ao limpar workspace do Firestore:', err);
+    }
+
+    // Se o freelancer continuará ativo, re-sincroniza apenas o documento dele
+    if (f) {
+      await syncFreelancerToFirestore(f).catch(() => {});
+    }
+
+    return { leadsRemoved: Math.max(leadsToDelete.length, firestoreStats.leadsDeleted) };
+  }
+
+  public async deleteLead(id: string): Promise<boolean> {
+    const idx = (this.data.leads || []).findIndex((l) => l.id === id);
+    if (idx !== -1) {
+      this.data.leads.splice(idx, 1);
+    }
+    if (this.data.lead_notes) {
+      this.data.lead_notes = this.data.lead_notes.filter((n) => n.lead_id !== id);
+    }
+    this.save();
+    await deleteLeadFromFirestore(id).catch(() => {});
+    return true;
   }
 
   // --- ACTIVITIES AUDIT LOG ---

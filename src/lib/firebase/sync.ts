@@ -178,6 +178,130 @@ export async function deleteFreelancerFromFirestore(id: string): Promise<void> {
   }
 }
 
+export async function deleteFreelancerAndAllDataFromFirestore(
+  freelancerId: string,
+  accessCode?: string,
+  name?: string
+): Promise<{ leadsDeleted: number; jobsDeleted: number; activitiesDeleted: number }> {
+  const db = getFirestoreDb();
+  if (!db) return { leadsDeleted: 0, jobsDeleted: 0, activitiesDeleted: 0 };
+
+  const rawIdentifiers = [
+    freelancerId,
+    accessCode,
+    `free_${accessCode}`,
+    freelancerId?.replace(/^free_/, ''),
+    name,
+    name?.toLowerCase(),
+  ].filter(Boolean) as string[];
+
+  const normIdentifiers = Array.from(
+    new Set(rawIdentifiers.map((s) => s.toLowerCase().trim()))
+  );
+
+  let leadsDeleted = 0;
+  let jobsDeleted = 0;
+  let activitiesDeleted = 0;
+
+  try {
+    // 1. Exclui TODOS os leads vinculados a este freelancer no Firestore
+    const leadsSnap = await getDocs(collection(db, 'leads')).catch(() => null);
+    if (leadsSnap) {
+      const deletePromises: Promise<void>[] = [];
+      leadsSnap.forEach((d) => {
+        const data = d.data();
+        const fid = (data.freelancer_id || '').toLowerCase().trim();
+        const uid = (data.user_id || '').toLowerCase().trim();
+        const fname = (data.freelancer_name || '').toLowerCase().trim();
+        const docId = d.id.toLowerCase();
+
+        const matches =
+          normIdentifiers.some((id) => fid === id || fid === `free_${id}` || (id.startsWith('free_') && fid === id.substring(5))) ||
+          normIdentifiers.some((id) => uid === id || uid === `free_${id}` || (id.startsWith('free_') && uid === id.substring(5))) ||
+          (name && fname === name.toLowerCase().trim()) ||
+          (accessCode && docId.includes(accessCode.toLowerCase().trim()) && docId.startsWith('lead_'));
+
+        if (matches) {
+          leadsDeleted++;
+          deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+        }
+      });
+      await Promise.all(deletePromises);
+    }
+
+    // 2. Exclui buscas do freelancer no Firestore
+    const jobsSnap = await getDocs(collection(db, 'search_jobs')).catch(() => null);
+    if (jobsSnap) {
+      const deletePromises: Promise<void>[] = [];
+      jobsSnap.forEach((d) => {
+        const data = d.data();
+        const fid = (data.freelancer_id || '').toLowerCase().trim();
+        if (normIdentifiers.some((id) => fid === id || fid === `free_${id}`)) {
+          jobsDeleted++;
+          deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+        }
+      });
+      await Promise.all(deletePromises);
+    }
+
+    // 3. Exclui atividades de auditoria do freelancer no Firestore
+    const actSnap = await getDocs(collection(db, 'activities')).catch(() => null);
+    if (actSnap) {
+      const deletePromises: Promise<void>[] = [];
+      actSnap.forEach((d) => {
+        const data = d.data();
+        const fid = (data.freelancer_id || '').toLowerCase().trim();
+        const fname = (data.freelancer_name || '').toLowerCase().trim();
+        if (
+          normIdentifiers.some((id) => fid === id || fid === `free_${id}`) ||
+          (name && fname === name.toLowerCase().trim())
+        ) {
+          activitiesDeleted++;
+          deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+        }
+      });
+      await Promise.all(deletePromises);
+    }
+
+    // 4. Exclui o cadastro do freelancer na coleção freelancers
+    const freePromises: Promise<void>[] = [];
+    if (freelancerId) {
+      freePromises.push(deleteDoc(doc(db, 'freelancers', freelancerId)).catch(() => {}));
+      const cleanFid = freelancerId.replace(/^free_/, '');
+      if (cleanFid !== freelancerId) {
+        freePromises.push(deleteDoc(doc(db, 'freelancers', cleanFid)).catch(() => {}));
+      }
+    }
+    if (accessCode) {
+      freePromises.push(deleteDoc(doc(db, 'freelancers', accessCode)).catch(() => {}));
+      freePromises.push(deleteDoc(doc(db, 'freelancers', `free_${accessCode}`)).catch(() => {}));
+    }
+
+    // Varre também coleção freelancers por nome ou código para não deixar nenhum documento duplicado
+    const freeSnap = await getDocs(collection(db, 'freelancers')).catch(() => null);
+    if (freeSnap) {
+      freeSnap.forEach((d) => {
+        const data = d.data();
+        const dName = (data.name || '').toLowerCase().trim();
+        const dCode = (data.access_code || '').toLowerCase().trim();
+        if (
+          (name && dName === name.toLowerCase().trim()) ||
+          (accessCode && dCode === accessCode.toLowerCase().trim()) ||
+          normIdentifiers.includes(d.id.toLowerCase())
+        ) {
+          freePromises.push(deleteDoc(d.ref).catch(() => {}));
+        }
+      });
+    }
+
+    await Promise.all(freePromises);
+  } catch (err) {
+    console.warn('[Firebase] Erro na exclusão completa do workspace:', err);
+  }
+
+  return { leadsDeleted, jobsDeleted, activitiesDeleted };
+}
+
 export async function deleteLeadFromFirestore(id: string): Promise<void> {
   const db = getFirestoreDb();
   if (!db || !id) return;

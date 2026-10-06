@@ -22,36 +22,27 @@ import {
   filterLeadsList,
   syncLeadUpdateToFirestoreDirect,
   invalidateLeadsCache,
-  matchesFreelancerId,
+  deleteFreelancerDataDirectFromClient,
+  deleteLeadDirectFromClient,
 } from './firebase/client';
 
 export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extraHeaders };
   if (typeof window === 'undefined') return headers;
 
-  const adminToken = localStorage.getItem('gh_admin_token');
-  const adminUser = localStorage.getItem('gh_admin_user');
   const freelancerToken = localStorage.getItem('gh_freelancer_token');
-
-  // Se o usuário está autenticado como administrador mestre, sempre prioriza token de admin
-  if (adminToken && adminUser) {
-    headers['Authorization'] = `Bearer ${adminToken}`;
-    return headers;
-  }
-
   if (freelancerToken) {
     headers['Authorization'] = `Bearer ${freelancerToken}`;
     return headers;
   }
 
-  headers['Authorization'] = `Bearer ${adminToken || 'admin_master_session_token'}`;
+  let adminToken = localStorage.getItem('gh_admin_token') || 'admin_master_session_token';
+  headers['Authorization'] = `Bearer ${adminToken}`;
   return headers;
 }
 
 export function isFreelancerMode(): boolean {
   if (typeof window === 'undefined') return false;
-  const adminUser = localStorage.getItem('gh_admin_user');
-  if (adminUser) return false;
   return Boolean(localStorage.getItem('gh_freelancer_token'));
 }
 
@@ -157,6 +148,21 @@ export const api = {
     localStorage.removeItem('gh_freelancer_session');
   },
 
+  async resetFreelancerWorkspace(freelancerId?: string): Promise<{ success: boolean; leadsRemoved: number; message: string }> {
+    invalidateLeadsCache();
+    const res = await fetch('/api/freelancer/workspace/reset', {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ freelancerId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao zerar workspace.');
+    }
+    invalidateLeadsCache();
+    return res.json();
+  },
+
   // Admin: Gestão de Freelancers
   async adminGetDashboardStats(filters?: {
     freelancer_id?: string;
@@ -198,6 +204,7 @@ export const api = {
     pin?: string;
     status?: 'active' | 'blocked' | 'inactive';
   }): Promise<{ success: boolean; freelancer: Freelancer; accessLink: string }> {
+    invalidateLeadsCache();
     const res = await fetch('/api/admin/freelancers', {
       method: 'POST',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -207,6 +214,7 @@ export const api = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Falha ao cadastrar freelancer.');
     }
+    invalidateLeadsCache();
     return res.json();
   },
 
@@ -255,12 +263,53 @@ export const api = {
     return res.json();
   },
 
-  async adminDeleteFreelancer(id: string): Promise<{ success: boolean }> {
+  async adminDeleteFreelancer(id: string): Promise<{ success: boolean; message?: string }> {
+    invalidateLeadsCache();
+    try {
+      const fData = await this.adminGetFreelancerById(id).catch(() => null);
+      if (fData?.freelancer) {
+        await deleteFreelancerDataDirectFromClient(
+          fData.freelancer.id,
+          fData.freelancer.access_code,
+          fData.freelancer.name
+        ).catch(() => {});
+      } else {
+        await deleteFreelancerDataDirectFromClient(id, id).catch(() => {});
+      }
+    } catch {}
+
     const res = await fetch(`/api/admin/freelancers/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    if (!res.ok) throw new Error('Falha ao excluir freelancer.');
+
+    invalidateLeadsCache();
+
+    // Se a sessão local pertencia a esse freelancer, encerra-a
+    const session = getActiveFreelancerSession();
+    if (session && (session.freelancer.id === id || session.freelancer.access_code === id)) {
+      this.freelancerLogout();
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao excluir freelancer.');
+    }
+    return res.json();
+  },
+
+  async deleteLead(id: string): Promise<{ success: boolean }> {
+    invalidateLeadsCache();
+    await deleteLeadDirectFromClient(id).catch(() => {});
+    const res = await fetch(`/api/leads/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    invalidateLeadsCache();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao excluir lead.');
+    }
     return res.json();
   },
 
@@ -343,9 +392,8 @@ export const api = {
   // Dashboard
   async getDashboardStats(freelancer_id?: string): Promise<DashboardStats> {
     try {
-      const isFree = isFreelancerMode();
       const session = getActiveFreelancerSession();
-      const targetFreelancerId = freelancer_id || (isFree ? session?.freelancer?.id : undefined);
+      const targetFreelancerId = freelancer_id || session?.freelancer?.id;
       const url = targetFreelancerId && targetFreelancerId !== 'ALL'
         ? `/api/dashboard/stats?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
         : '/api/dashboard/stats';
@@ -365,11 +413,10 @@ export const api = {
     // Se o backend retornou 0 (ou falhou na Vercel), busca os dados reais diretamente do Firestore
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
-    const isFree = isFreelancerMode();
     const session = getActiveFreelancerSession();
-    const targetFreelancerId = freelancer_id || (isFree ? session?.freelancer?.id : undefined);
+    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
+      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
     if (leads && leads.length > 0) {
       return computeStatsFromLeads(leads);
@@ -466,9 +513,8 @@ export const api = {
   // Leads & Niches
   async getNiches(params?: { onlyFavorites?: boolean; freelancer_id?: string }): Promise<{ niche: string; count: number }[]> {
     try {
-      const isFree = isFreelancerMode();
       const session = getActiveFreelancerSession();
-      const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
+      const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
       const query = new URLSearchParams();
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
       if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
@@ -488,11 +534,10 @@ export const api = {
 
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
-    const isFree = isFreelancerMode();
     const session = getActiveFreelancerSession();
-    const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
+    const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
+      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -509,9 +554,8 @@ export const api = {
 
   async getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string; freelancer_id?: string }): Promise<{ state: string; count: number }[]> {
     try {
-      const isFree = isFreelancerMode();
       const session = getActiveFreelancerSession();
-      const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
+      const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
       const query = new URLSearchParams();
       if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
       if (params?.niche && params.niche !== 'ALL') query.set('niche', params.niche);
@@ -532,11 +576,10 @@ export const api = {
 
     const allLeads = await fetchAllLeadsFromFirestore();
     let leads = allLeads;
-    const isFree = isFreelancerMode();
     const session = getActiveFreelancerSession();
-    const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
+    const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
+      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -574,9 +617,8 @@ export const api = {
     limit?: number;
   }): Promise<{ leads: Lead[]; total: number; page: number; totalPages: number }> {
     try {
-      const isFree = isFreelancerMode();
       const session = getActiveFreelancerSession();
-      const targetFreelancerId = params.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
+      const targetFreelancerId = params.freelancer_id || session?.freelancer?.id;
       const query = new URLSearchParams();
       if (params.state) query.set('state', params.state);
       if (params.city) query.set('city', params.city);
@@ -608,10 +650,9 @@ export const api = {
     }
 
     const allLeads = await fetchAllLeadsFromFirestore();
-    const isFree = isFreelancerMode();
     const session = getActiveFreelancerSession();
     const effectiveParams = { ...params };
-    const targetFreelancerId = effectiveParams.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
+    const targetFreelancerId = effectiveParams.freelancer_id || session?.freelancer?.id;
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
       (effectiveParams as any).freelancer_id = targetFreelancerId;
     }
@@ -749,7 +790,7 @@ export const api = {
     const session = getActiveFreelancerSession();
     const targetFreelancerId = freelancer_id || session?.freelancer?.id;
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
+      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
     }
     const board: Record<PipelineStatus, Lead[]> = {
       'NOVO': [],

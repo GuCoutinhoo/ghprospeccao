@@ -5,6 +5,7 @@ import {
   getDocs,
   doc,
   setDoc,
+  deleteDoc,
   Firestore,
 } from 'firebase/firestore';
 import firebaseConfig from '../../../firebase-applet-config.json';
@@ -265,7 +266,25 @@ export function filterLeadsList(
   let filtered = [...leads];
 
   if (params.freelancer_id && params.freelancer_id !== 'ALL') {
-    filtered = filtered.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
+    let freeCreatedAt: number | null = null;
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('gh_freelancer_session') : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.freelancer?.created_at && matchesFreelancerId(parsed.freelancer.id, params.freelancer_id)) {
+          freeCreatedAt = new Date(parsed.freelancer.created_at).getTime();
+        }
+      }
+    } catch {}
+
+    filtered = filtered.filter((l) => {
+      if (!matchesFreelancerId(l.freelancer_id, params.freelancer_id)) return false;
+      if (freeCreatedAt && l.created_at) {
+        const leadTime = new Date(l.created_at).getTime();
+        if (leadTime < freeCreatedAt - 2000) return false;
+      }
+      return true;
+    });
   }
 
   if (params.state && params.state !== 'ALL') {
@@ -381,5 +400,82 @@ export async function syncLeadUpdateToFirestoreDirect(
     await setDoc(doc(db, 'leads', leadId), cleanUpdates, { merge: true });
   } catch (err) {
     console.warn(`[Firebase Client] Falha ao sincronizar lead ${leadId} no Firestore:`, err);
+  }
+}
+
+export async function deleteLeadDirectFromClient(leadId: string): Promise<void> {
+  const db = getClientFirestore();
+  if (cachedLeads) {
+    cachedLeads = cachedLeads.filter((l) => l.id !== leadId);
+  }
+  if (!db || !leadId) return;
+  try {
+    await deleteDoc(doc(db, 'leads', leadId));
+  } catch (err) {
+    console.warn(`[Firebase Client] Falha ao deletar lead ${leadId} no Firestore:`, err);
+  }
+}
+
+export async function deleteFreelancerDataDirectFromClient(
+  freelancerId: string,
+  accessCode?: string,
+  name?: string
+): Promise<void> {
+  invalidateLeadsCache();
+  const db = getClientFirestore();
+  if (!db) return;
+
+  const rawIdentifiers = [
+    freelancerId,
+    accessCode,
+    `free_${accessCode}`,
+    freelancerId?.replace(/^free_/, ''),
+    name,
+  ].filter(Boolean) as string[];
+
+  const normIdentifiers = Array.from(
+    new Set(rawIdentifiers.map((s) => s.toLowerCase().trim()))
+  );
+
+  try {
+    const snap = await getDocs(collection(db, 'leads')).catch(() => null);
+    if (snap) {
+      const deletePromises: Promise<void>[] = [];
+      snap.forEach((d) => {
+        const data = d.data();
+        const fid = (data.freelancer_id || '').toLowerCase().trim();
+        const uid = (data.user_id || '').toLowerCase().trim();
+        const fname = (data.freelancer_name || '').toLowerCase().trim();
+        const docId = d.id.toLowerCase();
+
+        const matches =
+          normIdentifiers.some((id) => fid === id || fid === `free_${id}` || (id.startsWith('free_') && fid === id.substring(5))) ||
+          normIdentifiers.some((id) => uid === id || uid === `free_${id}` || (id.startsWith('free_') && uid === id.substring(5))) ||
+          (name && fname === name.toLowerCase().trim()) ||
+          (accessCode && docId.includes(accessCode.toLowerCase().trim()) && docId.startsWith('lead_'));
+
+        if (matches) {
+          deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+        }
+      });
+      await Promise.all(deletePromises);
+    }
+
+    // Exclui o próprio documento do freelancer
+    if (freelancerId) {
+      await deleteDoc(doc(db, 'freelancers', freelancerId)).catch(() => {});
+      const cleanFid = freelancerId.replace(/^free_/, '');
+      if (cleanFid !== freelancerId) {
+        await deleteDoc(doc(db, 'freelancers', cleanFid)).catch(() => {});
+      }
+    }
+    if (accessCode) {
+      await deleteDoc(doc(db, 'freelancers', accessCode)).catch(() => {});
+      await deleteDoc(doc(db, 'freelancers', `free_${accessCode}`)).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('[Firebase Client] Erro ao deletar dados do freelancer diretamente no cliente:', err);
+  } finally {
+    invalidateLeadsCache();
   }
 }

@@ -77,6 +77,7 @@ interface LeadsTableViewProps {
   onStartSpeedOutreach?: () => void;
   userRole?: UserRole;
   activeFreelancer?: Freelancer | null;
+  refreshTrigger?: number;
 }
 
 function getNicheIcon(niche: string) {
@@ -98,6 +99,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   onStartSpeedOutreach,
   userRole = 'admin',
   activeFreelancer,
+  refreshTrigger,
 }) => {
   const effectiveFreelancerId = userRole === 'freelancer'
     ? (activeFreelancer?.id || (activeFreelancer?.access_code ? `free_${activeFreelancer.access_code}` : undefined))
@@ -274,6 +276,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     onlyFavorites,
     minScore,
     sortBy,
+    refreshTrigger,
     loadLeads,
     loadNiches,
     loadStates,
