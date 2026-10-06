@@ -189,19 +189,18 @@ export function computeStatsFromLeads(leads: Lead[]): DashboardStats {
 
 export function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
   if (!targetFid || targetFid === 'ALL') return true;
-  if (!leadFid) return true; // Estabelecimentos da base comum/global permanecem acessíveis
+  // Leads sem freelancer_id pertencem estritamente à base geral do administrador
+  if (!leadFid) {
+    const tfClean = (targetFid || '').toLowerCase().trim().replace(/^free_/, '');
+    return tfClean === 'admin' || tfClean === 'administrador';
+  }
   const lf = leadFid.toLowerCase().trim();
   const tf = targetFid.toLowerCase().trim();
   if (lf === tf) return true;
   const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
   const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
-  if (cleanLf === cleanTf) return true;
-  // Trata sufixos numéricos e variações de slug como demonstracao-01, demonstracao-02, demonstracao-2
-  const baseLf = cleanLf.replace(/[-_]\d+$/, '');
-  const baseTf = cleanTf.replace(/[-_]\d+$/, '');
-  if (baseLf === baseTf) return true;
-  if (cleanLf.startsWith(baseTf) || cleanTf.startsWith(baseLf)) return true;
-  return false;
+  // Isolamento estrito por workspace (não misturar usuários ou workspaces distintos)
+  return cleanLf === cleanTf;
 }
 
 const NICHE_SYNONYMS: Record<string, string[]> = {

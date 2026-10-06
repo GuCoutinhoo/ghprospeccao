@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
-import { db } from '../lib/store/db';
+import { db, matchesFreelancerId } from '../lib/store/db';
 import { fetchStates, fetchCitiesByState } from '../lib/ibge/ibgeService';
 import {
   createAndPrepareSearchJob,
@@ -742,7 +742,7 @@ app.get('/api/leads/:id', (req: Request, res: Response) => {
     }
 
     // Se freelancer, valida se o lead pertence a ele
-    if (req.user?.role === 'freelancer' && lead.freelancer_id && lead.freelancer_id !== req.user.freelancerId) {
+    if (req.user?.role === 'freelancer' && !matchesFreelancerId(lead.freelancer_id, req.user.freelancerId)) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
@@ -757,8 +757,11 @@ app.get('/api/leads/:id', (req: Request, res: Response) => {
 
 app.patch('/api/leads/:id', (req: Request, res: Response) => {
   try {
-    const freelancerId = req.user?.role === 'freelancer' ? req.user.freelancerId : undefined;
     const oldLead = db.getLeadById(req.params.id);
+    if (req.user?.role === 'freelancer' && !matchesFreelancerId(oldLead?.freelancer_id, req.user.freelancerId)) {
+      return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
+    }
+    const freelancerId = req.user?.role === 'freelancer' ? req.user.freelancerId : undefined;
     const updated = db.updateLead(req.params.id, req.body, freelancerId);
     if (!updated) {
       return res.status(404).json({ error: 'Lead não encontrado ou acesso não autorizado.' });
@@ -798,7 +801,7 @@ app.post('/api/leads/:id/contact-attempt', (req: Request, res: Response) => {
     const lead = db.getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
 
-    if (req.user?.role === 'freelancer' && lead.freelancer_id && lead.freelancer_id !== req.user.freelancerId) {
+    if (req.user?.role === 'freelancer' && !matchesFreelancerId(lead.freelancer_id, req.user.freelancerId)) {
       return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
     }
 
@@ -834,7 +837,7 @@ app.post('/api/leads/:id/register-sale', (req: Request, res: Response) => {
     const lead = db.getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
 
-    if (req.user?.role === 'freelancer' && lead.freelancer_id && lead.freelancer_id !== req.user.freelancerId) {
+    if (req.user?.role === 'freelancer' && !matchesFreelancerId(lead.freelancer_id, req.user.freelancerId)) {
       return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
     }
 
@@ -935,7 +938,7 @@ app.post('/api/pipeline/move', (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
-    if (req.user?.role === 'freelancer' && lead.freelancer_id && lead.freelancer_id !== req.user.freelancerId) {
+    if (req.user?.role === 'freelancer' && !matchesFreelancerId(lead.freelancer_id, req.user.freelancerId)) {
       return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
     }
 
@@ -981,10 +984,16 @@ app.post('/api/pipeline/move', (req: Request, res: Response) => {
   }
 });
 
-// 8. SEARCH JOBS (ACESSO DIRETO GLOBAL)
-app.get('/api/search-jobs', (_req: Request, res: Response) => {
+// 8. SEARCH JOBS (COM ISOLAMENTO POR WORKSPACE)
+app.get('/api/search-jobs', (req: Request, res: Response) => {
   try {
-    const jobs = db.getAllSearchJobs();
+    let freelancerId: string | undefined = undefined;
+    if (req.query.freelancer_id && req.query.freelancer_id !== 'ALL') {
+      freelancerId = req.query.freelancer_id as string;
+    } else if (req.user?.role === 'freelancer') {
+      freelancerId = req.user.freelancerId || req.user.id;
+    }
+    const jobs = db.getAllSearchJobs(freelancerId);
     res.json(jobs);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

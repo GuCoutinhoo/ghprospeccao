@@ -75,6 +75,7 @@ interface LeadsTableViewProps {
   initialStateFilter?: string;
   onClearInitialFilters?: () => void;
   onStartSpeedOutreach?: () => void;
+  onNavigateToSearch?: () => void;
   userRole?: UserRole;
   activeFreelancer?: Freelancer | null;
   refreshTrigger?: number;
@@ -97,6 +98,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   initialStateFilter,
   onClearInitialFilters,
   onStartSpeedOutreach,
+  onNavigateToSearch,
   userRole = 'admin',
   activeFreelancer,
   refreshTrigger,
@@ -1055,24 +1057,39 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         <div className="py-16 text-center space-y-4 rounded-xl border border-neutral-200 bg-white p-6 shadow-2xs">
           <Globe className="h-10 w-10 text-neutral-300 mx-auto" />
           <h4 className="text-sm font-bold text-neutral-900">
-            Nenhuma loja encontrada com os filtros selecionados
+            {totalOverallLeads === 0 && !hasActiveFilters
+              ? 'Workspace Limpo e Zerado'
+              : 'Nenhuma loja encontrada com os filtros selecionados'}
           </h4>
           <p className="text-xs text-neutral-500 max-w-md mx-auto">
             {totalOverallLeads > 0
               ? `Você possui ${totalOverallLeads} estabelecimentos na sua base comercial. Os filtros ativos (nicho ou localização) restringiram os resultados.`
               : hasActiveFilters
               ? 'Os filtros atuais restringiram todos os resultados. Clique abaixo para limpar os filtros e visualizar todas as lojas da sua base comercial.'
-              : 'Nenhum lead cadastrado no momento. Use o menu "Buscar Leads" para prospectar novas lojas via Google Maps.'}
+              : userRole === 'freelancer'
+              ? `Este workspace privado está 100% isolado e sem estabelecimentos. Somente as prospecções que você (${activeFreelancer?.name || 'Danilo'}) minerar ficarão visíveis aqui.`
+              : 'Nenhum lead cadastrado no momento. Use a ferramenta "Buscar Leads" para minerar novas lojas via Google Maps.'}
           </p>
           <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={handleClearAllFilters}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-neutral-950 bg-amber-400 hover:bg-amber-300 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
-            >
-              <RotateCw className="h-4 w-4" />
-              <span>Limpar Filtros e Ver Todos os Leads {totalOverallLeads > 0 ? `(${totalOverallLeads})` : ''}</span>
-            </button>
+            {totalOverallLeads === 0 && !hasActiveFilters && onNavigateToSearch ? (
+              <button
+                type="button"
+                onClick={onNavigateToSearch}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-neutral-950 bg-amber-400 hover:bg-amber-300 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+              >
+                <Search className="h-4 w-4" />
+                <span>Iniciar Busca de Leads no Maps</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleClearAllFilters}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-neutral-950 bg-amber-400 hover:bg-amber-300 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+              >
+                <RotateCw className="h-4 w-4" />
+                <span>Limpar Filtros e Ver Todos os Leads {totalOverallLeads > 0 ? `(${totalOverallLeads})` : ''}</span>
+              </button>
+            )}
           </div>
         </div>
       ) : viewMode === 'cards' ? (

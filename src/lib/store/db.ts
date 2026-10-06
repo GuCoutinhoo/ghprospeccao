@@ -54,18 +54,18 @@ function slugifyFreelancerName(name?: string | null): string {
 
 export function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
   if (!targetFid || targetFid === 'ALL') return true;
-  if (!leadFid) return true;
+  // Leads sem freelancer_id pertencem estritamente à base geral do administrador
+  if (!leadFid) {
+    const tfClean = (targetFid || '').toLowerCase().trim().replace(/^free_/, '');
+    return tfClean === 'admin' || tfClean === 'administrador';
+  }
   const lf = leadFid.toLowerCase().trim();
   const tf = targetFid.toLowerCase().trim();
   if (lf === tf) return true;
   const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
   const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
-  if (cleanLf === cleanTf) return true;
-  const baseLf = cleanLf.replace(/[-_]\d+$/, '');
-  const baseTf = cleanTf.replace(/[-_]\d+$/, '');
-  if (baseLf === baseTf) return true;
-  if (cleanLf.startsWith(baseTf) || cleanTf.startsWith(baseLf)) return true;
-  return false;
+  // Isolamento estrito por workspace (não misturar usuários ou workspaces distintos)
+  return cleanLf === cleanTf;
 }
 
 const NICHE_SYNONYMS: Record<string, string[]> = {
@@ -850,7 +850,7 @@ class Database {
   public getAllSearchJobs(freelancer_id?: string): SearchJob[] {
     let list = [...this.data.search_jobs];
     if (freelancer_id && freelancer_id !== 'ALL') {
-      list = list.filter((j) => j.freelancer_id === freelancer_id);
+      list = list.filter((j) => matchesFreelancerId(j.freelancer_id, freelancer_id));
     }
     return list.sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()

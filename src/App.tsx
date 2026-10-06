@@ -299,8 +299,11 @@ export default function App() {
   const loadInitialData = async () => {
     setIsRefreshing(true);
     try {
+      const fid = userRole === 'freelancer'
+        ? (activeFreelancer?.id || (activeFreelancer?.access_code ? `free_${activeFreelancer.access_code}` : undefined))
+        : undefined;
       const [s, set] = await Promise.all([
-        api.getDashboardStats().catch((e) => {
+        api.getDashboardStats(fid).catch((e) => {
           console.warn('[App] Erro ao carregar stats da API:', e);
           return null;
         }),
@@ -605,6 +608,7 @@ export default function App() {
                 setLeadsStateFilter(undefined);
               }}
               onStartSpeedOutreach={() => handleNavigate('/outreach')}
+              onNavigateToSearch={() => handleNavigate('/search')}
               userRole={userRole}
               activeFreelancer={activeFreelancer}
               refreshTrigger={refreshTrigger}
