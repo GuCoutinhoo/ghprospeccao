@@ -22,6 +22,7 @@ import {
   filterLeadsList,
   syncLeadUpdateToFirestoreDirect,
   invalidateLeadsCache,
+  matchesFreelancerId,
 } from './firebase/client';
 
 export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
@@ -368,7 +369,7 @@ export const api = {
     const session = getActiveFreelancerSession();
     const targetFreelancerId = freelancer_id || (isFree ? session?.freelancer?.id : undefined);
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
+      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
     }
     if (leads && leads.length > 0) {
       return computeStatsFromLeads(leads);
@@ -491,7 +492,7 @@ export const api = {
     const session = getActiveFreelancerSession();
     const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
+      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -535,7 +536,7 @@ export const api = {
     const session = getActiveFreelancerSession();
     const targetFreelancerId = params?.freelancer_id || (isFree ? session?.freelancer?.id : undefined);
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
+      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -748,7 +749,7 @@ export const api = {
     const session = getActiveFreelancerSession();
     const targetFreelancerId = freelancer_id || session?.freelancer?.id;
     if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => l.freelancer_id === targetFreelancerId);
+      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
     }
     const board: Record<PipelineStatus, Lead[]> = {
       'NOVO': [],

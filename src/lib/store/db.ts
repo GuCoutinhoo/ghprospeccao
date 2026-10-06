@@ -59,7 +59,13 @@ export function matchesFreelancerId(leadFid: string | undefined | null, targetFi
   if (lf === tf) return true;
   const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
   const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
-  return cleanLf === cleanTf;
+  if (cleanLf === cleanTf) return true;
+  // Trata sufixos numéricos e variações de slug como demonstracao-01, demonstracao-02, demonstracao-2
+  const baseLf = cleanLf.replace(/[-_]\d+$/, '');
+  const baseTf = cleanTf.replace(/[-_]\d+$/, '');
+  if (baseLf === baseTf) return true;
+  if (cleanLf.startsWith(baseTf) || cleanTf.startsWith(baseLf)) return true;
+  return false;
 }
 
 export function matchesNicheSemantics(text: string, niche: string): boolean {
@@ -72,29 +78,34 @@ export function matchesNicheSemantics(text: string, niche: string): boolean {
   }
 
   const nicheSynonyms: Record<string, string[]> = {
-    barbearia: ['barber', 'barbearia', 'barbeiro', 'corte masculino', 'hair_care', 'beauty_salon'],
-    odontologia: ['dentista', 'odonto', 'consultorio odontologico', 'dental_clinic', 'dentist'],
-    restaurante: ['restaurante', 'bistro', 'gastronomia', 'churrascaria', 'pizzaria', 'restaurant', 'food'],
+    barbearia: ['barber', 'barbearia', 'barbeiro', 'corte masculino', 'hair_care', 'beauty_salon', 'cabelereiro', 'salao'],
+    odontologia: ['dentista', 'odonto', 'odontologica', 'odontologico', 'consultorio odontologico', 'clinica odontologica', 'dental_clinic', 'dentist'],
+    restaurante: ['restaurante', 'bistro', 'gastronomia', 'churrascaria', 'pizzaria', 'restaurant', 'food', 'lanchonete', 'hamburgueria'],
     clinica: ['clinica', 'medico', 'consultorio', 'saude', 'hospital', 'doctor', 'health'],
-    estetica: ['estetica', 'salao de beleza', 'manicure', 'depilacao', 'spa', 'beauty_salon'],
-    academia: ['academia', 'fitness', 'crossfit', 'treino', 'gym'],
+    estetica: ['estetica', 'salao de beleza', 'manicure', 'depilacao', 'spa', 'beauty_salon', 'estetica automotiva'],
+    academia: ['academia', 'fitness', 'crossfit', 'treino', 'gym', 'musculacao'],
     advocacia: ['advogado', 'advocacia', 'juridico', 'direito', 'lawyer'],
     contabilidade: ['contabilidade', 'contador', 'fiscal', 'accounting'],
-    mecanica: ['oficina', 'mecanica', 'auto', 'car_repair'],
+    mecanica: ['oficina', 'mecanica', 'auto', 'car_repair', 'oficina mecanica'],
     imobiliaria: ['imobiliaria', 'corretor', 'imoveis', 'real_estate_agency'],
-    pet: ['pet shop', 'veterinario', 'banho e tosa', 'veterinary_care'],
+    pet: ['pet shop', 'veterinario', 'banho e tosa', 'veterinary_care', 'pet'],
+    eletricista: ['eletricista', 'eletrica', 'solar', 'energia solar', 'energia', 'electrician'],
   };
 
   for (const [key, synonyms] of Object.entries(nicheSynonyms)) {
-    if (normNiche.includes(key) || key.includes(normNiche)) {
-      if (synonyms.some((s) => normText.includes(normalizeStr(s)))) {
-        return true;
-      }
+    const keyMatchedByNiche = normNiche.includes(key) || key.includes(normNiche) || synonyms.some((s) => normNiche.includes(normalizeStr(s)));
+    const keyMatchedByText = normText.includes(key) || key.includes(normText) || synonyms.some((s) => normText.includes(normalizeStr(s)));
+    if (keyMatchedByNiche && keyMatchedByText) {
+      return true;
     }
   }
 
   const nicheWords = normNiche.split(/\s+/).filter((w) => w.length > 2);
   if (nicheWords.length > 0 && nicheWords.some((word) => normText.includes(word))) {
+    return true;
+  }
+  const textWords = normText.split(/\s+/).filter((w) => w.length > 2);
+  if (textWords.length > 0 && textWords.some((word) => normNiche.includes(word))) {
     return true;
   }
 
@@ -246,19 +257,10 @@ class Database {
     try {
       const remote = await fetchAllFromFirestore();
       if (remote) {
-        // MERGE LEADS de forma segura (sem sobrescrever leads recém-criados localmente e sem reviver leads de workspaces deletados)
+        // MERGE LEADS de forma segura
         const leadMap = new Map<string, Lead>();
         for (const l of remote.leads || []) {
           if (!l || !l.id) continue;
-          const fid = (l.freelancer_id || '').toLowerCase().trim();
-          const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
-          const isFreelancerActive = (this.data.freelancers || []).some(
-            (f) => f.id.toLowerCase() === fid || f.access_code.toLowerCase() === cleanFid
-          );
-          if (fid && !isFreelancerActive && (deletedFreelancerCodes.has(fid) || deletedFreelancerCodes.has(`free_${fid}`))) {
-            deleteLeadFromFirestore(l.id).catch(() => {});
-            continue;
-          }
           leadMap.set(l.id, l);
         }
         for (const l of this.data.leads || []) {
@@ -912,66 +914,8 @@ class Database {
     const id = `free_${code}`;
     const now = new Date().toISOString();
 
-    // Garante que o novo workspace comece 100% LIMPO (zero leads herdados de criações anteriores)
     deletedFreelancerCodes.delete(code.toLowerCase());
     deletedFreelancerCodes.delete(id.toLowerCase());
-
-    const rawCodesToClean = [
-      id,
-      code,
-      `free_${code}`,
-      slugifyFreelancerName(rawName),
-      `free_${slugifyFreelancerName(rawName)}`,
-    ].filter(Boolean) as string[];
-    const codesToClean = rawCodesToClean.map((c) => c.toLowerCase());
-
-    const oldLeads = (this.data.leads || []).filter(
-      (l) =>
-        matchesFreelancerId(l.freelancer_id, id) ||
-        matchesFreelancerId(l.freelancer_id, code) ||
-        codesToClean.includes((l.freelancer_id || '').toLowerCase())
-    );
-    for (const l of oldLeads) {
-      deleteLeadFromFirestore(l.id).catch(() => {});
-    }
-    this.data.leads = (this.data.leads || []).filter(
-      (l) =>
-        !matchesFreelancerId(l.freelancer_id, id) &&
-        !matchesFreelancerId(l.freelancer_id, code) &&
-        !codesToClean.includes((l.freelancer_id || '').toLowerCase())
-    );
-
-    const oldJobs = (this.data.search_jobs || []).filter(
-      (j) =>
-        matchesFreelancerId(j.freelancer_id, id) ||
-        matchesFreelancerId(j.freelancer_id, code) ||
-        codesToClean.includes((j.freelancer_id || '').toLowerCase())
-    );
-    for (const j of oldJobs) {
-      deleteJobFromFirestore(j.id).catch(() => {});
-    }
-    this.data.search_jobs = (this.data.search_jobs || []).filter(
-      (j) =>
-        !matchesFreelancerId(j.freelancer_id, id) &&
-        !matchesFreelancerId(j.freelancer_id, code) &&
-        !codesToClean.includes((j.freelancer_id || '').toLowerCase())
-    );
-
-    const oldActivities = (this.data.activities || []).filter(
-      (a) =>
-        matchesFreelancerId(a.freelancer_id, id) ||
-        matchesFreelancerId(a.freelancer_id, code) ||
-        codesToClean.includes((a.freelancer_id || '').toLowerCase())
-    );
-    for (const a of oldActivities) {
-      deleteActivityFromFirestore(a.id).catch(() => {});
-    }
-    this.data.activities = (this.data.activities || []).filter(
-      (a) =>
-        !matchesFreelancerId(a.freelancer_id, id) &&
-        !matchesFreelancerId(a.freelancer_id, code) &&
-        !codesToClean.includes((a.freelancer_id || '').toLowerCase())
-    );
 
     const freelancer: Freelancer = {
       id,

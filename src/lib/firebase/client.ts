@@ -186,7 +186,7 @@ export function computeStatsFromLeads(leads: Lead[]): DashboardStats {
   };
 }
 
-function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
+export function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
   if (!targetFid || targetFid === 'ALL') return true;
   if (!leadFid) return true; // Estabelecimentos da base comum/global permanecem acessíveis
   const lf = leadFid.toLowerCase().trim();
@@ -194,38 +194,49 @@ function matchesFreelancerId(leadFid: string | undefined | null, targetFid: stri
   if (lf === tf) return true;
   const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
   const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
-  return cleanLf === cleanTf;
+  if (cleanLf === cleanTf) return true;
+  // Trata sufixos numéricos e variações de slug como demonstracao-01, demonstracao-02, demonstracao-2
+  const baseLf = cleanLf.replace(/[-_]\d+$/, '');
+  const baseTf = cleanTf.replace(/[-_]\d+$/, '');
+  if (baseLf === baseTf) return true;
+  if (cleanLf.startsWith(baseTf) || cleanTf.startsWith(baseLf)) return true;
+  return false;
 }
 
 const NICHE_SYNONYMS: Record<string, string[]> = {
-  barbearia: ['barber', 'barbearia', 'barbeiro', 'corte masculino', 'hair_care', 'beauty_salon'],
-  odontologia: ['dentista', 'odonto', 'consultorio odontologico', 'clinica odontologica', 'dental_clinic', 'dentist'],
-  restaurante: ['restaurante', 'bistro', 'gastronomia', 'churrascaria', 'pizzaria', 'restaurant', 'food'],
+  barbearia: ['barber', 'barbearia', 'barbeiro', 'corte masculino', 'hair_care', 'beauty_salon', 'cabelereiro', 'salao'],
+  odontologia: ['dentista', 'odonto', 'odontologica', 'odontologico', 'consultorio odontologico', 'clinica odontologica', 'dental_clinic', 'dentist'],
+  restaurante: ['restaurante', 'bistro', 'gastronomia', 'churrascaria', 'pizzaria', 'restaurant', 'food', 'lanchonete', 'hamburgueria'],
   clinica: ['clinica', 'medico', 'consultorio', 'saude', 'hospital', 'doctor', 'health'],
-  estetica: ['estetica', 'salao de beleza', 'manicure', 'depilacao', 'spa', 'beauty_salon'],
-  academia: ['academia', 'fitness', 'crossfit', 'treino', 'gym'],
+  estetica: ['estetica', 'salao de beleza', 'manicure', 'depilacao', 'spa', 'beauty_salon', 'estetica automotiva'],
+  academia: ['academia', 'fitness', 'crossfit', 'treino', 'gym', 'musculacao'],
   advocacia: ['advogado', 'advocacia', 'juridico', 'direito', 'lawyer'],
   contabilidade: ['contabilidade', 'contador', 'fiscal', 'accounting'],
-  mecanica: ['oficina', 'mecanica', 'auto', 'car_repair'],
+  mecanica: ['oficina', 'mecanica', 'auto', 'car_repair', 'oficina mecanica'],
   imobiliaria: ['imobiliaria', 'corretor', 'imoveis', 'real_estate_agency'],
-  pet: ['pet shop', 'veterinario', 'banho e tosa', 'veterinary_care'],
+  pet: ['pet shop', 'veterinario', 'banho e tosa', 'veterinary_care', 'pet'],
+  eletricista: ['eletricista', 'eletrica', 'solar', 'energia solar', 'energia', 'electrician'],
 };
 
-function clientMatchesNiche(text: string, niche: string): boolean {
+export function clientMatchesNiche(text: string, niche: string): boolean {
   if (!text || !niche) return false;
   const normText = normalizeStr(text);
   const normNiche = normalizeStr(niche);
   if (normText.includes(normNiche) || normNiche.includes(normText)) return true;
 
   for (const [key, synonyms] of Object.entries(NICHE_SYNONYMS)) {
-    if (normNiche.includes(key) || key.includes(normNiche)) {
-      if (synonyms.some((s) => normText.includes(normalizeStr(s)))) {
-        return true;
-      }
+    const keyMatchedByNiche = normNiche.includes(key) || key.includes(normNiche) || synonyms.some((s) => normNiche.includes(normalizeStr(s)));
+    const keyMatchedByText = normText.includes(key) || key.includes(normText) || synonyms.some((s) => normText.includes(normalizeStr(s)));
+    if (keyMatchedByNiche && keyMatchedByText) {
+      return true;
     }
   }
   const nicheWords = normNiche.split(/\s+/).filter((w) => w.length > 2);
   if (nicheWords.length > 0 && nicheWords.some((word) => normText.includes(word))) {
+    return true;
+  }
+  const textWords = normText.split(/\s+/).filter((w) => w.length > 2);
+  if (textWords.length > 0 && textWords.some((word) => normNiche.includes(word))) {
     return true;
   }
   return false;

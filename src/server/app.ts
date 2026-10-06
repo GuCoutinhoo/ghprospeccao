@@ -94,13 +94,18 @@ app.use('/api', (req: Request, _res: Response, next: NextFunction) => {
       }
       if (!freelancer && freelancerId && freelancerId.length >= 2) {
         const code = freelancerId.replace(/^free_/, '').toLowerCase();
-        const formattedName = code.charAt(0).toUpperCase() + code.slice(1);
-        freelancer = db.createFreelancer({
-          name: formattedName,
-          email: `${code}@ghprospeccao.com`,
-          access_code: code,
-          status: 'active',
-        });
+        const existing = db.getFreelancerByAccessCode(code);
+        if (existing) {
+          freelancer = existing;
+        } else {
+          const formattedName = code.charAt(0).toUpperCase() + code.slice(1);
+          freelancer = db.createFreelancer({
+            name: formattedName,
+            email: `${code}@ghprospeccao.com`,
+            access_code: code,
+            status: 'active',
+          });
+        }
       }
       if (freelancer) {
         req.user = {

@@ -20,6 +20,7 @@ import { FreelancerDetailView } from './components/admin/FreelancerDetailView';
 import { AuditLogView } from './components/admin/AuditLogView';
 import { DashboardStats, Lead, Freelancer, UserRole } from './types';
 import { api, getActiveFreelancerSession } from './lib/api';
+import { invalidateLeadsCache } from './lib/firebase/client';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 const DEFAULT_STATS: DashboardStats = {
@@ -199,6 +200,7 @@ export default function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [hasCustomKey, setHasCustomKey] = useState<boolean>(true);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Link público de demonstração do mockup (acesso direto via ?leadId=... ou /preview?leadId=...)
   const [publicPreviewLead, setPublicPreviewLead] = useState<Lead | null>(null);
@@ -312,8 +314,10 @@ export default function App() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
+      invalidateLeadsCache();
       await api.syncFirestore().catch((e) => console.warn('[App] Sincronização Firestore falhou:', e));
       await loadInitialData();
+      setRefreshTrigger((prev) => prev + 1);
     } catch (err) {
       console.error('Falha ao atualizar dados:', err);
     } finally {
@@ -593,6 +597,7 @@ export default function App() {
               onStartSpeedOutreach={() => handleNavigate('/outreach')}
               userRole={userRole}
               activeFreelancer={activeFreelancer}
+              refreshTrigger={refreshTrigger}
             />
           )}
 
