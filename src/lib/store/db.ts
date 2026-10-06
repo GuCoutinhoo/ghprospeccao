@@ -62,6 +62,45 @@ export function matchesFreelancerId(leadFid: string | undefined | null, targetFi
   return cleanLf === cleanTf;
 }
 
+export function matchesNicheSemantics(text: string, niche: string): boolean {
+  if (!text || !niche) return false;
+  const normText = normalizeStr(text);
+  const normNiche = normalizeStr(niche);
+
+  if (normText.includes(normNiche) || normNiche.includes(normText)) {
+    return true;
+  }
+
+  const nicheSynonyms: Record<string, string[]> = {
+    barbearia: ['barber', 'barbearia', 'barbeiro', 'corte masculino', 'hair_care', 'beauty_salon'],
+    odontologia: ['dentista', 'odonto', 'consultorio odontologico', 'dental_clinic', 'dentist'],
+    restaurante: ['restaurante', 'bistro', 'gastronomia', 'churrascaria', 'pizzaria', 'restaurant', 'food'],
+    clinica: ['clinica', 'medico', 'consultorio', 'saude', 'hospital', 'doctor', 'health'],
+    estetica: ['estetica', 'salao de beleza', 'manicure', 'depilacao', 'spa', 'beauty_salon'],
+    academia: ['academia', 'fitness', 'crossfit', 'treino', 'gym'],
+    advocacia: ['advogado', 'advocacia', 'juridico', 'direito', 'lawyer'],
+    contabilidade: ['contabilidade', 'contador', 'fiscal', 'accounting'],
+    mecanica: ['oficina', 'mecanica', 'auto', 'car_repair'],
+    imobiliaria: ['imobiliaria', 'corretor', 'imoveis', 'real_estate_agency'],
+    pet: ['pet shop', 'veterinario', 'banho e tosa', 'veterinary_care'],
+  };
+
+  for (const [key, synonyms] of Object.entries(nicheSynonyms)) {
+    if (normNiche.includes(key) || key.includes(normNiche)) {
+      if (synonyms.some((s) => normText.includes(normalizeStr(s)))) {
+        return true;
+      }
+    }
+  }
+
+  const nicheWords = normNiche.split(/\s+/).filter((w) => w.length > 2);
+  if (nicheWords.length > 0 && nicheWords.some((word) => normText.includes(word))) {
+    return true;
+  }
+
+  return false;
+}
+
 const deletedFreelancerCodes = new Set<string>();
 
 function generateAccessCode(): string {

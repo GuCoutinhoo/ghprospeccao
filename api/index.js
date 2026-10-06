@@ -298,6 +298,39 @@ function matchesFreelancerId(leadFid, targetFid) {
   const cleanTf = tf.startsWith("free_") ? tf.substring(5) : tf;
   return cleanLf === cleanTf;
 }
+function matchesNicheSemantics(text, niche) {
+  if (!text || !niche) return false;
+  const normText = normalizeStr(text);
+  const normNiche = normalizeStr(niche);
+  if (normText.includes(normNiche) || normNiche.includes(normText)) {
+    return true;
+  }
+  const nicheSynonyms = {
+    barbearia: ["barber", "barbearia", "barbeiro", "corte masculino", "hair_care", "beauty_salon"],
+    odontologia: ["dentista", "odonto", "consultorio odontologico", "dental_clinic", "dentist"],
+    restaurante: ["restaurante", "bistro", "gastronomia", "churrascaria", "pizzaria", "restaurant", "food"],
+    clinica: ["clinica", "medico", "consultorio", "saude", "hospital", "doctor", "health"],
+    estetica: ["estetica", "salao de beleza", "manicure", "depilacao", "spa", "beauty_salon"],
+    academia: ["academia", "fitness", "crossfit", "treino", "gym"],
+    advocacia: ["advogado", "advocacia", "juridico", "direito", "lawyer"],
+    contabilidade: ["contabilidade", "contador", "fiscal", "accounting"],
+    mecanica: ["oficina", "mecanica", "auto", "car_repair"],
+    imobiliaria: ["imobiliaria", "corretor", "imoveis", "real_estate_agency"],
+    pet: ["pet shop", "veterinario", "banho e tosa", "veterinary_care"]
+  };
+  for (const [key, synonyms] of Object.entries(nicheSynonyms)) {
+    if (normNiche.includes(key) || key.includes(normNiche)) {
+      if (synonyms.some((s) => normText.includes(normalizeStr(s)))) {
+        return true;
+      }
+    }
+  }
+  const nicheWords = normNiche.split(/\s+/).filter((w) => w.length > 2);
+  if (nicheWords.length > 0 && nicheWords.some((word) => normText.includes(word))) {
+    return true;
+  }
+  return false;
+}
 var deletedFreelancerCodes = /* @__PURE__ */ new Set();
 var isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 var BUNDLED_DB_FILE = path2.resolve(process.cwd(), ".data", "db.json");
@@ -1560,6 +1593,35 @@ var METROPOLITAN_GRIDS = {
     { name: "Curitiba - Port\xE3o / \xC1gua Verde / Santa Quit\xE9ria", lat: -25.4678, lng: -49.2932, radius: 4500 },
     { name: "Curitiba - Boqueir\xE3o / Hauer / Pinheirinho", lat: -25.5029, lng: -49.2458, radius: 5500 },
     { name: "Curitiba - Boa Vista / Bacacheri / Cabral", lat: -25.395, lng: -49.248, radius: 5e3 }
+  ],
+  "Campinas": [
+    { name: "Campinas - Centro / Cambu\xED / Guanabara", lat: -22.9056, lng: -47.0608, radius: 4500 },
+    { name: "Campinas - Taquaral / Bar\xE3o Geraldo / Mans\xF5es", lat: -22.8689, lng: -47.0583, radius: 6e3 },
+    { name: "Campinas - Ouro Verde / Campo Grande", lat: -22.9675, lng: -47.1278, radius: 7e3 },
+    { name: "Campinas - Nova Campinas / Alphaville", lat: -22.885, lng: -47.025, radius: 5500 }
+  ],
+  "Salvador": [
+    { name: "Salvador - Centro / Barra / Ondina", lat: -13.0033, lng: -38.5283, radius: 4500 },
+    { name: "Salvador - Pituba / Itaigara / Caminho das \xC1rvores", lat: -12.9922, lng: -38.4628, radius: 5e3 },
+    { name: "Salvador - Cabula / Brotas", lat: -12.9667, lng: -38.4833, radius: 5500 },
+    { name: "Salvador - Itapu\xE3 / Stella Maris", lat: -12.9356, lng: -38.3611, radius: 6500 }
+  ],
+  "Bras\xEDlia": [
+    { name: "Bras\xEDlia - Asa Sul / Asa Norte (Plano Piloto)", lat: -15.7975, lng: -47.8919, radius: 5500 },
+    { name: "Bras\xEDlia - Taguatinga / Samambaia", lat: -15.8333, lng: -48.0567, radius: 6500 },
+    { name: "Bras\xEDlia - \xC1guas Claras / Guar\xE1", lat: -15.84, lng: -47.98, radius: 5500 },
+    { name: "Bras\xEDlia - Ceil\xE2ndia", lat: -15.82, lng: -48.11, radius: 6500 }
+  ],
+  "Porto Alegre": [
+    { name: "Porto Alegre - Centro Hist\xF3rico / Moinhos de Vento", lat: -30.0346, lng: -51.2177, radius: 4500 },
+    { name: "Porto Alegre - Menino Deus / Praia de Belas / Azenha", lat: -30.055, lng: -51.225, radius: 4500 },
+    { name: "Porto Alegre - Petr\xF3polis / Bela Vista", lat: -30.04, lng: -51.185, radius: 5e3 },
+    { name: "Porto Alegre - Zona Norte / Sarandi", lat: -29.995, lng: -51.145, radius: 6e3 }
+  ],
+  "Goi\xE2nia": [
+    { name: "Goi\xE2nia - Setor Bueno / Marista / Oeste", lat: -16.698, lng: -49.268, radius: 4500 },
+    { name: "Goi\xE2nia - Centro / Setor Central / Aeroporto", lat: -16.678, lng: -49.255, radius: 4500 },
+    { name: "Goi\xE2nia - Jardim Goi\xE1s / Flamboyant", lat: -16.71, lng: -49.235, radius: 5e3 }
   ]
 };
 var memoryCitiesCache = /* @__PURE__ */ new Map();
@@ -1656,6 +1718,26 @@ function hasWebsite(rawWebsiteUri) {
     return { hasWebsite: false, status: "invalid_website" };
   }
 }
+function extractCityAndStateFromAddress(address) {
+  if (!address) return {};
+  const matchHyphen = address.match(/,\s*([A-Za-zÀ-ÿ\s.'-]+?)\s*-\s*([A-Z]{2})\b/);
+  if (matchHyphen) {
+    const rawCity = matchHyphen[1].trim();
+    const rawUf = matchHyphen[2].trim();
+    if (rawCity.length >= 2 && rawCity.length <= 40) {
+      return { city: rawCity, state: rawUf };
+    }
+  }
+  const matchComma = address.match(/,\s*([A-Za-zÀ-ÿ\s.'-]+?),\s*([A-Z]{2})\b/);
+  if (matchComma) {
+    const rawCity = matchComma[1].trim();
+    const rawUf = matchComma[2].trim();
+    if (rawCity.length >= 2 && rawCity.length <= 40) {
+      return { city: rawCity, state: rawUf };
+    }
+  }
+  return {};
+}
 function normalizePlace(raw, fallbackCity, fallbackState) {
   const placeId = raw.id || (raw.name ? raw.name.replace("places/", "") : `gen_${Date.now()}_${Math.random().toString(36).substring(7)}`);
   const displayName = raw.displayName?.text || "Estabelecimento sem nome";
@@ -1667,13 +1749,16 @@ function normalizePlace(raw, fallbackCity, fallbackState) {
   if (cepMatch) {
     postalCode = cepMatch[0];
   }
+  const extracted = extractCityAndStateFromAddress(address);
+  const resolvedCity = fallbackCity && fallbackCity !== "all" ? fallbackCity : extracted.city || fallbackCity;
+  const resolvedState = extracted.state || fallbackState;
   return {
     id: placeId,
     place_id: placeId,
     name: displayName,
     formatted_address: address,
-    city: fallbackCity,
-    state: fallbackState,
+    city: resolvedCity,
+    state: resolvedState,
     postal_code: postalCode,
     lat: raw.location?.latitude ?? 0,
     lng: raw.location?.longitude ?? 0,
@@ -1766,14 +1851,17 @@ async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
     languageCode: "pt-BR",
     maxResultCount: Math.min(options?.maxResultCount || 20, 20)
   };
-  if (options?.locationBias?.circle) {
+  const centerLat = options?.locationBias?.circle?.center?.latitude;
+  const centerLng = options?.locationBias?.circle?.center?.longitude;
+  const hasValidCenter = typeof centerLat === "number" && typeof centerLng === "number" && centerLat !== 0 && centerLng !== 0;
+  if (options?.locationBias?.circle && hasValidCenter) {
     body.locationBias = {
       circle: {
         center: {
-          latitude: options.locationBias.circle.center.latitude,
-          longitude: options.locationBias.circle.center.longitude
+          latitude: centerLat,
+          longitude: centerLng
         },
-        radius: options.locationBias.circle.radius
+        radius: options.locationBias.circle.radius || 12e3
       }
     };
   }
@@ -1793,12 +1881,12 @@ async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
         const errorJson = await response.json().catch(() => null);
         const errorMessage = errorJson?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
         lastError = errorMessage;
-        if (response.status === 429 || errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("resource_exhausted")) {
-          console.warn("[Places] Cota de SearchTextRequest atingida, alternando imediatamente para searchNearby...");
+        if (hasValidCenter && (response.status === 429 || errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("resource_exhausted"))) {
+          console.warn("[Places] Cota de SearchTextRequest atingida, alternando para searchNearby...");
           const center = options?.locationBias?.circle?.center;
           if (center) {
             const types = getIncludedTypesForQuery(query);
-            const nearbyRes = await searchPlacesNearby(apiKey, center, options?.locationBias?.circle?.radius || 8e3, types);
+            const nearbyRes = await searchPlacesNearby(apiKey, center, options?.locationBias?.circle?.radius || 12e3, types);
             if (nearbyRes.places && nearbyRes.places.length > 0) {
               return { places: nearbyRes.places };
             }
@@ -1815,9 +1903,9 @@ async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
       if (data.places && data.places.length > 0) {
         return { places: data.places };
       }
-      if (options?.locationBias?.circle?.center) {
+      if (hasValidCenter && options?.locationBias?.circle?.center) {
         const types = getIncludedTypesForQuery(query);
-        const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius, types);
+        const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 12e3, types);
         if (nearbyRes.places && nearbyRes.places.length > 0) {
           return { places: nearbyRes.places };
         }
@@ -1830,10 +1918,10 @@ async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
       }
     }
   }
-  if (options?.locationBias?.circle?.center) {
+  if (hasValidCenter && options?.locationBias?.circle?.center) {
     try {
       const types = getIncludedTypesForQuery(query);
-      const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 8e3, types);
+      const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 12e3, types);
       if (nearbyRes.places && nearbyRes.places.length > 0) {
         return { places: nearbyRes.places };
       }
@@ -1849,14 +1937,17 @@ async function createAndPrepareSearchJob(params) {
   const settings = db.getSettings();
   let targetCities = [];
   if (params.city === "all") {
+    const popular = POPULAR_CITIES_BY_STATE[params.state] || [];
     const ibgeCities = await fetchCitiesByState(params.state);
+    const otherCities = ibgeCities.map((c) => c.nome).filter((nome) => !popular.includes(nome));
+    const combined = [...popular, ...otherCities];
     if (settings.maxCitiesPerJob && settings.maxCitiesPerJob > 0) {
-      targetCities = ibgeCities.slice(0, settings.maxCitiesPerJob).map((c) => c.nome);
+      targetCities = combined.slice(0, settings.maxCitiesPerJob);
     } else {
-      targetCities = ibgeCities.map((c) => c.nome);
+      targetCities = combined;
     }
     if (targetCities.length === 0) {
-      targetCities = POPULAR_CITIES_BY_STATE[params.state] || ["Capital"];
+      targetCities = ["Capital"];
     }
   } else {
     targetCities = [params.city];
@@ -1881,15 +1972,15 @@ async function createAndPrepareSearchJob(params) {
         });
       }
     } else {
-      const coords = CITY_COORDINATES[c] || { lat: -23.5505, lng: -46.6333 };
+      const coords = CITY_COORDINATES[c];
       areas.push({
         id: `area_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         search_job_id: jobId,
         city: c,
         state: params.state,
-        lat: coords.lat,
-        lng: coords.lng,
-        radius: 8e3,
+        lat: coords ? coords.lat : 0,
+        lng: coords ? coords.lng : 0,
+        radius: coords ? 12e3 : 0,
         status: "pending",
         attempts: 0,
         places_found: 0
@@ -1972,15 +2063,22 @@ async function runSearchJob(jobId) {
       let isQuotaExceeded = false;
       let queryError;
       const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || "";
-      const res = await searchPlacesOfficial(query, apiKey, {
-        locationBias: {
-          circle: {
-            center: { latitude: area.lat, longitude: area.lng },
-            radius: area.radius
-          }
-        },
-        maxResultCount: 20
-      });
+      const hasRealCoords = area.lat !== 0 && area.lng !== 0;
+      const res = await searchPlacesOfficial(
+        query,
+        apiKey,
+        hasRealCoords ? {
+          locationBias: {
+            circle: {
+              center: { latitude: area.lat, longitude: area.lng },
+              radius: area.radius || 12e3
+            }
+          },
+          maxResultCount: 20
+        } : {
+          maxResultCount: 20
+        }
+      );
       if (res.isQuotaExceeded) {
         isQuotaExceeded = true;
         queryError = res.error;
@@ -2013,8 +2111,9 @@ async function runSearchJob(jobId) {
         if (normalizedPlace.website_status === "no_website") {
           newWithoutWebsite++;
         }
+        const isRelevant = isPlaceRelevantToNiche(normalizedPlace, job.niche);
         const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
-        if (matchesFilters) {
+        if (matchesFilters && isRelevant) {
           const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
           const leadId = `lead_${job.freelancer_id ? job.freelancer_id + "_" : ""}${normalizedPlace.place_id}`;
           const { created } = db.createLead({
@@ -2109,6 +2208,19 @@ function checkLeadFilters(place, filters) {
     return false;
   }
   if (filters.maxReviews && filters.maxReviews > 0 && reviews > filters.maxReviews) {
+    return false;
+  }
+  return true;
+}
+function isPlaceRelevantToNiche(place, niche) {
+  if (!niche || niche.trim() === "") return true;
+  const name = (place.name || "").toLowerCase();
+  const types = (place.raw_types || []).map((t) => t.toLowerCase());
+  if (matchesNicheSemantics(name, niche)) return true;
+  if (matchesNicheSemantics(types.join(" "), niche)) return true;
+  const incompatible = ["gas_station", "cemetery", "funeral_home", "police", "fire_station"];
+  const hasIncompatible = incompatible.some((inc) => types.includes(inc));
+  if (hasIncompatible && !matchesNicheSemantics(incompatible.join(" "), niche)) {
     return false;
   }
   return true;
@@ -2363,7 +2475,7 @@ app.use("/api", async (req, _res, next) => {
   next();
 });
 var ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || "gustavohcsantos.mm2020@gmail.com";
-var ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+var ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || "gustavo34";
 var adminSessions = /* @__PURE__ */ new Set();
 var freelancerSessions = /* @__PURE__ */ new Map();
 adminSessions.add("admin_master_session_token");
@@ -2451,7 +2563,7 @@ app.post("/api/admin/login", (req, res) => {
   }
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanPass = String(password).trim();
-  const isValidAdmin = (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === "admin@ghprospeccao.com" || cleanEmail === "admin") && (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === "Admin@2026!" || cleanPass === "admin");
+  const isValidAdmin = (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === "admin@ghprospeccao.com" || cleanEmail === "admin") && (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === "gustavo34");
   if (!isValidAdmin) {
     return res.status(401).json({ error: "Credenciais de administrador inv\xE1lidas." });
   }
@@ -2485,6 +2597,12 @@ app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: "Email e senha s\xE3o obrigat\xF3rios." });
+  }
+  const cleanEmail = String(email).trim().toLowerCase();
+  const cleanPass = String(password).trim();
+  const isValid = (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === "admin@ghprospeccao.com" || cleanEmail === "admin") && (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === "gustavo34");
+  if (!isValid) {
+    return res.status(401).json({ error: "Credenciais de administrador inv\xE1lidas." });
   }
   const token = `admin_sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
   adminSessions.add(token);
