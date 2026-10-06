@@ -315,11 +315,20 @@ export const api = {
   },
 
   async adminGetFreelancerLeads(id: string): Promise<{ leads: Lead[]; total: number }> {
-    const res = await fetch(`/api/admin/freelancers/${id}/leads`, {
-      headers: getAuthHeaders(),
-    });
-    if (!res.ok) throw new Error('Falha ao carregar leads do freelancer.');
-    return res.json();
+    try {
+      const res = await fetch(`/api/admin/freelancers/${id}/leads`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.leads) && typeof data.total === 'number' && data.total > 0) {
+          return data;
+        }
+      }
+    } catch {}
+    const allLeads = await fetchAllLeadsFromFirestore();
+    const filtered = allLeads.filter((l) => matchesFreelancerId(l.freelancer_id, id));
+    return { leads: filtered, total: filtered.length };
   },
 
   async adminGetFreelancerSearches(id: string): Promise<SearchJob[]> {
@@ -403,7 +412,11 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && typeof data.totalLeads === 'number') {
+        if (
+          data &&
+          typeof data.totalLeads === 'number' &&
+          data.totalLeads > 0
+        ) {
           return data;
         }
       }
@@ -525,7 +538,7 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           return data;
         }
       }
@@ -567,7 +580,7 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           return data;
         }
       }
@@ -642,7 +655,12 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.leads) && typeof data.total === 'number') {
+        if (
+          data &&
+          Array.isArray(data.leads) &&
+          typeof data.total === 'number' &&
+          data.total > 0
+        ) {
           return data;
         }
       }

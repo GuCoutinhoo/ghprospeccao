@@ -3,6 +3,7 @@ import { searchPlacesOfficial, normalizePlace, GooglePlaceRaw } from '../google/
 import { CITY_COORDINATES, METROPOLITAN_GRIDS, POPULAR_CITIES_BY_STATE, fetchCitiesByState } from '../ibge/ibgeService';
 import { calculateLeadScore } from '../scoring/leadScore';
 import { SearchArea, SearchJob, SearchQueryLog } from '../../types';
+import { syncLeadToFirestore } from '../firebase/sync';
 
 interface ActiveWorker {
   jobId: string;
@@ -250,7 +251,7 @@ export async function runSearchJob(jobId: string) {
         if (matchesFilters && isRelevant) {
           const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
           const leadId = `lead_${job.freelancer_id ? job.freelancer_id + '_' : ''}${normalizedPlace.place_id}`;
-          const { created } = db.createLead({
+          const { lead: persistedLead, created } = db.createLead({
             id: leadId,
             user_id: job.user_id,
             freelancer_id: job.freelancer_id,
@@ -272,6 +273,8 @@ export async function runSearchJob(jobId: string) {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
+
+          await syncLeadToFirestore(persistedLead);
 
           // Incrementa leads encontrados no job mesmo se já existia na base de dados
           newLeadsCreated++;
