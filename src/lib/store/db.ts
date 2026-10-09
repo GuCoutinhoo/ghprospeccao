@@ -27,6 +27,8 @@ import {
   deleteFreelancerFromFirestore,
   deleteFreelancerAndAllDataFromFirestore,
   deleteLeadFromFirestore,
+  deleteMultipleLeadsFromFirestore,
+  deleteLeadsForTenantFromFirestore,
   deleteJobFromFirestore,
   deleteActivityFromFirestore,
   syncActivityToFirestore,
@@ -539,7 +541,7 @@ class Database {
     }
 
     if (params.onlyWithoutWebsite) {
-      filtered = filtered.filter((l) => l.website_status === 'no_website' || !l.website);
+      filtered = filtered.filter((l) => (!l.website || l.website.trim() === '') && (l.website_status === 'no_website' || !l.website_status));
     }
 
     if (params.onlyWithPhone) {
@@ -742,7 +744,7 @@ class Database {
     const contactedLeads = leads.filter((l) => l.pipeline_status === 'CONTATADO').length;
     const interestedLeads = leads.filter((l) => l.pipeline_status === 'INTERESSADO' || l.pipeline_status === 'NEGOCIACAO').length;
     const closedLeads = leads.filter((l) => l.pipeline_status === 'FECHADO').length;
-    const noWebsiteLeads = leads.filter((l) => l.website_status === 'no_website' || !l.website).length;
+    const noWebsiteLeads = leads.filter((l) => (!l.website || l.website.trim() === '') && (l.website_status === 'no_website' || !l.website_status)).length;
     const withPhoneLeads = leads.filter((l) => Boolean(l.phone && l.phone.trim().length >= 8)).length;
 
     const contactedOrMore = leads.filter((l) => ['CONTATADO', 'RESPONDEU', 'INTERESSADO', 'FOLLOW_UP', 'NEGOCIACAO', 'REUNIÃO', 'PROPOSTA', 'FECHADO'].includes(l.pipeline_status)).length;
@@ -1187,7 +1189,16 @@ class Database {
     return { leadsRemoved: Math.max(leadsToDelete.length, firestoreStats.leadsDeleted) };
   }
 
-  public async deleteLead(id: string): Promise<boolean> {
+  public async deleteLead(
+    id: string,
+    scope?: { freelancerId?: string; role?: 'admin' | 'freelancer' }
+  ): Promise<boolean> {
+    const lead = (this.data.leads || []).find((l) => l.id === id);
+    if (lead && scope?.role === 'freelancer' && scope.freelancerId) {
+      if (!matchesFreelancerId(lead.freelancer_id, scope.freelancerId)) {
+        throw new Error('Acesso não autorizado: você só pode excluir leads do seu próprio workspace.');
+      }
+    }
     const idx = (this.data.leads || []).findIndex((l) => l.id === id);
     if (idx !== -1) {
       this.data.leads.splice(idx, 1);
@@ -1198,6 +1209,46 @@ class Database {
     this.save();
     await deleteLeadFromFirestore(id).catch(() => {});
     return true;
+  }
+
+  public async deleteAllLeads(scope: {
+    freelancerId?: string;
+    role?: 'admin' | 'freelancer';
+  }): Promise<{ deletedCount: number; leadIds: string[] }> {
+    let leadsToDelete: Lead[] = [];
+
+    if (scope.role === 'freelancer' || (scope.freelancerId && scope.freelancerId !== 'ALL')) {
+      const fid = scope.freelancerId;
+      if (!fid) return { deletedCount: 0, leadIds: [] };
+      leadsToDelete = (this.data.leads || []).filter((l) => matchesFreelancerId(l.freelancer_id, fid));
+    } else if (scope.role === 'admin' && (!scope.freelancerId || scope.freelancerId === 'admin' || scope.freelancerId === 'administrador')) {
+      leadsToDelete = (this.data.leads || []).filter((l) => {
+        const lf = (l.freelancer_id || '').toLowerCase().trim();
+        return !lf || lf === 'admin' || lf === 'administrador';
+      });
+    }
+
+    const idsToDelete = leadsToDelete.map((l) => l.id);
+    const idsSet = new Set(idsToDelete);
+
+    if (idsToDelete.length > 0) {
+      this.data.leads = (this.data.leads || []).filter((l) => !idsSet.has(l.id));
+      if (this.data.lead_notes) {
+        this.data.lead_notes = this.data.lead_notes.filter((n) => !idsSet.has(n.lead_id));
+      }
+      this.save();
+    }
+
+    const targetFid = scope.role === 'freelancer' ? scope.freelancerId : (scope.freelancerId || 'admin');
+    let firestoreDeletedCount = 0;
+    try {
+      firestoreDeletedCount = await deleteLeadsForTenantFromFirestore(targetFid);
+    } catch (err) {
+      console.warn('[DB] Erro ao deletar leads do tenant no Firestore:', err);
+    }
+
+    const finalDeletedCount = Math.max(idsToDelete.length, firestoreDeletedCount);
+    return { deletedCount: finalDeletedCount, leadIds: idsToDelete };
   }
 
   // --- ACTIVITIES AUDIT LOG ---

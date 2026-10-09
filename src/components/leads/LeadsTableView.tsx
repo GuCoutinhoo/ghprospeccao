@@ -32,6 +32,9 @@ import {
   Tags,
   Layers,
   Heart,
+  Trash2,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { Lead, PipelineStatus, UserRole, Freelancer } from '../../types';
 import { api } from '../../lib/api';
@@ -142,6 +145,13 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   const [filterTab, setFilterTab] = useState<'both' | 'niche' | 'state'>('both');
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Estados para exclusão de leads (individual e em massa)
+  const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
+  const [showConfirmDeleteAll, setShowConfirmDeleteAll] = useState<boolean>(false);
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
+  const [isDeletingAll, setIsDeletingAll] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Ref sempre atualizada com os filtros vigentes para evitar closures defasadas
   const latestFiltersRef = useRef({
@@ -395,6 +405,58 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const showToast = useCallback((type: 'success' | 'error', text: string) => {
+    setToastMessage({ type, text });
+    setTimeout(() => {
+      setToastMessage((cur) => (cur?.text === text ? null : cur));
+    }, 4500);
+  }, []);
+
+  const handleConfirmDeleteSingle = async () => {
+    if (!leadToDelete || deletingLeadId) return;
+    const targetLead = leadToDelete;
+    setDeletingLeadId(targetLead.id);
+    try {
+      await api.deleteLead(targetLead.id);
+      // Remove imediatamente da interface sem chance de reaparecer
+      setLeads((prev) => prev.filter((l) => l.id !== targetLead.id));
+      setTotal((prev) => Math.max(0, prev - 1));
+      setTotalOverallLeads((prev) => Math.max(0, prev - 1));
+      setLeadToDelete(null);
+      showToast('success', `Lead "${targetLead.name}" foi excluído com sucesso do banco de dados.`);
+      loadNiches();
+      loadStates();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao excluir lead.';
+      console.error('Erro ao excluir lead:', err);
+      showToast('error', msg);
+    } finally {
+      setDeletingLeadId(null);
+    }
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    if (isDeletingAll) return;
+    setIsDeletingAll(true);
+    try {
+      const res = await api.deleteAllLeads(effectiveFreelancerId);
+      setLeads([]);
+      setTotal(0);
+      setTotalOverallLeads(0);
+      setShowConfirmDeleteAll(false);
+      showToast('success', `Todos os leads foram excluídos permanentemente com sucesso! (${res.deletedCount || 0} estabelecimentos removidos).`);
+      loadNiches();
+      loadStates();
+      loadLeads(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao apagar todos os leads.';
+      console.error('Erro ao apagar todos os leads:', err);
+      showToast('error', msg);
+    } finally {
+      setIsDeletingAll(false);
+    }
   };
 
   const hasActiveFilters =
@@ -842,6 +904,20 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
               <span className="hidden md:inline">Exportar</span>
             </button>
 
+            {total > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowConfirmDeleteAll(true)}
+                disabled={isDeletingAll || loading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors shadow-2xs shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Apagar permanentemente todos os leads do workspace atual"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                <span className="hidden sm:inline">Apagar todos os leads</span>
+                <span className="sm:hidden">Apagar todos</span>
+              </button>
+            )}
+
             {onStartSpeedOutreach && (
               <button
                 type="button"
@@ -1148,6 +1224,19 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                         >
                           Score {lead.lead_score}
                         </span>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLeadToDelete(lead);
+                          }}
+                          disabled={deletingLeadId === lead.id}
+                          className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Excluir este lead"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
 
@@ -1185,9 +1274,22 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                         </span>
                       </div>
 
-                      <span className="text-[10px] font-bold text-amber-800 bg-amber-100/60 px-2 py-0.5 rounded">
-                        Sem site
-                      </span>
+                      {lead.website ? (
+                        <a
+                          href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[10px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded truncate max-w-[120px]"
+                          title={lead.website}
+                        >
+                          Possui site
+                        </a>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-800 bg-amber-100/60 px-2 py-0.5 rounded">
+                          Sem site
+                        </span>
+                      )}
                     </div>
 
                     {/* Telefone Formatado com Copiar */}
@@ -1378,11 +1480,17 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                       {/* Site */}
                       <td className="px-3 py-3 whitespace-nowrap">
                         {lead.website ? (
-                          <span className="text-neutral-500 truncate max-w-[100px] block" title={lead.website}>
+                          <a
+                            href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 hover:underline truncate max-w-[120px] block text-xs"
+                            title={lead.website}
+                          >
                             Possui site
-                          </span>
+                          </a>
                         ) : (
-                          <span className="text-amber-800 font-medium">Sem site</span>
+                          <span className="text-amber-800 font-medium text-xs">Sem site</span>
                         )}
                       </td>
 
@@ -1452,6 +1560,19 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                           >
                             <CheckCircle className="h-4 w-4" />
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLeadToDelete(lead);
+                            }}
+                            disabled={deletingLeadId === lead.id}
+                            title="Excluir este lead"
+                            className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1509,6 +1630,175 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação: Exclusão de Lead Individual */}
+      {leadToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          onClick={() => !deletingLeadId && setLeadToDelete(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-neutral-200 space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-neutral-900 leading-tight">
+                  Excluir Lead
+                </h3>
+                <p className="text-xs text-neutral-600">
+                  Tem certeza que deseja excluir este lead? Essa ação não poderá ser desfeita.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3.5 text-xs space-y-1">
+              <div className="font-bold text-neutral-900 text-sm">{leadToDelete.name}</div>
+              <div className="text-neutral-500 flex items-center gap-2">
+                <span>{leadToDelete.niche}</span>
+                <span>·</span>
+                <span>{leadToDelete.city} - {leadToDelete.state}</span>
+              </div>
+              {leadToDelete.phone && (
+                <div className="text-neutral-600 font-mono text-[11px] pt-1">
+                  📞 {formatBrazilianPhone(leadToDelete.phone)}
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-neutral-400">
+              O lead será removido permanentemente do banco de dados e do Firestore.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setLeadToDelete(null)}
+                disabled={Boolean(deletingLeadId)}
+                className="px-4 py-2 text-xs font-semibold text-neutral-700 bg-white border border-neutral-200 rounded-xl hover:bg-neutral-100 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSingle}
+                disabled={Boolean(deletingLeadId)}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 disabled:opacity-50 rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                {deletingLeadId === leadToDelete.id ? (
+                  <>
+                    <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Excluir Lead</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação: Exclusão em Massa (Apagar Todos os Leads) */}
+      {showConfirmDeleteAll && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          onClick={() => !isDeletingAll && setShowConfirmDeleteAll(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-rose-200 space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-neutral-900 leading-tight">
+                  Apagar Todos os Leads
+                </h3>
+                <p className="text-xs text-rose-700 font-semibold">
+                  Tem certeza que deseja apagar TODOS os leads? Essa ação é permanente e não poderá ser desfeita.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-3.5 text-xs text-rose-950 space-y-1.5">
+              <p>
+                Você está prestes a excluir permanentemente todos os <strong className="font-bold">{total} estabelecimentos</strong> cadastrados neste workspace.
+              </p>
+              <p className="text-[11px] text-rose-700 font-mono">
+                {userRole === 'freelancer'
+                  ? `Workspace do freelancer: ${activeFreelancer?.name || 'Freelancer'} (${effectiveFreelancerId || 'privado'})`
+                  : 'Workspace do Administrador'}
+              </p>
+              <p className="text-[11px] text-neutral-500 italic">
+                * Outros freelancers e contas não serão afetados (isolamento total de tenant respeitado).
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmDeleteAll(false)}
+                disabled={isDeletingAll}
+                className="px-4 py-2 text-xs font-semibold text-neutral-700 bg-white border border-neutral-200 rounded-xl hover:bg-neutral-100 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteAll}
+                disabled={isDeletingAll}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 disabled:opacity-50 rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                {isDeletingAll ? (
+                  <>
+                    <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Apagando todos...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Sim, apagar todos os leads</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Banner / Toast de Feedback Visual */}
+      {toastMessage && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg border text-xs font-medium animate-in slide-in-from-bottom-2 duration-200 ${
+            toastMessage.type === 'success'
+              ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+              : 'bg-rose-50 text-rose-900 border-rose-300'
+          }`}
+        >
+          {toastMessage.type === 'success' ? (
+            <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+          )}
+          <span>{toastMessage.text}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="ml-2 p-0.5 text-neutral-400 hover:text-neutral-800 rounded cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
     </div>

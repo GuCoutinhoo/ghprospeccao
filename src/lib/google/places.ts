@@ -77,12 +77,6 @@ export function hasWebsite(rawWebsiteUri?: string | null): { hasWebsite: boolean
       return { hasWebsite: false, status: 'invalid_website' };
     }
 
-    // Se for rede social ou link de WhatsApp/Linktree, a empresa NÃO tem site institucional próprio
-    const isSocial = SOCIAL_MEDIA_DOMAINS.some((domain) => url.hostname.includes(domain));
-    if (isSocial) {
-      return { hasWebsite: false, status: 'no_website' };
-    }
-
     return { hasWebsite: true, status: 'website_found' };
   } catch {
     return { hasWebsite: false, status: 'invalid_website' };

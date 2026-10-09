@@ -312,6 +312,70 @@ export async function deleteLeadFromFirestore(id: string): Promise<void> {
   }
 }
 
+export async function deleteMultipleLeadsFromFirestore(ids: string[]): Promise<number> {
+  const db = getFirestoreDb();
+  if (!db || !ids || ids.length === 0) return 0;
+  try {
+    const promises = ids.map((id) => deleteDoc(doc(db, 'leads', id)).catch(() => {}));
+    await Promise.all(promises);
+    return ids.length;
+  } catch (err) {
+    console.warn('[Firebase] Erro ao deletar múltiplos leads do Firestore:', err);
+    return 0;
+  }
+}
+
+export async function deleteLeadsForTenantFromFirestore(targetFreelancerId?: string): Promise<number> {
+  const db = getFirestoreDb();
+  if (!db) return 0;
+  try {
+    const snap = await getDocs(collection(db, 'leads')).catch(() => null);
+    if (!snap) return 0;
+    let count = 0;
+    const deletePromises: Promise<void>[] = [];
+
+    const normTarget = targetFreelancerId ? targetFreelancerId.toLowerCase().trim() : '';
+    const cleanTarget = normTarget.startsWith('free_') ? normTarget.substring(5) : normTarget;
+
+    snap.forEach((d) => {
+      const data = d.data() as Lead;
+      const fid = (data.freelancer_id || '').toLowerCase().trim();
+      const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
+      const uid = (data.user_id || '').toLowerCase().trim();
+      const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
+
+      let shouldDelete = false;
+      if (normTarget && normTarget !== 'all') {
+        shouldDelete = Boolean(
+          fid === normTarget ||
+          cleanFid === cleanTarget ||
+          (cleanTarget && fid === `free_${cleanTarget}`) ||
+          uid === normTarget ||
+          cleanUid === cleanTarget ||
+          (cleanTarget && uid === `free_${cleanTarget}`)
+        );
+      } else if (!normTarget || normTarget === 'admin' || normTarget === 'administrador') {
+        const hasFreelancer = Boolean(
+          (fid && fid !== 'admin' && fid !== 'administrador') ||
+          (uid && uid.startsWith('free_'))
+        );
+        shouldDelete = !hasFreelancer;
+      }
+
+      if (shouldDelete) {
+        count++;
+        deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+      }
+    });
+
+    await Promise.all(deletePromises);
+    return count;
+  } catch (err) {
+    console.warn('[Firebase] Erro ao deletar leads do tenant no Firestore:', err);
+    return 0;
+  }
+}
+
 export async function deleteJobFromFirestore(id: string): Promise<void> {
   const db = getFirestoreDb();
   if (!db || !id) return;

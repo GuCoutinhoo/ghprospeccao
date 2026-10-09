@@ -18,7 +18,7 @@ var DEFAULT_SCORING_WEIGHTS = {
 };
 function calculateLeadScore(place, customWeights) {
   const weights = { ...DEFAULT_SCORING_WEIGHTS, ...customWeights };
-  const isNoWebsite = place.website_status === "no_website" || !place.website || place.website.trim() === "";
+  const isNoWebsite = (!place.website || place.website.trim() === "") && (place.website_status === "no_website" || !place.website_status);
   const hasPhone = Boolean(place.phone && place.phone.trim().length >= 8);
   const rating = Number(place.rating || 0);
   const isHighRating = rating >= 4.5;
@@ -350,6 +350,46 @@ async function deleteLeadFromFirestore(id) {
     console.warn(`[Firebase] Erro ao deletar lead ${id} do Firestore:`, err);
   }
 }
+async function deleteLeadsForTenantFromFirestore(targetFreelancerId) {
+  const db2 = getFirestoreDb();
+  if (!db2) return 0;
+  try {
+    const snap = await getDocs(collection(db2, "leads")).catch(() => null);
+    if (!snap) return 0;
+    let count = 0;
+    const deletePromises = [];
+    const normTarget = targetFreelancerId ? targetFreelancerId.toLowerCase().trim() : "";
+    const cleanTarget = normTarget.startsWith("free_") ? normTarget.substring(5) : normTarget;
+    snap.forEach((d) => {
+      const data = d.data();
+      const fid = (data.freelancer_id || "").toLowerCase().trim();
+      const cleanFid = fid.startsWith("free_") ? fid.substring(5) : fid;
+      const uid = (data.user_id || "").toLowerCase().trim();
+      const cleanUid = uid.startsWith("free_") ? uid.substring(5) : uid;
+      let shouldDelete = false;
+      if (normTarget && normTarget !== "all") {
+        shouldDelete = Boolean(
+          fid === normTarget || cleanFid === cleanTarget || cleanTarget && fid === `free_${cleanTarget}` || uid === normTarget || cleanUid === cleanTarget || cleanTarget && uid === `free_${cleanTarget}`
+        );
+      } else if (!normTarget || normTarget === "admin" || normTarget === "administrador") {
+        const hasFreelancer = Boolean(
+          fid && fid !== "admin" && fid !== "administrador" || uid && uid.startsWith("free_")
+        );
+        shouldDelete = !hasFreelancer;
+      }
+      if (shouldDelete) {
+        count++;
+        deletePromises.push(deleteDoc(d.ref).catch(() => {
+        }));
+      }
+    });
+    await Promise.all(deletePromises);
+    return count;
+  } catch (err) {
+    console.warn("[Firebase] Erro ao deletar leads do tenant no Firestore:", err);
+    return 0;
+  }
+}
 async function syncActivityToFirestore(activity) {
   const db2 = getFirestoreDb();
   if (!db2 || !activity.id) return;
@@ -450,6 +490,7 @@ var Database = class {
       activities: []
     };
     this.initialized = false;
+    this.firestoreHydrated = false;
     this.initPromise = null;
     this.init();
   }
@@ -495,7 +536,7 @@ var Database = class {
     });
   }
   async ensureInitialized() {
-    if (this.initialized && this.data.leads && this.data.leads.length > 0 && this.data.freelancers && this.data.freelancers.length > 1) {
+    if (this.firestoreHydrated) {
       return;
     }
     if (this.initPromise) {
@@ -507,6 +548,7 @@ var Database = class {
       }
       try {
         await this.syncFromFirestore();
+        this.firestoreHydrated = true;
       } catch (syncErr) {
         console.warn("[DB] Erro ao sincronizar inicializa\xE7\xE3o com Firestore:", syncErr);
       }
@@ -519,28 +561,34 @@ var Database = class {
     try {
       const remote = await fetchAllFromFirestore();
       if (remote) {
+        if (remote.settings) {
+          this.data.settings = { ...this.data.settings, ...remote.settings };
+        }
+        const demoFreeIds = ["free_7F4K92XQ", "free_8HKS82MD", "free_9YPL21BZ", "free_4TRM67KV"];
+        if (remote.freelancers && remote.freelancers.length > 0) {
+          const freeMap = /* @__PURE__ */ new Map();
+          for (const f of remote.freelancers) {
+            if (f && f.id && !demoFreeIds.includes(f.id)) freeMap.set(f.id, f);
+            else if (f && f.id && demoFreeIds.includes(f.id)) {
+              deleteFreelancerFromFirestore(f.id).catch(() => {
+              });
+            }
+          }
+          for (const f of this.data.freelancers || []) {
+            if (!f || !f.id || demoFreeIds.includes(f.id)) continue;
+            if (!freeMap.has(f.id)) {
+              freeMap.set(f.id, f);
+              syncFreelancerToFirestore(f).catch(() => {
+              });
+            }
+          }
+          this.data.freelancers = Array.from(freeMap.values());
+        } else {
+          this.data.freelancers = (this.data.freelancers || []).filter((f) => !demoFreeIds.includes(f.id));
+        }
         const leadMap = /* @__PURE__ */ new Map();
         for (const l of remote.leads || []) {
           if (!l || !l.id) continue;
-          const fid = (l.freelancer_id || "").toLowerCase().trim();
-          const cleanFid = fid.startsWith("free_") ? fid.substring(5) : fid;
-          const targetFreelancer = (this.data.freelancers || []).find(
-            (f) => f.id.toLowerCase() === fid || f.access_code.toLowerCase() === cleanFid
-          );
-          if (fid && !targetFreelancer && (deletedFreelancerCodes.has(fid) || deletedFreelancerCodes.has(`free_${fid}`))) {
-            deleteLeadFromFirestore(l.id).catch(() => {
-            });
-            continue;
-          }
-          if (targetFreelancer && targetFreelancer.created_at && l.created_at) {
-            const leadTime = new Date(l.created_at).getTime();
-            const freeTime = new Date(targetFreelancer.created_at).getTime();
-            if (leadTime < freeTime - 2e3) {
-              deleteLeadFromFirestore(l.id).catch(() => {
-              });
-              continue;
-            }
-          }
           leadMap.set(l.id, l);
         }
         for (const l of this.data.leads || []) {
@@ -592,28 +640,6 @@ var Database = class {
           }
         }
         this.data.search_jobs = Array.from(jobMap.values());
-        const demoFreeIds = ["free_7F4K92XQ", "free_8HKS82MD", "free_9YPL21BZ", "free_4TRM67KV"];
-        if (remote.freelancers && remote.freelancers.length > 0) {
-          const freeMap = /* @__PURE__ */ new Map();
-          for (const f of remote.freelancers) {
-            if (f && f.id && !demoFreeIds.includes(f.id)) freeMap.set(f.id, f);
-            else if (f && f.id && demoFreeIds.includes(f.id)) {
-              deleteFreelancerFromFirestore(f.id).catch(() => {
-              });
-            }
-          }
-          for (const f of this.data.freelancers || []) {
-            if (!f || !f.id || demoFreeIds.includes(f.id)) continue;
-            if (!freeMap.has(f.id)) {
-              freeMap.set(f.id, f);
-              syncFreelancerToFirestore(f).catch(() => {
-              });
-            }
-          }
-          this.data.freelancers = Array.from(freeMap.values());
-        } else {
-          this.data.freelancers = (this.data.freelancers || []).filter((f) => !demoFreeIds.includes(f.id));
-        }
         if (remote.activities && remote.activities.length > 0) {
           const actMap = /* @__PURE__ */ new Map();
           for (const a of remote.activities) {
@@ -637,20 +663,18 @@ var Database = class {
             (a) => !demoFreeIds.includes(a.freelancer_id) && !["act_1", "act_2", "act_3", "act_4", "act_5", "act_6", "act_7"].includes(a.id)
           );
         }
-        if (remote.settings) {
-          this.data.settings = { ...this.data.settings, ...remote.settings };
-        }
+        this.firestoreHydrated = true;
         this.save();
       }
       return {
-        leadsCount: this.data.leads.length,
-        placesCount: this.data.places.length
+        leadsCount: (this.data.leads || []).length,
+        placesCount: (this.data.places || []).length
       };
     } catch (err) {
-      console.warn("[DB] Falha na sincroniza\xE7\xE3o do Firestore:", err);
+      console.warn("[DB] Erro ao sincronizar com Firestore:", err);
       return {
-        leadsCount: this.data.leads.length,
-        placesCount: this.data.places.length
+        leadsCount: (this.data.leads || []).length,
+        placesCount: (this.data.places || []).length
       };
     }
   }
@@ -784,7 +808,7 @@ var Database = class {
       filtered = filtered.filter((l) => l.pipeline_status === params.status);
     }
     if (params.onlyWithoutWebsite) {
-      filtered = filtered.filter((l) => l.website_status === "no_website" || !l.website);
+      filtered = filtered.filter((l) => (!l.website || l.website.trim() === "") && (l.website_status === "no_website" || !l.website_status));
     }
     if (params.onlyWithPhone) {
       filtered = filtered.filter((l) => Boolean(l.phone && l.phone.trim().length >= 8));
@@ -956,7 +980,7 @@ var Database = class {
     const contactedLeads = leads.filter((l) => l.pipeline_status === "CONTATADO").length;
     const interestedLeads = leads.filter((l) => l.pipeline_status === "INTERESSADO" || l.pipeline_status === "NEGOCIACAO").length;
     const closedLeads = leads.filter((l) => l.pipeline_status === "FECHADO").length;
-    const noWebsiteLeads = leads.filter((l) => l.website_status === "no_website" || !l.website).length;
+    const noWebsiteLeads = leads.filter((l) => (!l.website || l.website.trim() === "") && (l.website_status === "no_website" || !l.website_status)).length;
     const withPhoneLeads = leads.filter((l) => Boolean(l.phone && l.phone.trim().length >= 8)).length;
     const contactedOrMore = leads.filter((l) => ["CONTATADO", "RESPONDEU", "INTERESSADO", "FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)).length;
     const respondedOrMore = leads.filter((l) => ["RESPONDEU", "INTERESSADO", "FOLLOW_UP", "NEGOCIACAO", "REUNI\xC3O", "PROPOSTA", "FECHADO"].includes(l.pipeline_status)).length;
@@ -1071,28 +1095,6 @@ var Database = class {
     const now = (/* @__PURE__ */ new Date()).toISOString();
     deletedFreelancerCodes.delete(code.toLowerCase());
     deletedFreelancerCodes.delete(id.toLowerCase());
-    const rawCodesToClean = [
-      id,
-      code,
-      `free_${code}`,
-      slugifyFreelancerName(rawName),
-      `free_${slugifyFreelancerName(rawName)}`
-    ].filter(Boolean);
-    const codesToClean = rawCodesToClean.map((c) => c.toLowerCase());
-    try {
-      await deleteFreelancerAndAllDataFromFirestore(id, code, rawName);
-    } catch (err) {
-      console.warn("[DB] Erro na pr\xE9-purga de dados do Firestore para novo workspace:", err);
-    }
-    this.data.leads = (this.data.leads || []).filter(
-      (l) => !matchesFreelancerId(l.freelancer_id, id) && !matchesFreelancerId(l.freelancer_id, code) && !matchesFreelancerId(l.user_id, id) && !matchesFreelancerId(l.user_id, code) && !codesToClean.includes((l.freelancer_id || "").toLowerCase()) && !codesToClean.includes((l.user_id || "").toLowerCase()) && (l.freelancer_name || "").toLowerCase() !== rawName.toLowerCase()
-    );
-    this.data.search_jobs = (this.data.search_jobs || []).filter(
-      (j) => !matchesFreelancerId(j.freelancer_id, id) && !matchesFreelancerId(j.freelancer_id, code) && !codesToClean.includes((j.freelancer_id || "").toLowerCase())
-    );
-    this.data.activities = (this.data.activities || []).filter(
-      (a) => !matchesFreelancerId(a.freelancer_id, id) && !matchesFreelancerId(a.freelancer_id, code) && !codesToClean.includes((a.freelancer_id || "").toLowerCase()) && (a.freelancer_name || "").toLowerCase() !== rawName.toLowerCase()
-    );
     const freelancer = {
       id,
       name: rawName,
@@ -1289,7 +1291,13 @@ var Database = class {
     }
     return { leadsRemoved: Math.max(leadsToDelete.length, firestoreStats.leadsDeleted) };
   }
-  async deleteLead(id) {
+  async deleteLead(id, scope) {
+    const lead = (this.data.leads || []).find((l) => l.id === id);
+    if (lead && scope?.role === "freelancer" && scope.freelancerId) {
+      if (!matchesFreelancerId(lead.freelancer_id, scope.freelancerId)) {
+        throw new Error("Acesso n\xE3o autorizado: voc\xEA s\xF3 pode excluir leads do seu pr\xF3prio workspace.");
+      }
+    }
     const idx = (this.data.leads || []).findIndex((l) => l.id === id);
     if (idx !== -1) {
       this.data.leads.splice(idx, 1);
@@ -1301,6 +1309,37 @@ var Database = class {
     await deleteLeadFromFirestore(id).catch(() => {
     });
     return true;
+  }
+  async deleteAllLeads(scope) {
+    let leadsToDelete = [];
+    if (scope.role === "freelancer" || scope.freelancerId && scope.freelancerId !== "ALL") {
+      const fid = scope.freelancerId;
+      if (!fid) return { deletedCount: 0, leadIds: [] };
+      leadsToDelete = (this.data.leads || []).filter((l) => matchesFreelancerId(l.freelancer_id, fid));
+    } else if (scope.role === "admin" && (!scope.freelancerId || scope.freelancerId === "admin" || scope.freelancerId === "administrador")) {
+      leadsToDelete = (this.data.leads || []).filter((l) => {
+        const lf = (l.freelancer_id || "").toLowerCase().trim();
+        return !lf || lf === "admin" || lf === "administrador";
+      });
+    }
+    const idsToDelete = leadsToDelete.map((l) => l.id);
+    const idsSet = new Set(idsToDelete);
+    if (idsToDelete.length > 0) {
+      this.data.leads = (this.data.leads || []).filter((l) => !idsSet.has(l.id));
+      if (this.data.lead_notes) {
+        this.data.lead_notes = this.data.lead_notes.filter((n) => !idsSet.has(n.lead_id));
+      }
+      this.save();
+    }
+    const targetFid = scope.role === "freelancer" ? scope.freelancerId : scope.freelancerId || "admin";
+    let firestoreDeletedCount = 0;
+    try {
+      firestoreDeletedCount = await deleteLeadsForTenantFromFirestore(targetFid);
+    } catch (err) {
+      console.warn("[DB] Erro ao deletar leads do tenant no Firestore:", err);
+    }
+    const finalDeletedCount = Math.max(idsToDelete.length, firestoreDeletedCount);
+    return { deletedCount: finalDeletedCount, leadIds: idsToDelete };
   }
   // --- ACTIVITIES AUDIT LOG ---
   logActivity(activity) {
@@ -1785,20 +1824,6 @@ var OFFICIAL_PLACES_FIELD_MASK = [
   "places.googleMapsUri",
   "places.businessStatus"
 ].join(",");
-var SOCIAL_MEDIA_DOMAINS = [
-  "instagram.com",
-  "facebook.com",
-  "fb.com",
-  "wa.me",
-  "whatsapp.com",
-  "linktr.ee",
-  "linktree.com",
-  "tiktok.com",
-  "google.com",
-  "goo.gl",
-  "bio.site",
-  "beacons.ai"
-];
 function hasWebsite(rawWebsiteUri) {
   if (!rawWebsiteUri || rawWebsiteUri.trim() === "") {
     return { hasWebsite: false, status: "no_website" };
@@ -1808,10 +1833,6 @@ function hasWebsite(rawWebsiteUri) {
     const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
     if (url.hostname.length < 3 || !url.hostname.includes(".")) {
       return { hasWebsite: false, status: "invalid_website" };
-    }
-    const isSocial = SOCIAL_MEDIA_DOMAINS.some((domain) => url.hostname.includes(domain));
-    if (isSocial) {
-      return { hasWebsite: false, status: "no_website" };
     }
     return { hasWebsite: true, status: "website_found" };
   } catch {
@@ -2208,7 +2229,7 @@ async function runSearchJob(jobId) {
         if (isNew) {
           newPlacesFound++;
         }
-        if (normalizedPlace.website_status === "no_website") {
+        if ((!normalizedPlace.website || normalizedPlace.website.trim() === "") && normalizedPlace.website_status === "no_website") {
           newWithoutWebsite++;
         }
         const isRelevant = isPlaceRelevantToNiche(normalizedPlace, job.niche);
@@ -2294,8 +2315,11 @@ async function runSearchJob(jobId) {
   activeWorkers.delete(jobId);
 }
 function checkLeadFilters(place, filters) {
-  if (filters.onlyWithoutWebsite && place.website_status !== "no_website" && place.website) {
-    return false;
+  if (filters.onlyWithoutWebsite) {
+    const hasAnyWebsite = Boolean(place.website && place.website.trim() !== "") || place.website_status !== "no_website";
+    if (hasAnyWebsite) {
+      return false;
+    }
   }
   if (filters.onlyWithPhone && (!place.phone || place.phone.trim().length < 8)) {
     return false;
@@ -2599,15 +2623,13 @@ app.use("/api", async (req, _res, next) => {
       if (!freelancer && freelancerId.startsWith("free_")) {
         freelancer = db.getFreelancerByAccessCode(freelancerId.substring(5));
       }
-      if (!freelancer && freelancerId && freelancerId.length >= 2) {
-        const code = freelancerId.replace(/^free_/, "").toLowerCase();
-        const formattedName = code.charAt(0).toUpperCase() + code.slice(1);
-        freelancer = await db.createFreelancer({
-          name: formattedName,
-          email: `${code}@ghprospeccao.com`,
-          access_code: code,
-          status: "active"
-        });
+      if (!freelancer) {
+        try {
+          await db.syncFromFirestore();
+        } catch (syncErr) {
+          console.warn("[Server] Falha ao sincronizar com Firestore na autentica\xE7\xE3o:", syncErr);
+        }
+        freelancer = db.getFreelancerById(freelancerId) || db.getFreelancerByAccessCode(freelancerId) || (freelancerId.startsWith("free_") ? db.getFreelancerByAccessCode(freelancerId.substring(5)) : void 0);
       }
       if (freelancer) {
         req.user = {
@@ -2621,6 +2643,10 @@ app.use("/api", async (req, _res, next) => {
         db.updateFreelancer(freelancer.id, { last_activity_at: (/* @__PURE__ */ new Date()).toISOString() });
         return next();
       }
+      return _res.status(401).json({
+        error: "Sess\xE3o inv\xE1lida",
+        message: "Acesso do freelancer n\xE3o encontrado ou revogado."
+      });
     }
   }
   req.user = {
@@ -2743,16 +2769,6 @@ app.post("/api/freelancer/auth/verify", async (req, res) => {
     } catch (err) {
       console.warn("[Server] Falha ao sincronizar Firestore ao verificar c\xF3digo:", err);
     }
-  }
-  if (!freelancer && accessCode && accessCode.trim().length >= 2) {
-    const cleanCode = accessCode.trim().toLowerCase();
-    const formattedName = cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1);
-    freelancer = await db.createFreelancer({
-      name: formattedName,
-      email: `${cleanCode}@ghprospeccao.com`,
-      access_code: cleanCode,
-      status: "active"
-    });
   }
   if (!freelancer) {
     return res.status(404).json({
@@ -2986,9 +3002,70 @@ app.post("/api/admin/freelancers/:id/reset", requireAdmin, async (req, res) => {
     res.status(500).json({ error: message });
   }
 });
+app.delete("/api/leads/all", async (req, res) => {
+  try {
+    const isFreelancer = req.user?.role === "freelancer";
+    const targetFreelancerId = isFreelancer ? req.user?.freelancerId : req.body?.freelancer_id || req.query.freelancer_id || void 0;
+    const result = await db.deleteAllLeads({
+      freelancerId: targetFreelancerId,
+      role: req.user?.role || "admin"
+    });
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `${result.deletedCount} leads exclu\xEDdos com sucesso do workspace.`
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.post("/api/leads/delete-all", async (req, res) => {
+  try {
+    const isFreelancer = req.user?.role === "freelancer";
+    const targetFreelancerId = isFreelancer ? req.user?.freelancerId : req.body?.freelancer_id || req.query.freelancer_id || void 0;
+    const result = await db.deleteAllLeads({
+      freelancerId: targetFreelancerId,
+      role: req.user?.role || "admin"
+    });
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `${result.deletedCount} leads exclu\xEDdos com sucesso do workspace.`
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
 app.delete("/api/leads/:id", async (req, res) => {
   try {
-    await db.deleteLead(req.params.id);
+    const leadId = req.params.id;
+    const lead = db.getLeadById(leadId);
+    if (lead && req.user?.role === "freelancer" && !matchesFreelancerId(lead.freelancer_id, req.user.freelancerId) && !matchesFreelancerId(lead.user_id, req.user.freelancerId)) {
+      return res.status(403).json({ error: "Acesso negado: este lead n\xE3o pertence ao seu workspace." });
+    }
+    await db.deleteLead(leadId, {
+      freelancerId: req.user?.freelancerId,
+      role: req.user?.role
+    });
+    res.json({ success: true, message: "Lead exclu\xEDdo com sucesso." });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+app.post("/api/leads/:id/delete", async (req, res) => {
+  try {
+    const leadId = req.params.id;
+    const lead = db.getLeadById(leadId);
+    if (lead && req.user?.role === "freelancer" && !matchesFreelancerId(lead.freelancer_id, req.user.freelancerId) && !matchesFreelancerId(lead.user_id, req.user.freelancerId)) {
+      return res.status(403).json({ error: "Acesso negado: este lead n\xE3o pertence ao seu workspace." });
+    }
+    await db.deleteLead(leadId, {
+      freelancerId: req.user?.freelancerId,
+      role: req.user?.role
+    });
     res.json({ success: true, message: "Lead exclu\xEDdo com sucesso." });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -3398,14 +3475,12 @@ app.post("/api/search-jobs", async (req, res) => {
     if (freelancerId) {
       let f = db.getFreelancerById(freelancerId) || db.getFreelancerByAccessCode(freelancerId.replace(/^free_/, ""));
       if (!f) {
-        const cleanCode = freelancerId.replace(/^free_/, "").toLowerCase();
-        const fName = freelancerName || cleanCode.charAt(0).toUpperCase() + cleanCode.slice(1);
-        f = await db.createFreelancer({
-          name: fName,
-          email: `${cleanCode}@ghprospeccao.com`,
-          access_code: cleanCode,
-          status: "active"
-        });
+        try {
+          await db.syncFromFirestore();
+        } catch (syncErr) {
+          console.warn("[Server] Falha ao sincronizar Firestore em search/start:", syncErr);
+        }
+        f = db.getFreelancerById(freelancerId) || db.getFreelancerByAccessCode(freelancerId.replace(/^free_/, ""));
       }
       if (f) {
         freelancerId = f.id;

@@ -15,7 +15,7 @@ export function calculateLeadScore(
 ): LeadScoreBreakdown {
   const weights = { ...DEFAULT_SCORING_WEIGHTS, ...customWeights };
 
-  const isNoWebsite = place.website_status === 'no_website' || !place.website || place.website.trim() === '';
+  const isNoWebsite = (!place.website || place.website.trim() === '') && (place.website_status === 'no_website' || !place.website_status);
   const hasPhone = Boolean(place.phone && place.phone.trim().length >= 8);
   const rating = Number(place.rating || 0);
   const isHighRating = rating >= 4.5;

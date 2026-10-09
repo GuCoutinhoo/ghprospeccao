@@ -24,6 +24,7 @@ import {
   invalidateLeadsCache,
   deleteFreelancerDataDirectFromClient,
   deleteLeadDirectFromClient,
+  deleteAllLeadsDirectFromClient,
   matchesFreelancerId,
 } from './firebase/client';
 
@@ -310,6 +311,28 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Falha ao excluir lead.');
+    }
+    return res.json();
+  },
+
+  async deleteAllLeads(freelancer_id?: string): Promise<{ success: boolean; deletedCount: number; message: string }> {
+    invalidateLeadsCache();
+    const session = getActiveFreelancerSession();
+    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+
+    // Remove diretamente do Firestore do cliente
+    await deleteAllLeadsDirectFromClient(targetFreelancerId).catch(() => {});
+
+    // Remove no backend
+    const res = await fetch('/api/leads/all', {
+      method: 'DELETE',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ freelancer_id: targetFreelancerId }),
+    });
+    invalidateLeadsCache();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao excluir todos os leads.');
     }
     return res.json();
   },
@@ -876,9 +899,8 @@ export const api = {
       targetLeads?: number;
     };
   }): Promise<{ job: SearchJob; estimatedQueries: number; totalCities: number; totalAreas: number }> {
-    const session = getActiveFreelancerSession();
-    const effectiveFreelancerId = payload.freelancerId || session?.freelancer?.id;
-    const effectiveFreelancerName = payload.freelancerName || session?.freelancer?.name;
+    const effectiveFreelancerId = payload.freelancerId;
+    const effectiveFreelancerName = payload.freelancerName;
     const fullPayload = {
       ...payload,
       freelancerId: effectiveFreelancerId,

@@ -33,7 +33,7 @@ export function generateAuditReport(lead: Lead): AuditReportData {
     year: 'numeric',
   });
 
-  const hasWebsite = Boolean(lead.website && lead.website_status !== 'no_website');
+  const hasWebsite = Boolean(lead.website && lead.website.trim() !== '' && lead.website_status !== 'no_website');
   const hasPhone = Boolean(lead.phone);
   const reviews = lead.reviews_count || 5;
   const rating = lead.rating || 4.5;

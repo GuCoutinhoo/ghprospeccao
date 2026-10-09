@@ -242,7 +242,7 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
   // Leads filtrados para a esteira
   const queue = useMemo(() => {
     return allLeads.filter((l) => {
-      if (onlyWithoutWebsite && l.website_status !== 'no_website' && l.website) {
+      if (onlyWithoutWebsite && (Boolean(l.website && l.website.trim()) || l.website_status !== 'no_website')) {
         return false;
       }
       if (onlyWithPhone && (!l.phone || l.phone.trim().length < 8)) {
@@ -943,12 +943,12 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
 
                   <span
                     className={`text-xs px-2.5 py-1 rounded-md font-semibold ${
-                      currentLead.website_status === 'no_website' || !currentLead.website
+                      !currentLead.website || currentLead.website_status === 'no_website'
                         ? 'bg-rose-50 text-rose-700 border border-rose-200'
                         : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     }`}
                   >
-                    {currentLead.website_status === 'no_website' || !currentLead.website
+                    {!currentLead.website || currentLead.website_status === 'no_website'
                       ? '⚠️ Sem Website Oficial'
                       : 'Website já cadastrado'}
                   </span>

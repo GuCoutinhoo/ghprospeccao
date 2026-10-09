@@ -669,6 +669,7 @@ export default function App() {
           }}
           onDeleteLead={() => {
             setSelectedLead(null);
+            setRefreshTrigger((prev) => prev + 1);
             loadInitialData();
           }}
         />

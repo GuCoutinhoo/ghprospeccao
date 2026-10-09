@@ -151,10 +151,10 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
       const session = getActiveFreelancerSession();
       const effectiveFreelancerId = userRole === 'freelancer'
         ? (activeFreelancer?.id || (activeFreelancer?.access_code ? `free_${activeFreelancer.access_code}` : session?.freelancer?.id))
-        : session?.freelancer?.id;
+        : undefined;
       const effectiveFreelancerName = userRole === 'freelancer'
         ? (activeFreelancer?.name || session?.freelancer?.name)
-        : session?.freelancer?.name;
+        : undefined;
 
       const res = await api.createSearchJob({
         state: selectedState,

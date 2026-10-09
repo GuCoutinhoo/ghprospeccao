@@ -241,7 +241,7 @@ export async function runSearchJob(jobId: string) {
           newPlacesFound++;
         }
 
-        if (normalizedPlace.website_status === 'no_website') {
+        if ((!normalizedPlace.website || normalizedPlace.website.trim() === '') && normalizedPlace.website_status === 'no_website') {
           newWithoutWebsite++;
         }
 
@@ -362,8 +362,11 @@ function checkLeadFilters(
     maxReviews?: number;
   }
 ): boolean {
-  if (filters.onlyWithoutWebsite && place.website_status !== 'no_website' && place.website) {
-    return false;
+  if (filters.onlyWithoutWebsite) {
+    const hasAnyWebsite = Boolean(place.website && place.website.trim() !== '') || place.website_status !== 'no_website';
+    if (hasAnyWebsite) {
+      return false;
+    }
   }
 
   if (filters.onlyWithPhone && (!place.phone || place.phone.trim().length < 8)) {

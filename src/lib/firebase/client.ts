@@ -125,7 +125,7 @@ export function computeStatsFromLeads(leads: Lead[]): DashboardStats {
     if (status === 'INTERESSADO') interestedLeads++;
     if (status === 'FECHADO') closedLeads++;
 
-    if (lead.website_status === 'no_website' || !lead.website) {
+    if ((!lead.website || lead.website.trim() === '') && (lead.website_status === 'no_website' || !lead.website_status)) {
       noWebsiteLeads++;
     }
     if (lead.phone && lead.phone.trim().length >= 8) {
@@ -309,7 +309,7 @@ export function filterLeadsList(
   }
 
   if (params.onlyWithoutWebsite) {
-    filtered = filtered.filter((l) => l.website_status === 'no_website' || !l.website);
+    filtered = filtered.filter((l) => (!l.website || l.website.trim() === '') && (l.website_status === 'no_website' || !l.website_status));
   }
 
   if (params.onlyWithPhone) {
@@ -401,6 +401,47 @@ export async function deleteLeadDirectFromClient(leadId: string): Promise<void> 
     await deleteDoc(doc(db, 'leads', leadId));
   } catch (err) {
     console.warn(`[Firebase Client] Falha ao deletar lead ${leadId} no Firestore:`, err);
+  }
+}
+
+export async function deleteAllLeadsDirectFromClient(targetFreelancerId?: string): Promise<number> {
+  invalidateLeadsCache();
+  const db = getClientFirestore();
+  if (!db) return 0;
+  try {
+    const snap = await getDocs(collection(db, 'leads')).catch(() => null);
+    if (!snap) return 0;
+    let count = 0;
+    const deletePromises: Promise<void>[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as Lead;
+      const fid = data.freelancer_id;
+      const uid = data.user_id;
+      let shouldDelete = false;
+
+      if (targetFreelancerId && targetFreelancerId !== 'ALL') {
+        shouldDelete = matchesFreelancerId(fid, targetFreelancerId) || matchesFreelancerId(uid, targetFreelancerId);
+      } else if (!targetFreelancerId || targetFreelancerId === 'admin' || targetFreelancerId === 'administrador') {
+        const lf = (fid || '').toLowerCase().trim();
+        const lu = (uid || '').toLowerCase().trim();
+        const hasFreelancer =
+          (lf && lf !== 'admin' && lf !== 'administrador') ||
+          (lu && lu.startsWith('free_'));
+        shouldDelete = !hasFreelancer;
+      }
+
+      if (shouldDelete) {
+        count++;
+        deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+      }
+    });
+    await Promise.all(deletePromises);
+    return count;
+  } catch (err) {
+    console.warn('[Firebase Client] Falha ao deletar leads no Firestore diretamente no cliente:', err);
+    return 0;
+  } finally {
+    invalidateLeadsCache();
   }
 }
 

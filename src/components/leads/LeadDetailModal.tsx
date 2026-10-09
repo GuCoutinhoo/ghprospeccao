@@ -33,6 +33,7 @@ import {
   Award,
   Maximize2,
   Trash2,
+  RotateCw,
 } from 'lucide-react';
 import { Lead, LeadNote, PipelineStatus } from '../../types';
 import { api } from '../../lib/api';
@@ -93,6 +94,9 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const [submittingNote, setSubmittingNote] = useState<boolean>(false);
   const [copiedPhone, setCopiedPhone] = useState<boolean>(false);
   const [copiedAddress, setCopiedAddress] = useState<boolean>(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Tabs do modal: 'loja' (vitrine e mapas), 'mockup' (prévia do site), 'pitch' (scripts), 'audit' (diagnóstico), 'notas'
   const [activeTab, setActiveTab] = useState<'loja' | 'mockup' | 'pitch' | 'audit' | 'notas'>('loja');
@@ -242,18 +246,23 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
     setTimeout(() => setCopiedAddress(false), 2000);
   };
 
-  const handleDeleteLead = async () => {
-    if (!lead) return;
-    if (!confirm(`Deseja excluir permanentemente o lead "${lead.name}"? Todos os dados vinculados a ele serão apagados por completo do banco de dados e do Google Firestore.`)) {
-      return;
-    }
+  const handleDeleteLead = () => {
+    setShowConfirmDelete(true);
+  };
+
+  const handleExecuteDelete = async () => {
+    if (!lead || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError(null);
     try {
       await api.deleteLead(lead.id);
       if (onDeleteLead) onDeleteLead(lead.id);
       onClose();
-    } catch (err) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao excluir lead.';
       console.error('Erro ao excluir lead:', err);
-      alert('Falha ao excluir lead.');
+      setDeleteError(msg);
+      setIsDeleting(false);
     }
   };
 
@@ -585,19 +594,43 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
           {activeTab === 'loja' && (
             <div className="space-y-6">
               {/* Alerta de Diagnóstico Comercial */}
-              <div className="flex items-start gap-3 rounded-xl border border-amber-200/80 bg-amber-50/60 p-4">
-                <div className="rounded-lg bg-amber-100 p-2 text-amber-800 shrink-0">
-                  <Globe className="h-5 w-5" />
+              {!lead.website ? (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200/80 bg-amber-50/60 p-4">
+                  <div className="rounded-lg bg-amber-100 p-2 text-amber-800 shrink-0">
+                    <Globe className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                      Oportunidade Comercial: Loja Sem Website Cadastrado
+                    </h4>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      Esta empresa já construiu autoridade no Google Maps (nota <strong>{lead.rating.toFixed(1)}</strong> com <strong>{lead.reviews_count} clientes</strong>), mas não possui website cadastrado no Google Maps para apresentação institucional e agendamento.
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
-                    Oportunidade Comercial: Loja Sem Website Cadastrado
-                  </h4>
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    Esta empresa já construiu ótima autoridade local no Google Maps (nota <strong>{lead.rating.toFixed(1)}</strong> com <strong>{lead.reviews_count} clientes</strong>), mas perde clientes todos os dias porque quem busca não encontra um site próprio para ver tabela de preços, serviços e botão direto de agendamento online.
-                  </p>
+              ) : (
+                <div className="flex items-start gap-3 rounded-xl border border-blue-200/80 bg-blue-50/60 p-4">
+                  <div className="rounded-lg bg-blue-100 p-2 text-blue-800 shrink-0">
+                    <Globe className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-blue-900 uppercase tracking-wider">
+                      Presença Web: Website Cadastrado
+                    </h4>
+                    <p className="text-xs text-blue-800 leading-relaxed">
+                      A empresa possui o link cadastrado:{' '}
+                      <a
+                        href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold underline text-blue-900 hover:text-blue-700 break-all"
+                      >
+                        {lead.website}
+                      </a>
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Grid: Cartão de Contato da Loja + Mapa Interativo Embutido */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -653,6 +686,27 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {/* Website da Empresa se houver */}
+                  {lead.website && (
+                    <div className="space-y-1 pt-2 border-t border-neutral-100">
+                      <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block">
+                        Website Registrado
+                      </span>
+                      <div className="flex items-center justify-between text-xs">
+                        <a
+                          href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-blue-600 hover:text-blue-800 underline flex items-center gap-1.5 truncate max-w-[220px]"
+                        >
+                          <Globe className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{lead.website}</span>
+                        </a>
+                        <ExternalLink className="h-3 w-3 text-neutral-400" />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Avaliações do Google */}
                   <div className="space-y-1 pt-2 border-t border-neutral-100">
@@ -1011,6 +1065,86 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
             setOpenFullPitch(true);
           }}
         />
+      )}
+
+      {/* Modal de Confirmação: Exclusão do Lead */}
+      {showConfirmDelete && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-neutral-950/70 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          onClick={() => !isDeleting && setShowConfirmDelete(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-neutral-200 space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-neutral-900 leading-tight">
+                  Excluir Lead
+                </h3>
+                <p className="text-xs text-neutral-600">
+                  Tem certeza que deseja excluir este lead? Essa ação não poderá ser desfeita.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3.5 text-xs space-y-1">
+              <div className="font-bold text-neutral-900 text-sm">{lead.name}</div>
+              <div className="text-neutral-500 flex items-center gap-2">
+                <span>{lead.niche}</span>
+                <span>·</span>
+                <span>{lead.city} - {lead.state}</span>
+              </div>
+              {lead.phone && (
+                <div className="text-neutral-600 font-mono text-[11px] pt-1">
+                  📞 {formatBrazilianPhone(lead.phone)}
+                </div>
+              )}
+            </div>
+
+            {deleteError && (
+              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs">
+                {deleteError}
+              </div>
+            )}
+
+            <p className="text-[11px] text-neutral-400">
+              O lead será removido permanentemente do banco de dados e do Firestore.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmDelete(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-semibold text-neutral-700 bg-white border border-neutral-200 rounded-xl hover:bg-neutral-100 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDelete}
+                disabled={isDeleting}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 disabled:opacity-50 rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                {isDeleting ? (
+                  <>
+                    <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Excluir Lead</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

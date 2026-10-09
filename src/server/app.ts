@@ -535,9 +535,94 @@ app.post('/api/admin/freelancers/:id/reset', requireAdmin, async (req: Request, 
   }
 });
 
+app.delete('/api/leads/all', async (req: Request, res: Response) => {
+  try {
+    const isFreelancer = req.user?.role === 'freelancer';
+    // Se for freelancer, OBRIGATORIAMENTE isola pelo freelancerId da sessão autenticada (REGRA DE SEGURANÇA CRÍTICA)
+    const targetFreelancerId = isFreelancer
+      ? req.user?.freelancerId
+      : (req.body?.freelancer_id || (req.query.freelancer_id as string) || undefined);
+
+    const result = await db.deleteAllLeads({
+      freelancerId: targetFreelancerId,
+      role: req.user?.role || 'admin',
+    });
+
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `${result.deletedCount} leads excluídos com sucesso do workspace.`,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/leads/delete-all', async (req: Request, res: Response) => {
+  try {
+    const isFreelancer = req.user?.role === 'freelancer';
+    const targetFreelancerId = isFreelancer
+      ? req.user?.freelancerId
+      : (req.body?.freelancer_id || (req.query.freelancer_id as string) || undefined);
+
+    const result = await db.deleteAllLeads({
+      freelancerId: targetFreelancerId,
+      role: req.user?.role || 'admin',
+    });
+
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `${result.deletedCount} leads excluídos com sucesso do workspace.`,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
 app.delete('/api/leads/:id', async (req: Request, res: Response) => {
   try {
-    await db.deleteLead(req.params.id);
+    const leadId = req.params.id;
+    const lead = db.getLeadById(leadId);
+    if (
+      lead &&
+      req.user?.role === 'freelancer' &&
+      !matchesFreelancerId(lead.freelancer_id, req.user.freelancerId) &&
+      !matchesFreelancerId(lead.user_id, req.user.freelancerId)
+    ) {
+      return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
+    }
+
+    await db.deleteLead(leadId, {
+      freelancerId: req.user?.freelancerId,
+      role: req.user?.role,
+    });
+    res.json({ success: true, message: 'Lead excluído com sucesso.' });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/leads/:id/delete', async (req: Request, res: Response) => {
+  try {
+    const leadId = req.params.id;
+    const lead = db.getLeadById(leadId);
+    if (
+      lead &&
+      req.user?.role === 'freelancer' &&
+      !matchesFreelancerId(lead.freelancer_id, req.user.freelancerId) &&
+      !matchesFreelancerId(lead.user_id, req.user.freelancerId)
+    ) {
+      return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
+    }
+
+    await db.deleteLead(leadId, {
+      freelancerId: req.user?.freelancerId,
+      role: req.user?.role,
+    });
     res.json({ success: true, message: 'Lead excluído com sucesso.' });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
