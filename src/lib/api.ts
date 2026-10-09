@@ -344,7 +344,7 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.leads) && typeof data.total === 'number' && data.total > 0) {
+        if (data && Array.isArray(data.leads) && typeof data.total === 'number') {
           return data;
         }
       }
@@ -437,8 +437,7 @@ export const api = {
         const data = await res.json();
         if (
           data &&
-          typeof data.totalLeads === 'number' &&
-          data.totalLeads > 0
+          typeof data.totalLeads === 'number'
         ) {
           return data;
         }
@@ -681,8 +680,7 @@ export const api = {
         if (
           data &&
           Array.isArray(data.leads) &&
-          typeof data.total === 'number' &&
-          data.total > 0
+          typeof data.total === 'number'
         ) {
           return data;
         }

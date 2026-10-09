@@ -51,23 +51,37 @@ export async function fetchAllFromFirestore(): Promise<{
   settings?: AppSettings;
   freelancers?: Freelancer[];
   activities?: Activity[];
+  deletedLeadIds: Set<string>;
 } | null> {
   const db = getFirestoreDb();
   if (!db) return null;
 
   try {
-    const [leadsSnap, placesSnap, jobsSnap, settingsSnap, freelancersSnap, activitiesSnap] = await Promise.all([
+    const [leadsSnap, placesSnap, jobsSnap, settingsSnap, freelancersSnap, activitiesSnap, deletedSnap] = await Promise.all([
       getDocs(collection(db, 'leads')).catch(() => null),
       getDocs(collection(db, 'places')).catch(() => null),
       getDocs(collection(db, 'search_jobs')).catch(() => null),
       getDoc(doc(db, 'settings', 'config')).catch(() => null),
       getDocs(collection(db, 'freelancers')).catch(() => null),
       getDocs(collection(db, 'activities')).catch(() => null),
+      getDocs(collection(db, 'deleted_leads')).catch(() => null),
     ]);
+
+    const deletedLeadIds = new Set<string>();
+    if (deletedSnap) {
+      deletedSnap.forEach((d) => deletedLeadIds.add(d.id));
+    }
 
     const leads: Lead[] = [];
     if (leadsSnap) {
-      leadsSnap.forEach((d) => leads.push(d.data() as Lead));
+      leadsSnap.forEach((d) => {
+        if (!deletedLeadIds.has(d.id)) {
+          const l = d.data() as Lead;
+          if (l && l.id && !deletedLeadIds.has(l.id)) {
+            leads.push(l);
+          }
+        }
+      });
     }
 
     const places: Place[] = [];
@@ -94,7 +108,7 @@ export async function fetchAllFromFirestore(): Promise<{
       ? (settingsSnap.data() as AppSettings)
       : undefined;
 
-    return { places, leads, jobs, settings, freelancers, activities };
+    return { places, leads, jobs, settings, freelancers, activities, deletedLeadIds };
   } catch (err) {
     console.warn('[Firebase] Erro ao carregar dados do Firestore:', err);
     return null;
@@ -223,7 +237,14 @@ export async function deleteFreelancerAndAllDataFromFirestore(
 
         if (matches) {
           leadsDeleted++;
-          deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+          const leadId = d.id;
+          deletePromises.push(
+            deleteDoc(d.ref).catch(() => {}),
+            setDoc(doc(db, 'deleted_leads', leadId), {
+              id: leadId,
+              deleted_at: new Date().toISOString(),
+            }).catch(() => {})
+          );
         }
       });
       await Promise.all(deletePromises);
@@ -306,7 +327,13 @@ export async function deleteLeadFromFirestore(id: string): Promise<void> {
   const db = getFirestoreDb();
   if (!db || !id) return;
   try {
-    await deleteDoc(doc(db, 'leads', id));
+    await Promise.all([
+      deleteDoc(doc(db, 'leads', id)).catch(() => {}),
+      setDoc(doc(db, 'deleted_leads', id), {
+        id,
+        deleted_at: new Date().toISOString(),
+      }).catch(() => {}),
+    ]);
   } catch (err) {
     console.warn(`[Firebase] Erro ao deletar lead ${id} do Firestore:`, err);
   }
@@ -316,7 +343,13 @@ export async function deleteMultipleLeadsFromFirestore(ids: string[]): Promise<n
   const db = getFirestoreDb();
   if (!db || !ids || ids.length === 0) return 0;
   try {
-    const promises = ids.map((id) => deleteDoc(doc(db, 'leads', id)).catch(() => {}));
+    const promises = ids.map(async (id) => {
+      await deleteDoc(doc(db, 'leads', id)).catch(() => {});
+      await setDoc(doc(db, 'deleted_leads', id), {
+        id,
+        deleted_at: new Date().toISOString(),
+      }).catch(() => {});
+    });
     await Promise.all(promises);
     return ids.length;
   } catch (err) {
@@ -332,7 +365,7 @@ export async function deleteLeadsForTenantFromFirestore(targetFreelancerId?: str
     const snap = await getDocs(collection(db, 'leads')).catch(() => null);
     if (!snap) return 0;
     let count = 0;
-    const deletePromises: Promise<void>[] = [];
+    const deletePromises: Promise<unknown>[] = [];
 
     const normTarget = targetFreelancerId ? targetFreelancerId.toLowerCase().trim() : '';
     const cleanTarget = normTarget.startsWith('free_') ? normTarget.substring(5) : normTarget;
@@ -364,7 +397,14 @@ export async function deleteLeadsForTenantFromFirestore(targetFreelancerId?: str
 
       if (shouldDelete) {
         count++;
-        deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+        const leadId = d.id;
+        deletePromises.push(
+          deleteDoc(d.ref).catch(() => {}),
+          setDoc(doc(db, 'deleted_leads', leadId), {
+            id: leadId,
+            deleted_at: new Date().toISOString(),
+          }).catch(() => {})
+        );
       }
     });
 

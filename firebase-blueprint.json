@@ -55,6 +55,15 @@
         "hasCustomKey": { "type": "boolean" },
         "maxResultsPerJob": { "type": "number" }
       }
+    },
+    "DeletedLead": {
+      "title": "DeletedLead",
+      "description": "Tombstones for permanently deleted leads",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "deleted_at": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -65,6 +74,10 @@
     "/leads/{leadId}": {
       "schema": "Lead",
       "description": "All B2B prospect leads"
+    },
+    "/deleted_leads/{leadId}": {
+      "schema": "DeletedLead",
+      "description": "Permanently deleted lead records"
     },
     "/search_jobs/{jobId}": {
       "schema": "SearchJob",

@@ -56,20 +56,28 @@ export async function fetchAllLeadsFromFirestore(forceRefresh = false): Promise<
   if (!db) return cachedLeads || [];
 
   try {
-    const snap = await getDocs(collection(db, 'leads'));
+    const [snap, deletedSnap] = await Promise.all([
+      getDocs(collection(db, 'leads')),
+      getDocs(collection(db, 'deleted_leads')).catch(() => null),
+    ]);
+
+    const deletedIds = new Set<string>();
+    if (deletedSnap) {
+      deletedSnap.forEach((d) => deletedIds.add(d.id));
+    }
+
     const leads: Lead[] = [];
     snap.forEach((d) => {
+      if (deletedIds.has(d.id)) return;
       const data = d.data() as Lead;
-      if (data && data.name) {
+      if (data && data.name && !deletedIds.has(data.id)) {
         leads.push(data);
       }
     });
 
-    if (leads.length > 0) {
-      cachedLeads = leads;
-      lastFetchTime = now;
-    }
-    return cachedLeads || leads;
+    cachedLeads = leads;
+    lastFetchTime = now;
+    return leads;
   } catch (err) {
     console.warn('[Firebase Client] Erro ao carregar leads do Firestore:', err);
     return cachedLeads || [];
@@ -334,11 +342,12 @@ export function filterLeadsList(
 
   if (params.search && params.search.trim() !== '') {
     const q = normalizeStr(params.search);
+    const qDigits = q.replace(/\D/g, '');
     filtered = filtered.filter(
       (l) =>
         normalizeStr(l.name).includes(q) ||
         normalizeStr(l.city).includes(q) ||
-        (l.phone && l.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '')))
+        (qDigits.length >= 3 && Boolean(l.phone && l.phone.replace(/\D/g, '').includes(qDigits)))
     );
   }
 
@@ -398,7 +407,13 @@ export async function deleteLeadDirectFromClient(leadId: string): Promise<void> 
   }
   if (!db || !leadId) return;
   try {
-    await deleteDoc(doc(db, 'leads', leadId));
+    await Promise.all([
+      deleteDoc(doc(db, 'leads', leadId)).catch(() => {}),
+      setDoc(doc(db, 'deleted_leads', leadId), {
+        id: leadId,
+        deleted_at: new Date().toISOString(),
+      }).catch(() => {}),
+    ]);
   } catch (err) {
     console.warn(`[Firebase Client] Falha ao deletar lead ${leadId} no Firestore:`, err);
   }
@@ -412,7 +427,7 @@ export async function deleteAllLeadsDirectFromClient(targetFreelancerId?: string
     const snap = await getDocs(collection(db, 'leads')).catch(() => null);
     if (!snap) return 0;
     let count = 0;
-    const deletePromises: Promise<void>[] = [];
+    const deletePromises: Promise<unknown>[] = [];
     snap.forEach((d) => {
       const data = d.data() as Lead;
       const fid = data.freelancer_id;
@@ -432,7 +447,14 @@ export async function deleteAllLeadsDirectFromClient(targetFreelancerId?: string
 
       if (shouldDelete) {
         count++;
-        deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+        const leadId = d.id;
+        deletePromises.push(
+          deleteDoc(d.ref).catch(() => {}),
+          setDoc(doc(db, 'deleted_leads', leadId), {
+            id: leadId,
+            deleted_at: new Date().toISOString(),
+          }).catch(() => {})
+        );
       }
     });
     await Promise.all(deletePromises);
@@ -469,7 +491,7 @@ export async function deleteFreelancerDataDirectFromClient(
   try {
     const snap = await getDocs(collection(db, 'leads')).catch(() => null);
     if (snap) {
-      const deletePromises: Promise<void>[] = [];
+      const deletePromises: Promise<unknown>[] = [];
       snap.forEach((d) => {
         const data = d.data();
         const fid = (data.freelancer_id || '').toLowerCase().trim();
@@ -484,7 +506,14 @@ export async function deleteFreelancerDataDirectFromClient(
           (accessCode && docId.includes(accessCode.toLowerCase().trim()) && docId.startsWith('lead_'));
 
         if (matches) {
-          deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+          const leadId = d.id;
+          deletePromises.push(
+            deleteDoc(d.ref).catch(() => {}),
+            setDoc(doc(db, 'deleted_leads', leadId), {
+              id: leadId,
+              deleted_at: new Date().toISOString(),
+            }).catch(() => {})
+          );
         }
       });
       await Promise.all(deletePromises);

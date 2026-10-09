@@ -132,6 +132,7 @@ interface DbSchema {
   settings: AppSettings;
   freelancers: Freelancer[];
   activities: Activity[];
+  deleted_lead_ids?: string[];
 }
 
 const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
@@ -167,8 +168,10 @@ class Database {
     settings: INITIAL_SETTINGS,
     freelancers: [],
     activities: [],
+    deleted_lead_ids: [],
   };
 
+  private deletedLeadIds = new Set<string>();
   private initialized = false;
   private firestoreHydrated = false;
   private initPromise: Promise<void> | null = null;
@@ -186,17 +189,24 @@ class Database {
         this.data.settings = { ...INITIAL_SETTINGS, ...(this.data.settings || {}) };
         if (!this.data.freelancers) this.data.freelancers = [];
         if (!this.data.activities) this.data.activities = [];
+        if (!this.data.deleted_lead_ids) this.data.deleted_lead_ids = [];
+
+        for (const id of this.data.deleted_lead_ids) {
+          this.deletedLeadIds.add(id);
+        }
 
         // Filtra apenas freelancers inválidos/sem id se houver
         this.data.freelancers = (this.data.freelancers || []).filter((f) => f && f.id && f.name);
         this.data.activities = (this.data.activities || []).filter((a) => a && a.id);
-        this.data.leads = (this.data.leads || []).map((l) => ({
-          ...l,
-          rating: typeof l.rating === 'number' && !isNaN(l.rating) ? l.rating : 0,
-          reviews_count: typeof l.reviews_count === 'number' && !isNaN(l.reviews_count) ? l.reviews_count : 0,
-          lead_score: typeof l.lead_score === 'number' && !isNaN(l.lead_score) ? l.lead_score : 50,
-          pipeline_status: l.pipeline_status || 'NOVO',
-        }));
+        this.data.leads = (this.data.leads || [])
+          .filter((l) => l && l.id && !this.deletedLeadIds.has(l.id))
+          .map((l) => ({
+            ...l,
+            rating: typeof l.rating === 'number' && !isNaN(l.rating) ? l.rating : 0,
+            reviews_count: typeof l.reviews_count === 'number' && !isNaN(l.reviews_count) ? l.reviews_count : 0,
+            lead_score: typeof l.lead_score === 'number' && !isNaN(l.lead_score) ? l.lead_score : 50,
+            pipeline_status: l.pipeline_status || 'NOVO',
+          }));
 
         this.initialized = true;
         return;
@@ -211,6 +221,12 @@ class Database {
           const bundledRaw = fs.readFileSync(BUNDLED_DB_FILE, 'utf-8');
           this.data = JSON.parse(bundledRaw);
           this.data.settings = { ...INITIAL_SETTINGS, ...(this.data.settings || {}) };
+          if (Array.isArray(this.data.deleted_lead_ids)) {
+            for (const id of this.data.deleted_lead_ids) {
+              this.deletedLeadIds.add(id);
+            }
+          }
+          this.data.leads = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
           fs.writeFileSync(DB_FILE, bundledRaw, 'utf-8');
           this.initialized = true;
           return;
@@ -292,18 +308,34 @@ class Database {
           this.data.freelancers = (this.data.freelancers || []).filter((f) => !demoFreeIds.includes(f.id));
         }
 
-        // 3. MERGE LEADS (SEM deleção acidental na sincronização)
+        // 3. MERGE LEADS COM RESPEITO ESTRITO A DELEÇÕES
+        if (remote.deletedLeadIds) {
+          for (const id of remote.deletedLeadIds) {
+            this.deletedLeadIds.add(id);
+          }
+        }
+        this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
+
+        // Remove imediatamente qualquer lead deletado do estado em memória
+        this.data.leads = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
+
         const leadMap = new Map<string, Lead>();
         for (const l of remote.leads || []) {
-          if (!l || !l.id) continue;
+          if (!l || !l.id || this.deletedLeadIds.has(l.id)) continue;
           leadMap.set(l.id, l);
         }
+
+        // Se estamos na Vercel (onde Firestore é a fonte autoritativa):
+        // NÃO ressuscitamos leads de db.json se eles não existem no Firestore.
+        // Apenas preservamos novos leads locais que acabaram de ser criados nesta execução (ex: buscas ativas) e não foram deletados.
         for (const l of this.data.leads || []) {
-          if (!l || !l.id) continue;
+          if (!l || !l.id || this.deletedLeadIds.has(l.id)) continue;
           const existing = leadMap.get(l.id);
           if (!existing) {
-            leadMap.set(l.id, l);
-            syncLeadToFirestore(l).catch(() => {});
+            if (!isVercel) {
+              leadMap.set(l.id, l);
+              syncLeadToFirestore(l).catch(() => {});
+            }
           } else {
             const localTime = new Date(l.updated_at || l.created_at || 0).getTime();
             const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
@@ -312,7 +344,7 @@ class Database {
             }
           }
         }
-        this.data.leads = Array.from(leadMap.values());
+        this.data.leads = Array.from(leadMap.values()).filter((l) => !this.deletedLeadIds.has(l.id));
 
         // 4. MERGE PLACES
         const placeMap = new Map<string, Place>();
@@ -508,7 +540,7 @@ class Database {
     page?: number;
     limit?: number;
   }): { leads: Lead[]; total: number; page: number; totalPages: number } {
-    let filtered = [...this.data.leads];
+    let filtered = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
 
     if (params.freelancer_id && params.freelancer_id !== 'ALL') {
       filtered = filtered.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
@@ -573,10 +605,11 @@ class Database {
 
     if (params.search && params.search.trim() !== '') {
       const q = normalizeStr(params.search);
+      const qDigits = q.replace(/\D/g, '');
       filtered = filtered.filter((l) =>
         normalizeStr(l.name).includes(q) ||
         normalizeStr(l.city).includes(q) ||
-        (l.phone && l.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '')))
+        (qDigits.length >= 3 && Boolean(l.phone && l.phone.replace(/\D/g, '').includes(qDigits)))
       );
     }
 
@@ -651,6 +684,7 @@ class Database {
   }
 
   public getLeadById(id: string): Lead | undefined {
+    if (this.deletedLeadIds.has(id)) return undefined;
     return this.data.leads.find((l) => l.id === id);
   }
 
@@ -1073,6 +1107,10 @@ class Database {
     );
     const leadIdsToDelete = new Set(leadsToDelete.map((l) => l.id));
 
+    for (const l of leadsToDelete) {
+      this.deletedLeadIds.add(l.id);
+    }
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
     this.data.leads = (this.data.leads || []).filter((l) => !leadIdsToDelete.has(l.id));
 
     // Remove notas desses leads
@@ -1149,6 +1187,10 @@ class Database {
         (l.freelancer_name || '').toLowerCase() === name.toLowerCase()
     );
     const leadIdsToDelete = new Set(leadsToDelete.map((l) => l.id));
+    for (const l of leadsToDelete) {
+      this.deletedLeadIds.add(l.id);
+    }
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
     this.data.leads = (this.data.leads || []).filter((l) => !leadIdsToDelete.has(l.id));
 
     if (this.data.lead_notes) {
@@ -1206,10 +1248,11 @@ class Database {
         throw new Error('Acesso não autorizado: você só pode excluir leads do seu próprio workspace.');
       }
     }
-    const idx = (this.data.leads || []).findIndex((l) => l.id === id);
-    if (idx !== -1) {
-      this.data.leads.splice(idx, 1);
-    }
+
+    this.deletedLeadIds.add(id);
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
+    this.data.leads = (this.data.leads || []).filter((l) => l.id !== id);
+
     if (this.data.lead_notes) {
       this.data.lead_notes = this.data.lead_notes.filter((n) => n.lead_id !== id);
     }
@@ -1236,6 +1279,11 @@ class Database {
     }
 
     const idsToDelete = leadsToDelete.map((l) => l.id);
+    for (const id of idsToDelete) {
+      this.deletedLeadIds.add(id);
+    }
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
+
     const idsSet = new Set(idsToDelete);
 
     if (idsToDelete.length > 0) {
