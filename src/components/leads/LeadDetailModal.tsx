@@ -330,8 +330,8 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                   </span>
                   <span aria-hidden="true" className="text-neutral-500">·</span>
                   <span className="text-amber-300 font-semibold flex items-center gap-1">
-                    ★ {lead.rating.toFixed(1)}
-                    <span className="text-neutral-400 font-normal">({lead.reviews_count} avaliações)</span>
+                    ★ {(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)}
+                    <span className="text-neutral-400 font-normal">({lead.reviews_count ?? 0} avaliações)</span>
                   </span>
                 </div>
               </div>
@@ -604,7 +604,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                       Oportunidade Comercial: Loja Sem Website Cadastrado
                     </h4>
                     <p className="text-xs text-amber-800 leading-relaxed">
-                      Esta empresa já construiu autoridade no Google Maps (nota <strong>{lead.rating.toFixed(1)}</strong> com <strong>{lead.reviews_count} clientes</strong>), mas não possui website cadastrado no Google Maps para apresentação institucional e agendamento.
+                      Esta empresa já construiu autoridade no Google Maps (nota <strong>{(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)}</strong> com <strong>{lead.reviews_count ?? 0} clientes</strong>), mas não possui website cadastrado no Google Maps para apresentação institucional e agendamento.
                     </p>
                   </div>
                 </div>
@@ -719,7 +719,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                           <Star
                             key={star}
                             className={`h-4 w-4 ${
-                              star <= Math.round(lead.rating)
+                              star <= Math.round(lead.rating || 0)
                                 ? 'fill-amber-400 text-amber-400'
                                 : 'text-neutral-200'
                             }`}
@@ -727,10 +727,10 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                         ))}
                       </div>
                       <span className="text-xs font-bold text-neutral-900 font-mono">
-                        {lead.rating.toFixed(1)}
+                        {(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)}
                       </span>
                       <span className="text-xs text-neutral-500 font-mono">
-                        ({lead.reviews_count} clientes avaliaram)
+                        ({lead.reviews_count ?? 0} clientes avaliaram)
                       </span>
                     </div>
                   </div>
@@ -862,7 +862,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                     <span>Scripts de Abordagem com Dados Reais da Loja</span>
                   </h3>
                   <p className="text-[11px] text-neutral-500 mt-0.5">
-                    Pitches prontos baseados na nota ({lead.rating.toFixed(1)} ★) e {lead.reviews_count} avaliações reais do Google.
+                    Pitches prontos baseados na nota ({(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)} ★) e {lead.reviews_count ?? 0} avaliações reais do Google.
                   </p>
                 </div>
 

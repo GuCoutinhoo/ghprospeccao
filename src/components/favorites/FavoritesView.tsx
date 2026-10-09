@@ -154,8 +154,8 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
       `"${l.city}"`,
       `"${l.state}"`,
       `"${l.niche}"`,
-      l.rating.toFixed(1),
-      l.reviews_count,
+      (typeof l.rating === 'number' ? l.rating : 0).toFixed(1),
+      l.reviews_count ?? 0,
       `"${formatBrazilianPhone(l.phone)}"`,
       `"${l.website || 'Sem site'}"`,
       l.lead_score,
@@ -483,11 +483,11 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                   <div className="flex items-center gap-2 mt-2">
                     <div className="flex items-center gap-1 text-xs font-bold text-neutral-900">
                       <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      <span>{lead.rating.toFixed(1)}</span>
+                      <span>{(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)}</span>
                     </div>
                     <span className="text-neutral-300">·</span>
                     <span className="text-xs text-neutral-500">
-                      {lead.reviews_count} {lead.reviews_count === 1 ? 'avaliação' : 'avaliações no Google'}
+                      {lead.reviews_count ?? 0} {(lead.reviews_count ?? 0) === 1 ? 'avaliação' : 'avaliações no Google'}
                     </span>
                   </div>
 
@@ -637,8 +637,8 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1 font-semibold text-neutral-900">
                           <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                          <span>{lead.rating.toFixed(1)}</span>
-                          <span className="text-neutral-400 font-normal">({lead.reviews_count})</span>
+                          <span>{(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)}</span>
+                          <span className="text-neutral-400 font-normal">({lead.reviews_count ?? 0})</span>
                         </div>
                       </td>
                       <td className="px-4 py-3.5">

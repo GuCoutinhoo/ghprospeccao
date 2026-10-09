@@ -343,7 +343,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <span>{lead.niche}</span>
                       <span aria-hidden="true" className="text-neutral-300">·</span>
                       <span className="font-mono tabular-nums text-neutral-700 font-medium">
-                        ★ {lead.rating.toFixed(1)} ({lead.reviews_count} avaliações)
+                        ★ {(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)} ({lead.reviews_count ?? 0} avaliações)
                       </span>
                       <span aria-hidden="true" className="text-neutral-300">·</span>
                       <span className="text-amber-700 font-medium">Sem site</span>

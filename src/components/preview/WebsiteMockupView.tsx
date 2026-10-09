@@ -175,11 +175,11 @@ export const WebsiteMockupView: React.FC<WebsiteMockupViewProps> = ({ lead, isEm
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border bg-white shadow-2xs text-xs font-semibold">
             <span className="flex items-center gap-1 text-amber-500 font-bold">
               <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-              {lead.rating.toFixed(1)} no Google Maps
+              {(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)} no Google Maps
             </span>
             <span className="text-neutral-300">·</span>
             <span className="text-neutral-600 font-medium">
-              Mais de {lead.reviews_count} clientes satisfeitos
+              Mais de {lead.reviews_count ?? 0} clientes satisfeitos
             </span>
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 ml-1" />
           </div>
@@ -221,11 +221,11 @@ export const WebsiteMockupView: React.FC<WebsiteMockupViewProps> = ({ lead, isEm
               <div className="text-[11px] text-neutral-500 mt-0.5">Atendimento local</div>
             </div>
             <div className="p-3 bg-white rounded-xl border border-neutral-200/80 shadow-2xs">
-              <div className="text-base font-bold text-amber-600 font-mono">★ {lead.rating.toFixed(1)}</div>
+              <div className="text-base font-bold text-amber-600 font-mono">★ {(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)}</div>
               <div className="text-[11px] text-neutral-500 mt-0.5">Nota média Google</div>
             </div>
             <div className="p-3 bg-white rounded-xl border border-neutral-200/80 shadow-2xs">
-              <div className="text-base font-bold text-neutral-900 font-mono">+{lead.reviews_count}</div>
+              <div className="text-base font-bold text-neutral-900 font-mono">+{lead.reviews_count ?? 0}</div>
               <div className="text-[11px] text-neutral-500 mt-0.5">Avaliações públicas</div>
             </div>
             <div className="p-3 bg-white rounded-xl border border-neutral-200/80 shadow-2xs">

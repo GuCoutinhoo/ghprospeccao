@@ -196,7 +196,7 @@ export const DigitalAuditModal: React.FC<DigitalAuditModalProps> = ({
               <span>Diagnóstico de Oportunidade Identificado</span>
             </div>
             <p className="text-xs text-amber-900/90 leading-relaxed">
-              A <strong>{lead.name}</strong> possui reputação sólida perante os consumidores locais com nota <strong>{lead.rating.toFixed(1)} ★</strong> no Google Maps. No entanto, a ausência de uma página web oficial causa uma <strong>ruptura na jornada de compra</strong> do cliente móvel, desviando pesquisas qualificadas da região de {lead.city} para estabelecimentos concorrentes que possuem catálogo e botão direto.
+              A <strong>{lead.name}</strong> possui reputação sólida perante os consumidores locais com nota <strong>{(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)} ★</strong> no Google Maps. No entanto, a ausência de uma página web oficial causa uma <strong>ruptura na jornada de compra</strong> do cliente móvel, desviando pesquisas qualificadas da região de {lead.city} para estabelecimentos concorrentes que possuem catálogo e botão direto.
             </p>
           </div>
 

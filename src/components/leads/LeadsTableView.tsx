@@ -388,8 +388,8 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
       `"${l.city}"`,
       `"${l.state}"`,
       `"${l.niche}"`,
-      l.rating.toFixed(1),
-      l.reviews_count,
+      (typeof l.rating === 'number' ? l.rating : 0).toFixed(1),
+      l.reviews_count ?? 0,
       `"${formatBrazilianPhone(l.phone)}"`,
       `"${l.website || 'Sem site'}"`,
       l.lead_score,
@@ -1259,7 +1259,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                             <Star
                               key={star}
                               className={`h-3.5 w-3.5 ${
-                                star <= Math.round(lead.rating)
+                                star <= Math.round(lead.rating || 0)
                                   ? 'fill-amber-400 text-amber-400'
                                   : 'text-neutral-200'
                               }`}
@@ -1267,10 +1267,10 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                           ))}
                         </div>
                         <span className="font-bold text-neutral-900 font-mono tabular-nums">
-                          {lead.rating.toFixed(1)}
+                          {(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)}
                         </span>
                         <span className="text-neutral-400 text-[10px] font-mono">
-                          ({lead.reviews_count})
+                          ({lead.reviews_count ?? 0})
                         </span>
                       </div>
 
@@ -1465,10 +1465,10 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                       <td className="px-3 py-3 whitespace-nowrap">
                         <div className="font-mono tabular-nums text-neutral-900 font-semibold flex items-center gap-1">
                           <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                          <span>{lead.rating.toFixed(1)}</span>
+                          <span>{(typeof lead.rating === 'number' ? lead.rating : 0).toFixed(1)}</span>
                         </div>
                         <div className="text-[11px] text-neutral-400 font-mono tabular-nums">
-                          {lead.reviews_count} avaliações
+                          {lead.reviews_count ?? 0} avaliações
                         </div>
                       </td>
 

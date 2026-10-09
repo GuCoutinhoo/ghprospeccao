@@ -190,6 +190,13 @@ class Database {
         // Filtra apenas freelancers inválidos/sem id se houver
         this.data.freelancers = (this.data.freelancers || []).filter((f) => f && f.id && f.name);
         this.data.activities = (this.data.activities || []).filter((a) => a && a.id);
+        this.data.leads = (this.data.leads || []).map((l) => ({
+          ...l,
+          rating: typeof l.rating === 'number' && !isNaN(l.rating) ? l.rating : 0,
+          reviews_count: typeof l.reviews_count === 'number' && !isNaN(l.reviews_count) ? l.reviews_count : 0,
+          lead_score: typeof l.lead_score === 'number' && !isNaN(l.lead_score) ? l.lead_score : 50,
+          pipeline_status: l.pipeline_status || 'NOVO',
+        }));
 
         this.initialized = true;
         return;
@@ -576,11 +583,11 @@ class Database {
     // Ordenação
     const sortBy = params.sortBy || 'score';
     filtered.sort((a, b) => {
-      if (sortBy === 'score') return b.lead_score - a.lead_score;
-      if (sortBy === 'reviews') return b.reviews_count - a.reviews_count;
-      if (sortBy === 'rating') return b.rating - a.rating;
+      if (sortBy === 'score') return (b.lead_score || 0) - (a.lead_score || 0);
+      if (sortBy === 'reviews') return (b.reviews_count || 0) - (a.reviews_count || 0);
+      if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
       if (sortBy === 'recent') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      return b.lead_score - a.lead_score;
+      return (b.lead_score || 0) - (a.lead_score || 0);
     });
 
     const total = filtered.length;

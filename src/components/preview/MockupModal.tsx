@@ -53,7 +53,8 @@ export const MockupModal: React.FC<MockupModalProps> = ({
     if (!lead.phone) return;
     const clean = lead.phone.replace(/\D/g, '');
     const fullNumber = clean.startsWith('55') ? clean : `55${clean}`;
-    const text = `Olá! Vi o trabalho de excelência da *${lead.name}* no Google Maps (${lead.rating.toFixed(1)} estrelas).
+    const ratingStr = typeof lead.rating === 'number' && !isNaN(lead.rating) ? lead.rating.toFixed(1) : '5.0';
+    const text = `Olá! Vi o trabalho de excelência da *${lead.name}* no Google Maps (${ratingStr} estrelas).
 Como vocês não têm site institucional para transformar buscas em agendamentos, preparei uma prévia interativa exclusiva de como a página de vocês ficaria:
 
 👉 Acesse aqui: ${previewUrl}
