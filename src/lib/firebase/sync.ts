@@ -8,6 +8,7 @@ import {
   collection,
   getDocs,
   deleteDoc,
+  writeBatch,
   Firestore,
 } from 'firebase/firestore';
 import fs from 'fs';
@@ -221,7 +222,7 @@ export async function deleteFreelancerAndAllDataFromFirestore(
     // 1. Exclui TODOS os leads vinculados a este freelancer no Firestore
     const leadsSnap = await getDocs(collection(db, 'leads')).catch(() => null);
     if (leadsSnap) {
-      const deletePromises: Promise<void>[] = [];
+      const matchedDocs: Array<{ ref: any; id: string }> = [];
       leadsSnap.forEach((d) => {
         const data = d.data();
         const fid = (data.freelancer_id || '').toLowerCase().trim();
@@ -236,18 +237,25 @@ export async function deleteFreelancerAndAllDataFromFirestore(
           (accessCode && docId.includes(accessCode.toLowerCase().trim()) && docId.startsWith('lead_'));
 
         if (matches) {
-          leadsDeleted++;
-          const leadId = d.id;
-          deletePromises.push(
-            deleteDoc(d.ref).catch(() => {}),
-            setDoc(doc(db, 'deleted_leads', leadId), {
-              id: leadId,
-              deleted_at: new Date().toISOString(),
-            }).catch(() => {})
-          );
+          matchedDocs.push({ ref: d.ref, id: d.id });
         }
       });
-      await Promise.all(deletePromises);
+
+      leadsDeleted = matchedDocs.length;
+      for (let i = 0; i < matchedDocs.length; i += 200) {
+        const chunk = matchedDocs.slice(i, i + 200);
+        const batch = writeBatch(db);
+        for (const item of chunk) {
+          batch.delete(item.ref);
+          batch.set(doc(db, 'deleted_leads', item.id), {
+            id: item.id,
+            deleted_at: new Date().toISOString(),
+          });
+        }
+        await batch.commit().catch((err) => {
+          console.warn('[Firebase] Erro ao commitar batch de leads:', err);
+        });
+      }
     }
 
     // 2. Exclui buscas do freelancer no Firestore
@@ -343,14 +351,20 @@ export async function deleteMultipleLeadsFromFirestore(ids: string[]): Promise<n
   const db = getFirestoreDb();
   if (!db || !ids || ids.length === 0) return 0;
   try {
-    const promises = ids.map(async (id) => {
-      await deleteDoc(doc(db, 'leads', id)).catch(() => {});
-      await setDoc(doc(db, 'deleted_leads', id), {
-        id,
-        deleted_at: new Date().toISOString(),
-      }).catch(() => {});
-    });
-    await Promise.all(promises);
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const batch = writeBatch(db);
+      for (const id of chunk) {
+        batch.delete(doc(db, 'leads', id));
+        batch.set(doc(db, 'deleted_leads', id), {
+          id,
+          deleted_at: new Date().toISOString(),
+        });
+      }
+      await batch.commit().catch((err) => {
+        console.warn('[Firebase] Erro ao commitar batch deleteMultipleLeads:', err);
+      });
+    }
     return ids.length;
   } catch (err) {
     console.warn('[Firebase] Erro ao deletar múltiplos leads do Firestore:', err);
@@ -364,8 +378,7 @@ export async function deleteLeadsForTenantFromFirestore(targetFreelancerId?: str
   try {
     const snap = await getDocs(collection(db, 'leads')).catch(() => null);
     if (!snap) return 0;
-    let count = 0;
-    const deletePromises: Promise<unknown>[] = [];
+    const matchedDocs: Array<{ ref: any; id: string }> = [];
 
     const normTarget = targetFreelancerId ? targetFreelancerId.toLowerCase().trim() : '';
     const cleanTarget = normTarget.startsWith('free_') ? normTarget.substring(5) : normTarget;
@@ -396,20 +409,26 @@ export async function deleteLeadsForTenantFromFirestore(targetFreelancerId?: str
       }
 
       if (shouldDelete) {
-        count++;
-        const leadId = d.id;
-        deletePromises.push(
-          deleteDoc(d.ref).catch(() => {}),
-          setDoc(doc(db, 'deleted_leads', leadId), {
-            id: leadId,
-            deleted_at: new Date().toISOString(),
-          }).catch(() => {})
-        );
+        matchedDocs.push({ ref: d.ref, id: d.id });
       }
     });
 
-    await Promise.all(deletePromises);
-    return count;
+    for (let i = 0; i < matchedDocs.length; i += 200) {
+      const chunk = matchedDocs.slice(i, i + 200);
+      const batch = writeBatch(db);
+      for (const item of chunk) {
+        batch.delete(item.ref);
+        batch.set(doc(db, 'deleted_leads', item.id), {
+          id: item.id,
+          deleted_at: new Date().toISOString(),
+        });
+      }
+      await batch.commit().catch((err) => {
+        console.warn('[Firebase] Erro ao commitar batch deleteLeadsForTenant:', err);
+      });
+    }
+
+    return matchedDocs.length;
   } catch (err) {
     console.warn('[Firebase] Erro ao deletar leads do tenant no Firestore:', err);
     return 0;

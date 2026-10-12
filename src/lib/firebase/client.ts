@@ -6,6 +6,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  writeBatch,
   Firestore,
 } from 'firebase/firestore';
 import firebaseConfig from '../../../firebase-applet-config.json';
@@ -426,8 +427,8 @@ export async function deleteAllLeadsDirectFromClient(targetFreelancerId?: string
   try {
     const snap = await getDocs(collection(db, 'leads')).catch(() => null);
     if (!snap) return 0;
-    let count = 0;
-    const deletePromises: Promise<unknown>[] = [];
+    const matchedDocs: Array<{ ref: any; id: string }> = [];
+
     snap.forEach((d) => {
       const data = d.data() as Lead;
       const fid = data.freelancer_id;
@@ -446,19 +447,26 @@ export async function deleteAllLeadsDirectFromClient(targetFreelancerId?: string
       }
 
       if (shouldDelete) {
-        count++;
-        const leadId = d.id;
-        deletePromises.push(
-          deleteDoc(d.ref).catch(() => {}),
-          setDoc(doc(db, 'deleted_leads', leadId), {
-            id: leadId,
-            deleted_at: new Date().toISOString(),
-          }).catch(() => {})
-        );
+        matchedDocs.push({ ref: d.ref, id: d.id });
       }
     });
-    await Promise.all(deletePromises);
-    return count;
+
+    for (let i = 0; i < matchedDocs.length; i += 200) {
+      const chunk = matchedDocs.slice(i, i + 200);
+      const batch = writeBatch(db);
+      for (const item of chunk) {
+        batch.delete(item.ref);
+        batch.set(doc(db, 'deleted_leads', item.id), {
+          id: item.id,
+          deleted_at: new Date().toISOString(),
+        });
+      }
+      await batch.commit().catch((err) => {
+        console.warn('[Firebase Client] Erro no commit do batch deleteAllLeads:', err);
+      });
+    }
+
+    return matchedDocs.length;
   } catch (err) {
     console.warn('[Firebase Client] Falha ao deletar leads no Firestore diretamente no cliente:', err);
     return 0;
@@ -491,7 +499,7 @@ export async function deleteFreelancerDataDirectFromClient(
   try {
     const snap = await getDocs(collection(db, 'leads')).catch(() => null);
     if (snap) {
-      const deletePromises: Promise<unknown>[] = [];
+      const matchedDocs: Array<{ ref: any; id: string }> = [];
       snap.forEach((d) => {
         const data = d.data();
         const fid = (data.freelancer_id || '').toLowerCase().trim();
@@ -506,17 +514,24 @@ export async function deleteFreelancerDataDirectFromClient(
           (accessCode && docId.includes(accessCode.toLowerCase().trim()) && docId.startsWith('lead_'));
 
         if (matches) {
-          const leadId = d.id;
-          deletePromises.push(
-            deleteDoc(d.ref).catch(() => {}),
-            setDoc(doc(db, 'deleted_leads', leadId), {
-              id: leadId,
-              deleted_at: new Date().toISOString(),
-            }).catch(() => {})
-          );
+          matchedDocs.push({ ref: d.ref, id: d.id });
         }
       });
-      await Promise.all(deletePromises);
+
+      for (let i = 0; i < matchedDocs.length; i += 200) {
+        const chunk = matchedDocs.slice(i, i + 200);
+        const batch = writeBatch(db);
+        for (const item of chunk) {
+          batch.delete(item.ref);
+          batch.set(doc(db, 'deleted_leads', item.id), {
+            id: item.id,
+            deleted_at: new Date().toISOString(),
+          });
+        }
+        await batch.commit().catch((err) => {
+          console.warn('[Firebase Client] Erro no commit do batch deleteFreelancerData:', err);
+        });
+      }
     }
 
     // Exclui o próprio documento do freelancer

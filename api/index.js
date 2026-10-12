@@ -89,7 +89,8 @@ import {
   setDoc,
   collection,
   getDocs,
-  deleteDoc
+  deleteDoc,
+  writeBatch
 } from "firebase/firestore";
 import fs from "fs";
 import path from "path";
@@ -137,17 +138,29 @@ async function fetchAllFromFirestore() {
   const db2 = getFirestoreDb();
   if (!db2) return null;
   try {
-    const [leadsSnap, placesSnap, jobsSnap, settingsSnap, freelancersSnap, activitiesSnap] = await Promise.all([
+    const [leadsSnap, placesSnap, jobsSnap, settingsSnap, freelancersSnap, activitiesSnap, deletedSnap] = await Promise.all([
       getDocs(collection(db2, "leads")).catch(() => null),
       getDocs(collection(db2, "places")).catch(() => null),
       getDocs(collection(db2, "search_jobs")).catch(() => null),
       getDoc(doc(db2, "settings", "config")).catch(() => null),
       getDocs(collection(db2, "freelancers")).catch(() => null),
-      getDocs(collection(db2, "activities")).catch(() => null)
+      getDocs(collection(db2, "activities")).catch(() => null),
+      getDocs(collection(db2, "deleted_leads")).catch(() => null)
     ]);
+    const deletedLeadIds = /* @__PURE__ */ new Set();
+    if (deletedSnap) {
+      deletedSnap.forEach((d) => deletedLeadIds.add(d.id));
+    }
     const leads = [];
     if (leadsSnap) {
-      leadsSnap.forEach((d) => leads.push(d.data()));
+      leadsSnap.forEach((d) => {
+        if (!deletedLeadIds.has(d.id)) {
+          const l = d.data();
+          if (l && l.id && !deletedLeadIds.has(l.id)) {
+            leads.push(l);
+          }
+        }
+      });
     }
     const places = [];
     if (placesSnap) {
@@ -166,7 +179,7 @@ async function fetchAllFromFirestore() {
       activitiesSnap.forEach((d) => activities.push(d.data()));
     }
     const settings = settingsSnap && settingsSnap.exists() ? settingsSnap.data() : void 0;
-    return { places, leads, jobs, settings, freelancers, activities };
+    return { places, leads, jobs, settings, freelancers, activities, deletedLeadIds };
   } catch (err) {
     console.warn("[Firebase] Erro ao carregar dados do Firestore:", err);
     return null;
@@ -262,7 +275,7 @@ async function deleteFreelancerAndAllDataFromFirestore(freelancerId, accessCode,
   try {
     const leadsSnap = await getDocs(collection(db2, "leads")).catch(() => null);
     if (leadsSnap) {
-      const deletePromises = [];
+      const matchedDocs = [];
       leadsSnap.forEach((d) => {
         const data = d.data();
         const fid = (data.freelancer_id || "").toLowerCase().trim();
@@ -271,12 +284,24 @@ async function deleteFreelancerAndAllDataFromFirestore(freelancerId, accessCode,
         const docId = d.id.toLowerCase();
         const matches = normIdentifiers.some((id) => fid === id || fid === `free_${id}` || id.startsWith("free_") && fid === id.substring(5)) || normIdentifiers.some((id) => uid === id || uid === `free_${id}` || id.startsWith("free_") && uid === id.substring(5)) || name && fname === name.toLowerCase().trim() || accessCode && docId.includes(accessCode.toLowerCase().trim()) && docId.startsWith("lead_");
         if (matches) {
-          leadsDeleted++;
-          deletePromises.push(deleteDoc(d.ref).catch(() => {
-          }));
+          matchedDocs.push({ ref: d.ref, id: d.id });
         }
       });
-      await Promise.all(deletePromises);
+      leadsDeleted = matchedDocs.length;
+      for (let i = 0; i < matchedDocs.length; i += 200) {
+        const chunk = matchedDocs.slice(i, i + 200);
+        const batch = writeBatch(db2);
+        for (const item of chunk) {
+          batch.delete(item.ref);
+          batch.set(doc(db2, "deleted_leads", item.id), {
+            id: item.id,
+            deleted_at: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        }
+        await batch.commit().catch((err) => {
+          console.warn("[Firebase] Erro ao commitar batch de leads:", err);
+        });
+      }
     }
     const jobsSnap = await getDocs(collection(db2, "search_jobs")).catch(() => null);
     if (jobsSnap) {
@@ -345,7 +370,15 @@ async function deleteLeadFromFirestore(id) {
   const db2 = getFirestoreDb();
   if (!db2 || !id) return;
   try {
-    await deleteDoc(doc(db2, "leads", id));
+    await Promise.all([
+      deleteDoc(doc(db2, "leads", id)).catch(() => {
+      }),
+      setDoc(doc(db2, "deleted_leads", id), {
+        id,
+        deleted_at: (/* @__PURE__ */ new Date()).toISOString()
+      }).catch(() => {
+      })
+    ]);
   } catch (err) {
     console.warn(`[Firebase] Erro ao deletar lead ${id} do Firestore:`, err);
   }
@@ -356,8 +389,7 @@ async function deleteLeadsForTenantFromFirestore(targetFreelancerId) {
   try {
     const snap = await getDocs(collection(db2, "leads")).catch(() => null);
     if (!snap) return 0;
-    let count = 0;
-    const deletePromises = [];
+    const matchedDocs = [];
     const normTarget = targetFreelancerId ? targetFreelancerId.toLowerCase().trim() : "";
     const cleanTarget = normTarget.startsWith("free_") ? normTarget.substring(5) : normTarget;
     snap.forEach((d) => {
@@ -378,13 +410,24 @@ async function deleteLeadsForTenantFromFirestore(targetFreelancerId) {
         shouldDelete = !hasFreelancer;
       }
       if (shouldDelete) {
-        count++;
-        deletePromises.push(deleteDoc(d.ref).catch(() => {
-        }));
+        matchedDocs.push({ ref: d.ref, id: d.id });
       }
     });
-    await Promise.all(deletePromises);
-    return count;
+    for (let i = 0; i < matchedDocs.length; i += 200) {
+      const chunk = matchedDocs.slice(i, i + 200);
+      const batch = writeBatch(db2);
+      for (const item of chunk) {
+        batch.delete(item.ref);
+        batch.set(doc(db2, "deleted_leads", item.id), {
+          id: item.id,
+          deleted_at: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      }
+      await batch.commit().catch((err) => {
+        console.warn("[Firebase] Erro ao commitar batch deleteLeadsForTenant:", err);
+      });
+    }
+    return matchedDocs.length;
   } catch (err) {
     console.warn("[Firebase] Erro ao deletar leads do tenant no Firestore:", err);
     return 0;
@@ -487,8 +530,10 @@ var Database = class {
       search_queries: [],
       settings: INITIAL_SETTINGS,
       freelancers: [],
-      activities: []
+      activities: [],
+      deleted_lead_ids: []
     };
+    this.deletedLeadIds = /* @__PURE__ */ new Set();
     this.initialized = false;
     this.firestoreHydrated = false;
     this.initPromise = null;
@@ -502,8 +547,19 @@ var Database = class {
         this.data.settings = { ...INITIAL_SETTINGS, ...this.data.settings || {} };
         if (!this.data.freelancers) this.data.freelancers = [];
         if (!this.data.activities) this.data.activities = [];
+        if (!this.data.deleted_lead_ids) this.data.deleted_lead_ids = [];
+        for (const id of this.data.deleted_lead_ids) {
+          this.deletedLeadIds.add(id);
+        }
         this.data.freelancers = (this.data.freelancers || []).filter((f) => f && f.id && f.name);
         this.data.activities = (this.data.activities || []).filter((a) => a && a.id);
+        this.data.leads = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id)).map((l) => ({
+          ...l,
+          rating: typeof l.rating === "number" && !isNaN(l.rating) ? l.rating : 0,
+          reviews_count: typeof l.reviews_count === "number" && !isNaN(l.reviews_count) ? l.reviews_count : 0,
+          lead_score: typeof l.lead_score === "number" && !isNaN(l.lead_score) ? l.lead_score : 50,
+          pipeline_status: l.pipeline_status || "NOVO"
+        }));
         this.initialized = true;
         return;
       }
@@ -515,6 +571,12 @@ var Database = class {
           const bundledRaw = fs2.readFileSync(BUNDLED_DB_FILE, "utf-8");
           this.data = JSON.parse(bundledRaw);
           this.data.settings = { ...INITIAL_SETTINGS, ...this.data.settings || {} };
+          if (Array.isArray(this.data.deleted_lead_ids)) {
+            for (const id of this.data.deleted_lead_ids) {
+              this.deletedLeadIds.add(id);
+            }
+          }
+          this.data.leads = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
           fs2.writeFileSync(DB_FILE, bundledRaw, "utf-8");
           this.initialized = true;
           return;
@@ -586,18 +648,27 @@ var Database = class {
         } else {
           this.data.freelancers = (this.data.freelancers || []).filter((f) => !demoFreeIds.includes(f.id));
         }
+        if (remote.deletedLeadIds) {
+          for (const id of remote.deletedLeadIds) {
+            this.deletedLeadIds.add(id);
+          }
+        }
+        this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
+        this.data.leads = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
         const leadMap = /* @__PURE__ */ new Map();
         for (const l of remote.leads || []) {
-          if (!l || !l.id) continue;
+          if (!l || !l.id || this.deletedLeadIds.has(l.id)) continue;
           leadMap.set(l.id, l);
         }
         for (const l of this.data.leads || []) {
-          if (!l || !l.id) continue;
+          if (!l || !l.id || this.deletedLeadIds.has(l.id)) continue;
           const existing = leadMap.get(l.id);
           if (!existing) {
-            leadMap.set(l.id, l);
-            syncLeadToFirestore(l).catch(() => {
-            });
+            if (!isVercel) {
+              leadMap.set(l.id, l);
+              syncLeadToFirestore(l).catch(() => {
+              });
+            }
           } else {
             const localTime = new Date(l.updated_at || l.created_at || 0).getTime();
             const remoteTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
@@ -606,7 +677,7 @@ var Database = class {
             }
           }
         }
-        this.data.leads = Array.from(leadMap.values());
+        this.data.leads = Array.from(leadMap.values()).filter((l) => !this.deletedLeadIds.has(l.id));
         const placeMap = /* @__PURE__ */ new Map();
         for (const p of remote.places || []) {
           if (p && p.id) placeMap.set(p.id, p);
@@ -774,7 +845,7 @@ var Database = class {
     return { lead, created: true };
   }
   getLeads(params) {
-    let filtered = [...this.data.leads];
+    let filtered = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
     if (params.freelancer_id && params.freelancer_id !== "ALL") {
       filtered = filtered.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
     }
@@ -827,17 +898,18 @@ var Database = class {
     }
     if (params.search && params.search.trim() !== "") {
       const q = normalizeStr(params.search);
+      const qDigits = q.replace(/\D/g, "");
       filtered = filtered.filter(
-        (l) => normalizeStr(l.name).includes(q) || normalizeStr(l.city).includes(q) || l.phone && l.phone.replace(/\D/g, "").includes(q.replace(/\D/g, ""))
+        (l) => normalizeStr(l.name).includes(q) || normalizeStr(l.city).includes(q) || qDigits.length >= 3 && Boolean(l.phone && l.phone.replace(/\D/g, "").includes(qDigits))
       );
     }
     const sortBy = params.sortBy || "score";
     filtered.sort((a, b) => {
-      if (sortBy === "score") return b.lead_score - a.lead_score;
-      if (sortBy === "reviews") return b.reviews_count - a.reviews_count;
-      if (sortBy === "rating") return b.rating - a.rating;
+      if (sortBy === "score") return (b.lead_score || 0) - (a.lead_score || 0);
+      if (sortBy === "reviews") return (b.reviews_count || 0) - (a.reviews_count || 0);
+      if (sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
       if (sortBy === "recent") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      return b.lead_score - a.lead_score;
+      return (b.lead_score || 0) - (a.lead_score || 0);
     });
     const total = filtered.length;
     const page = Math.max(1, params.page || 1);
@@ -892,6 +964,7 @@ var Database = class {
     return Object.entries(counts).map(([state, count]) => ({ state, count })).sort((a, b) => b.count - a.count);
   }
   getLeadById(id) {
+    if (this.deletedLeadIds.has(id)) return void 0;
     return this.data.leads.find((l) => l.id === id);
   }
   updateLead(id, updates, freelancer_id) {
@@ -1211,6 +1284,10 @@ var Database = class {
       (l) => matchesFreelancerId(l.freelancer_id, id) || matchesFreelancerId(l.freelancer_id, removed.access_code) || matchesFreelancerId(l.user_id, id) || matchesFreelancerId(l.user_id, removed.access_code) || codes.includes((l.freelancer_id || "").toLowerCase()) || codes.includes((l.user_id || "").toLowerCase()) || (l.freelancer_name || "").toLowerCase() === removed.name.toLowerCase()
     );
     const leadIdsToDelete = new Set(leadsToDelete.map((l) => l.id));
+    for (const l of leadsToDelete) {
+      this.deletedLeadIds.add(l.id);
+    }
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
     this.data.leads = (this.data.leads || []).filter((l) => !leadIdsToDelete.has(l.id));
     if (this.data.lead_notes) {
       this.data.lead_notes = this.data.lead_notes.filter((n) => !leadIdsToDelete.has(n.lead_id));
@@ -1260,6 +1337,10 @@ var Database = class {
       (l) => matchesFreelancerId(l.freelancer_id, id) || matchesFreelancerId(l.freelancer_id, code) || matchesFreelancerId(l.user_id, id) || matchesFreelancerId(l.user_id, code) || codes.includes((l.freelancer_id || "").toLowerCase()) || codes.includes((l.user_id || "").toLowerCase()) || (l.freelancer_name || "").toLowerCase() === name.toLowerCase()
     );
     const leadIdsToDelete = new Set(leadsToDelete.map((l) => l.id));
+    for (const l of leadsToDelete) {
+      this.deletedLeadIds.add(l.id);
+    }
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
     this.data.leads = (this.data.leads || []).filter((l) => !leadIdsToDelete.has(l.id));
     if (this.data.lead_notes) {
       this.data.lead_notes = this.data.lead_notes.filter((n) => !leadIdsToDelete.has(n.lead_id));
@@ -1298,10 +1379,9 @@ var Database = class {
         throw new Error("Acesso n\xE3o autorizado: voc\xEA s\xF3 pode excluir leads do seu pr\xF3prio workspace.");
       }
     }
-    const idx = (this.data.leads || []).findIndex((l) => l.id === id);
-    if (idx !== -1) {
-      this.data.leads.splice(idx, 1);
-    }
+    this.deletedLeadIds.add(id);
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
+    this.data.leads = (this.data.leads || []).filter((l) => l.id !== id);
     if (this.data.lead_notes) {
       this.data.lead_notes = this.data.lead_notes.filter((n) => n.lead_id !== id);
     }
@@ -1316,13 +1396,17 @@ var Database = class {
       const fid = scope.freelancerId;
       if (!fid) return { deletedCount: 0, leadIds: [] };
       leadsToDelete = (this.data.leads || []).filter((l) => matchesFreelancerId(l.freelancer_id, fid));
-    } else if (scope.role === "admin" && (!scope.freelancerId || scope.freelancerId === "admin" || scope.freelancerId === "administrador")) {
+    } else if (scope.role === "admin" && (!scope.freelancerId || scope.freelancerId === "admin" || scope.freelancerId === "administrador" || scope.freelancerId === "free_admin" || scope.freelancerId === "free_administrador")) {
       leadsToDelete = (this.data.leads || []).filter((l) => {
         const lf = (l.freelancer_id || "").toLowerCase().trim();
-        return !lf || lf === "admin" || lf === "administrador";
+        return !lf || lf === "admin" || lf === "administrador" || lf === "free_admin" || lf === "free_administrador";
       });
     }
     const idsToDelete = leadsToDelete.map((l) => l.id);
+    for (const id of idsToDelete) {
+      this.deletedLeadIds.add(id);
+    }
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
     const idsSet = new Set(idsToDelete);
     if (idsToDelete.length > 0) {
       this.data.leads = (this.data.leads || []).filter((l) => !idsSet.has(l.id));
