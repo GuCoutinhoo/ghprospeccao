@@ -333,106 +333,105 @@ export async function deleteFreelancerAndAllDataFromFirestore(
 
 export async function deleteLeadFromFirestore(id: string): Promise<void> {
   const db = getFirestoreDb();
-  if (!db || !id) return;
-  try {
-    await Promise.all([
-      deleteDoc(doc(db, 'leads', id)).catch(() => {}),
-      setDoc(doc(db, 'deleted_leads', id), {
-        id,
-        deleted_at: new Date().toISOString(),
-      }).catch(() => {}),
-    ]);
-  } catch (err) {
-    console.warn(`[Firebase] Erro ao deletar lead ${id} do Firestore:`, err);
+  if (!db) {
+    throw new Error('Banco de dados Firestore não inicializado para exclusão.');
+  }
+  if (!id) return;
+
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'leads', id));
+  batch.set(doc(db, 'deleted_leads', id), {
+    id,
+    deleted_at: new Date().toISOString(),
+  });
+  await batch.commit();
+
+  // Verificação de segurança: confirmação de que o documento original foi removido
+  const verificationSnap = await getDoc(doc(db, 'leads', id)).catch(() => null);
+  if (verificationSnap && verificationSnap.exists()) {
+    await deleteDoc(doc(db, 'leads', id));
   }
 }
 
 export async function deleteMultipleLeadsFromFirestore(ids: string[]): Promise<number> {
   const db = getFirestoreDb();
   if (!db || !ids || ids.length === 0) return 0;
-  try {
-    for (let i = 0; i < ids.length; i += 200) {
-      const chunk = ids.slice(i, i + 200);
-      const batch = writeBatch(db);
-      for (const id of chunk) {
-        batch.delete(doc(db, 'leads', id));
-        batch.set(doc(db, 'deleted_leads', id), {
-          id,
-          deleted_at: new Date().toISOString(),
-        });
-      }
-      await batch.commit().catch((err) => {
-        console.warn('[Firebase] Erro ao commitar batch deleteMultipleLeads:', err);
+  let confirmedCount = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(db, 'leads', id));
+      batch.set(doc(db, 'deleted_leads', id), {
+        id,
+        deleted_at: new Date().toISOString(),
       });
     }
-    return ids.length;
-  } catch (err) {
-    console.warn('[Firebase] Erro ao deletar múltiplos leads do Firestore:', err);
-    return 0;
+    await batch.commit();
+    confirmedCount += chunk.length;
   }
+  return confirmedCount;
 }
 
 export async function deleteLeadsForTenantFromFirestore(targetFreelancerId?: string): Promise<number> {
   const db = getFirestoreDb();
-  if (!db) return 0;
-  try {
-    const snap = await getDocs(collection(db, 'leads')).catch(() => null);
-    if (!snap) return 0;
-    const matchedDocs: Array<{ ref: any; id: string }> = [];
+  if (!db) {
+    throw new Error('Banco de dados Firestore indisponível para exclusão de leads do workspace.');
+  }
 
-    const normTarget = targetFreelancerId ? targetFreelancerId.toLowerCase().trim() : '';
-    const cleanTarget = normTarget.startsWith('free_') ? normTarget.substring(5) : normTarget;
+  const snap = await getDocs(collection(db, 'leads'));
+  if (!snap) return 0;
+  const matchedDocs: Array<{ ref: any; id: string }> = [];
 
-    snap.forEach((d) => {
-      const data = d.data() as Lead;
-      const fid = (data.freelancer_id || '').toLowerCase().trim();
-      const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
-      const uid = (data.user_id || '').toLowerCase().trim();
-      const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
+  const normTarget = targetFreelancerId ? targetFreelancerId.toLowerCase().trim() : '';
+  const cleanTarget = normTarget.startsWith('free_') ? normTarget.substring(5) : normTarget;
 
-      let shouldDelete = false;
-      if (normTarget && normTarget !== 'all') {
-        shouldDelete = Boolean(
-          fid === normTarget ||
-          cleanFid === cleanTarget ||
-          (cleanTarget && fid === `free_${cleanTarget}`) ||
-          uid === normTarget ||
-          cleanUid === cleanTarget ||
-          (cleanTarget && uid === `free_${cleanTarget}`)
-        );
-      } else if (!normTarget || normTarget === 'admin' || normTarget === 'administrador') {
-        const hasFreelancer = Boolean(
-          (fid && fid !== 'admin' && fid !== 'administrador') ||
-          (uid && uid.startsWith('free_'))
-        );
-        shouldDelete = !hasFreelancer;
-      }
+  snap.forEach((d) => {
+    const data = d.data() as Lead;
+    const fid = (data.freelancer_id || '').toLowerCase().trim();
+    const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
+    const uid = (data.user_id || '').toLowerCase().trim();
+    const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
 
-      if (shouldDelete) {
-        matchedDocs.push({ ref: d.ref, id: d.id });
-      }
-    });
-
-    for (let i = 0; i < matchedDocs.length; i += 200) {
-      const chunk = matchedDocs.slice(i, i + 200);
-      const batch = writeBatch(db);
-      for (const item of chunk) {
-        batch.delete(item.ref);
-        batch.set(doc(db, 'deleted_leads', item.id), {
-          id: item.id,
-          deleted_at: new Date().toISOString(),
-        });
-      }
-      await batch.commit().catch((err) => {
-        console.warn('[Firebase] Erro ao commitar batch deleteLeadsForTenant:', err);
-      });
+    let shouldDelete = false;
+    if (normTarget && normTarget !== 'all') {
+      shouldDelete = Boolean(
+        fid === normTarget ||
+        cleanFid === cleanTarget ||
+        (cleanTarget && fid === `free_${cleanTarget}`) ||
+        uid === normTarget ||
+        cleanUid === cleanTarget ||
+        (cleanTarget && uid === `free_${cleanTarget}`)
+      );
+    } else if (!normTarget || normTarget === 'admin' || normTarget === 'administrador') {
+      const hasFreelancer = Boolean(
+        (fid && fid !== 'admin' && fid !== 'administrador') ||
+        (uid && uid.startsWith('free_'))
+      );
+      shouldDelete = !hasFreelancer;
     }
 
-    return matchedDocs.length;
-  } catch (err) {
-    console.warn('[Firebase] Erro ao deletar leads do tenant no Firestore:', err);
-    return 0;
+    if (shouldDelete) {
+      matchedDocs.push({ ref: d.ref, id: d.id });
+    }
+  });
+
+  let confirmedCount = 0;
+  for (let i = 0; i < matchedDocs.length; i += 200) {
+    const chunk = matchedDocs.slice(i, i + 200);
+    const batch = writeBatch(db);
+    for (const item of chunk) {
+      batch.delete(item.ref);
+      batch.set(doc(db, 'deleted_leads', item.id), {
+        id: item.id,
+        deleted_at: new Date().toISOString(),
+      });
+    }
+    await batch.commit();
+    confirmedCount += chunk.length;
   }
+
+  return confirmedCount;
 }
 
 export async function deleteJobFromFirestore(id: string): Promise<void> {

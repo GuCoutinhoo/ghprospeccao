@@ -55,19 +55,27 @@ function slugifyFreelancerName(name?: string | null): string {
 }
 
 export function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
-  if (!targetFid || targetFid === 'ALL') return true;
-  // Leads sem freelancer_id pertencem estritamente à base geral do administrador
-  if (!leadFid) {
-    const tfClean = (targetFid || '').toLowerCase().trim().replace(/^free_/, '');
-    return tfClean === 'admin' || tfClean === 'administrador';
+  // Se explicitamente solicitado ALL (somente permitido via rotas administrativas autenticadas)
+  if (targetFid === 'ALL') return true;
+
+  const tfClean = (targetFid || '').toLowerCase().trim().replace(/^free_/, '');
+  const isTargetAdmin = !tfClean || tfClean === 'admin' || tfClean === 'administrador';
+
+  const lfClean = (leadFid || '').toLowerCase().trim().replace(/^free_/, '');
+  const isLeadAdmin = !lfClean || lfClean === 'admin' || lfClean === 'administrador';
+
+  // Se o alvo for o workspace do Admin, o lead DEVE ser do admin (nunca de um freelancer)
+  if (isTargetAdmin) {
+    return isLeadAdmin;
   }
-  const lf = leadFid.toLowerCase().trim();
-  const tf = targetFid.toLowerCase().trim();
-  if (lf === tf) return true;
-  const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
-  const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
-  // Isolamento estrito por workspace (não misturar usuários ou workspaces distintos)
-  return cleanLf === cleanTf;
+
+  // Se o alvo for um freelancer específico, o lead NÃO PODE ser do admin
+  if (isLeadAdmin) {
+    return false;
+  }
+
+  // Compara os identificadores de freelancer normalizados (estritamente o mesmo workspace)
+  return lfClean === tfClean;
 }
 
 const NICHE_SYNONYMS: Record<string, string[]> = {
@@ -542,7 +550,7 @@ class Database {
   }): { leads: Lead[]; total: number; page: number; totalPages: number } {
     let filtered = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
 
-    if (params.freelancer_id && params.freelancer_id !== 'ALL') {
+    if (params.freelancer_id !== 'ALL') {
       filtered = filtered.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
     }
 
@@ -637,8 +645,8 @@ class Database {
   public getNichesSummary(params?: { onlyFavorites?: boolean; freelancer_id?: string }): { niche: string; count: number }[] {
     const counts: Record<string, { display: string; count: number }> = {};
     let leads = this.data.leads;
-    if (params?.freelancer_id && params.freelancer_id !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
+    if (params?.freelancer_id !== 'ALL') {
+      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, params?.freelancer_id));
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -659,8 +667,8 @@ class Database {
   public getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string; freelancer_id?: string }): { state: string; count: number }[] {
     const counts: Record<string, number> = {};
     let leads = this.data.leads;
-    if (params?.freelancer_id && params.freelancer_id !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
+    if (params?.freelancer_id !== 'ALL') {
+      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, params?.freelancer_id));
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -754,7 +762,7 @@ class Database {
     };
 
     let list = this.data.leads;
-    if (freelancer_id && freelancer_id !== 'ALL') {
+    if (freelancer_id !== 'ALL') {
       list = list.filter((l) => matchesFreelancerId(l.freelancer_id, freelancer_id));
     }
 
@@ -777,7 +785,7 @@ class Database {
   // --- DASHBOARD ---
   public getDashboardStats(freelancer_id?: string): DashboardStats {
     let leads = this.data.leads;
-    if (freelancer_id && freelancer_id !== 'ALL') {
+    if (freelancer_id !== 'ALL') {
       leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, freelancer_id));
     }
     const totalLeads = leads.length;
@@ -874,7 +882,7 @@ class Database {
 
   public getAllSearchJobs(freelancer_id?: string): SearchJob[] {
     let list = [...this.data.search_jobs];
-    if (freelancer_id && freelancer_id !== 'ALL') {
+    if (freelancer_id !== 'ALL') {
       list = list.filter((j) => matchesFreelancerId(j.freelancer_id, freelancer_id));
     }
     return list.sort(
@@ -1257,7 +1265,7 @@ class Database {
       this.data.lead_notes = this.data.lead_notes.filter((n) => n.lead_id !== id);
     }
     this.save();
-    await deleteLeadFromFirestore(id).catch(() => {});
+    await deleteLeadFromFirestore(id);
     return true;
   }
 
@@ -1295,12 +1303,7 @@ class Database {
     }
 
     const targetFid = scope.role === 'freelancer' ? scope.freelancerId : (scope.freelancerId || 'admin');
-    let firestoreDeletedCount = 0;
-    try {
-      firestoreDeletedCount = await deleteLeadsForTenantFromFirestore(targetFid);
-    } catch (err) {
-      console.warn('[DB] Erro ao deletar leads do tenant no Firestore:', err);
-    }
+    const firestoreDeletedCount = await deleteLeadsForTenantFromFirestore(targetFid);
 
     const finalDeletedCount = Math.max(idsToDelete.length, firestoreDeletedCount);
     return { deletedCount: finalDeletedCount, leadIds: idsToDelete };
