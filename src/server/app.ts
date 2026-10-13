@@ -230,8 +230,12 @@ export function resolveWorkspaceScope(req: Request): {
 
   if (req.user.role === 'freelancer') {
     const userFid = req.user.freelancerId!;
-    const queryFid = req.query.freelancer_id ? String(req.query.freelancer_id).trim() : undefined;
-    const bodyFid = req.body?.freelancer_id ? String(req.body.freelancer_id).trim() : undefined;
+    const queryFid = req.query.freelancer_id
+      ? String(req.query.freelancer_id).trim()
+      : (req.query.workspace_id ? String(req.query.workspace_id).trim() : undefined);
+    const bodyFid = req.body?.freelancer_id
+      ? String(req.body.freelancer_id).trim()
+      : (req.body?.workspace_id ? String(req.body.workspace_id).trim() : undefined);
     const requestedFid = queryFid || bodyFid;
 
     if (requestedFid && requestedFid !== 'ALL' && !matchesFreelancerId(userFid, requestedFid)) {
@@ -248,9 +252,16 @@ export function resolveWorkspaceScope(req: Request): {
     };
   }
 
-  // Admin
-  const queryFid = req.query.freelancer_id ? String(req.query.freelancer_id).trim() : undefined;
-  if (queryFid === 'ALL') {
+  // Admin: considera tanto req.query quanto req.body (freelancer_id ou workspace_id)
+  const queryFid = req.query.freelancer_id
+    ? String(req.query.freelancer_id).trim()
+    : (req.query.workspace_id ? String(req.query.workspace_id).trim() : undefined);
+  const bodyFid = req.body?.freelancer_id
+    ? String(req.body.freelancer_id).trim()
+    : (req.body?.workspace_id ? String(req.body.workspace_id).trim() : undefined);
+  const targetFid = queryFid || bodyFid;
+
+  if (targetFid === 'ALL') {
     return {
       role: 'admin',
       workspaceId: 'ALL',
@@ -258,11 +269,11 @@ export function resolveWorkspaceScope(req: Request): {
       isInspectingFreelancer: false,
     };
   }
-  if (queryFid && queryFid !== 'admin' && queryFid !== 'administrador') {
+  if (targetFid && targetFid !== 'admin' && targetFid !== 'administrador' && targetFid !== 'free_admin' && targetFid !== 'free_administrador') {
     return {
       role: 'admin',
-      workspaceId: queryFid,
-      freelancerId: queryFid,
+      workspaceId: targetFid,
+      freelancerId: targetFid,
       isInspectingFreelancer: true,
     };
   }

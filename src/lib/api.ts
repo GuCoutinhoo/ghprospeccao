@@ -337,17 +337,17 @@ export const api = {
 
   async deleteLead(id: string): Promise<{ success: boolean }> {
     invalidateLeadsCache();
-    await deleteLeadDirectFromClient(id).catch(() => {});
     const res = await fetch(`/api/leads/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    invalidateLeadsCache();
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Falha ao excluir lead.');
     }
-    return res.json();
+    const data = await res.json();
+    invalidateLeadsCache();
+    return data;
   },
 
   async deleteAllLeads(freelancer_id?: string): Promise<{ success: boolean; deletedCount: number; message: string }> {
@@ -355,21 +355,23 @@ export const api = {
     const session = getActiveFreelancerSession();
     const targetFreelancerId = freelancer_id || session?.freelancer?.id;
 
-    // Remove diretamente do Firestore do cliente
-    await deleteAllLeadsDirectFromClient(targetFreelancerId).catch(() => {});
-
-    // Remove no backend
-    const res = await fetch('/api/leads/all', {
+    // Constrói URL com freelancer_id na query e envia também no body para suporte total
+    const queryParam = targetFreelancerId ? `?freelancer_id=${encodeURIComponent(targetFreelancerId)}` : '';
+    const res = await fetch(`/api/leads/all${queryParam}`, {
       method: 'DELETE',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ freelancer_id: targetFreelancerId }),
+      body: JSON.stringify({
+        freelancer_id: targetFreelancerId,
+        workspace_id: targetFreelancerId,
+      }),
     });
-    invalidateLeadsCache();
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Falha ao excluir todos os leads.');
     }
-    return res.json();
+    const data = await res.json();
+    invalidateLeadsCache();
+    return data;
   },
 
   async adminGetFreelancerLeads(id: string): Promise<{ leads: Lead[]; total: number }> {

@@ -29,6 +29,7 @@ import {
   deleteLeadFromFirestore,
   deleteMultipleLeadsFromFirestore,
   deleteLeadsForTenantFromFirestore,
+  isLeadInWorkspace,
   deleteJobFromFirestore,
   deleteActivityFromFirestore,
   syncActivityToFirestore,
@@ -1275,18 +1276,8 @@ class Database {
     freelancerId?: string;
     role?: 'admin' | 'freelancer';
   }): Promise<{ deletedCount: number; leadIds: string[] }> {
-    let leadsToDelete: Lead[] = [];
-
-    if (scope.role === 'freelancer' || (scope.freelancerId && scope.freelancerId !== 'ALL')) {
-      const fid = scope.freelancerId;
-      if (!fid) return { deletedCount: 0, leadIds: [] };
-      leadsToDelete = (this.data.leads || []).filter((l) => matchesFreelancerId(l.freelancer_id, fid));
-    } else if (scope.role === 'admin' && (!scope.freelancerId || scope.freelancerId === 'admin' || scope.freelancerId === 'administrador' || scope.freelancerId === 'free_admin' || scope.freelancerId === 'free_administrador')) {
-      leadsToDelete = (this.data.leads || []).filter((l) => {
-        const lf = (l.freelancer_id || '').toLowerCase().trim();
-        return !lf || lf === 'admin' || lf === 'administrador' || lf === 'free_admin' || lf === 'free_administrador';
-      });
-    }
+    const targetFid = scope.role === 'freelancer' ? scope.freelancerId : (scope.freelancerId || 'admin');
+    const leadsToDelete = (this.data.leads || []).filter((l) => isLeadInWorkspace(l, targetFid));
 
     const idsToDelete = leadsToDelete.map((l) => l.id);
     for (const id of idsToDelete) {
@@ -1304,7 +1295,6 @@ class Database {
       this.save();
     }
 
-    const targetFid = scope.role === 'freelancer' ? scope.freelancerId : (scope.freelancerId || 'admin');
     const firestoreDeletedCount = await deleteLeadsForTenantFromFirestore(targetFid);
 
     const finalDeletedCount = Math.max(idsToDelete.length, firestoreDeletedCount);

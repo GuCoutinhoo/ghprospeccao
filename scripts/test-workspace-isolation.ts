@@ -66,12 +66,17 @@ async function runIsolationTests() {
   // Seed sample leads for each workspace
   db.createLead({
     id: 'lead_admin_sample',
+    place_id: 'place_admin_sample',
     workspace_id: 'admin',
     user_id: 'admin_1',
     name: 'Loja Exclusiva Admin',
     niche: 'barbearia',
     state: 'SP',
     city: 'Campinas',
+    website_status: 'no_website',
+    rating: 4.5,
+    reviews_count: 10,
+    lead_score: 80,
     pipeline_status: 'NOVO',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -79,6 +84,7 @@ async function runIsolationTests() {
 
   db.createLead({
     id: 'lead_free_teste_a_sample',
+    place_id: 'place_free_a_sample',
     workspace_id: 'free_teste_a',
     freelancer_id: 'free_teste_a',
     user_id: 'free_teste_a',
@@ -86,6 +92,10 @@ async function runIsolationTests() {
     niche: 'restaurante',
     state: 'SP',
     city: 'Santos',
+    website_status: 'no_website',
+    rating: 4.8,
+    reviews_count: 25,
+    lead_score: 90,
     pipeline_status: 'NOVO',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -93,6 +103,7 @@ async function runIsolationTests() {
 
   db.createLead({
     id: 'lead_free_teste_b_sample',
+    place_id: 'place_free_b_sample',
     workspace_id: 'free_teste_b',
     freelancer_id: 'free_teste_b',
     user_id: 'free_teste_b',
@@ -100,6 +111,10 @@ async function runIsolationTests() {
     niche: 'odontologia',
     state: 'RJ',
     city: 'Niterói',
+    website_status: 'no_website',
+    rating: 4.2,
+    reviews_count: 15,
+    lead_score: 75,
     pipeline_status: 'NOVO',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

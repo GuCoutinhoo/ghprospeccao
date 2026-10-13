@@ -373,6 +373,41 @@ export async function deleteMultipleLeadsFromFirestore(ids: string[]): Promise<n
   return confirmedCount;
 }
 
+export function isLeadInWorkspace(
+  lead: { freelancer_id?: string | null; workspace_id?: string | null; user_id?: string | null },
+  targetWorkspaceId?: string | null
+): boolean {
+  if (targetWorkspaceId === 'ALL') return true;
+
+  const targetClean = (targetWorkspaceId || '').toLowerCase().trim().replace(/^free_/, '');
+  const isTargetAdmin = !targetClean || targetClean === 'admin' || targetClean === 'administrador';
+
+  const fid = (lead.freelancer_id || '').toLowerCase().trim();
+  const wid = (lead.workspace_id || '').toLowerCase().trim();
+  const uid = (lead.user_id || '').toLowerCase().trim();
+
+  const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
+  const cleanWid = wid.startsWith('free_') ? wid.substring(5) : wid;
+  const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
+
+  const isLeadOwnedByFreelancer =
+    (Boolean(cleanFid) && cleanFid !== 'admin' && cleanFid !== 'administrador') ||
+    (Boolean(cleanWid) && cleanWid !== 'admin' && cleanWid !== 'administrador' && cleanWid !== 'default') ||
+    (Boolean(cleanUid) && cleanUid !== 'admin' && cleanUid !== 'administrador');
+
+  if (isTargetAdmin) {
+    // Para o workspace do Admin, o lead pertence ao admin se NÃO pertencer a nenhum freelancer
+    return !isLeadOwnedByFreelancer;
+  }
+
+  // Para um workspace de freelancer específico:
+  if (!isLeadOwnedByFreelancer) {
+    return false;
+  }
+
+  return cleanFid === targetClean || cleanWid === targetClean || cleanUid === targetClean;
+}
+
 export async function deleteLeadsForTenantFromFirestore(targetFreelancerId?: string): Promise<number> {
   const db = getFirestoreDb();
   if (!db) {
@@ -383,35 +418,9 @@ export async function deleteLeadsForTenantFromFirestore(targetFreelancerId?: str
   if (!snap) return 0;
   const matchedDocs: Array<{ ref: any; id: string }> = [];
 
-  const normTarget = targetFreelancerId ? targetFreelancerId.toLowerCase().trim() : '';
-  const cleanTarget = normTarget.startsWith('free_') ? normTarget.substring(5) : normTarget;
-
   snap.forEach((d) => {
     const data = d.data() as Lead;
-    const fid = (data.freelancer_id || '').toLowerCase().trim();
-    const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
-    const uid = (data.user_id || '').toLowerCase().trim();
-    const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
-
-    let shouldDelete = false;
-    if (normTarget && normTarget !== 'all') {
-      shouldDelete = Boolean(
-        fid === normTarget ||
-        cleanFid === cleanTarget ||
-        (cleanTarget && fid === `free_${cleanTarget}`) ||
-        uid === normTarget ||
-        cleanUid === cleanTarget ||
-        (cleanTarget && uid === `free_${cleanTarget}`)
-      );
-    } else if (!normTarget || normTarget === 'admin' || normTarget === 'administrador') {
-      const hasFreelancer = Boolean(
-        (fid && fid !== 'admin' && fid !== 'administrador') ||
-        (uid && uid.startsWith('free_'))
-      );
-      shouldDelete = !hasFreelancer;
-    }
-
-    if (shouldDelete) {
+    if (isLeadInWorkspace(data, targetFreelancerId)) {
       matchedDocs.push({ ref: d.ref, id: d.id });
     }
   });

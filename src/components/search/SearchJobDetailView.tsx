@@ -368,7 +368,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
                       {area.city}, {area.state}
                     </span>
                     <span className="text-[10px] text-neutral-400 font-mono">
-                      Lat: {area.lat.toFixed(3)} | Lng: {area.lng.toFixed(3)} | Raio: {area.radius / 1000}km
+                      Lat: {(area.lat ?? 0).toFixed(3)} | Lng: {(area.lng ?? 0).toFixed(3)} | Raio: {(area.radius ?? 0) / 1000}km
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
