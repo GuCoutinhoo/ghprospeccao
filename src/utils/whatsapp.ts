@@ -77,8 +77,8 @@ export function getWhatsAppUrl(
   if (isBarbearia) {
     text = getBarbeariaWhatsAppPitch(companyName || 'barbearia');
   } else if (companyName) {
-    const greeting = 'Olá! Tudo bem?';
-    text = `${greeting} Gostaria de falar com o responsável pela ${companyName}.`;
+    const greeting = 'Oi boa tarde, tudo bem?';
+    text = `${greeting} Falo com a psicóloga  ${companyName}?`;
   }
 
   return `https://wa.me/${normalized}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
