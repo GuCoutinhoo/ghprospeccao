@@ -463,3 +463,18 @@ export function cancelSearchJob(jobId: string): boolean {
   activeWorkers.delete(jobId);
   return true;
 }
+
+export function cancelAllSearchWorkers(): number {
+  let count = 0;
+  for (const [jobId, worker] of activeWorkers.entries()) {
+    worker.cancelled = true;
+    db.updateSearchJob(jobId, {
+      status: 'cancelled',
+      finished_at: new Date().toISOString(),
+    });
+    count++;
+  }
+  activeWorkers.clear();
+  return count;
+}
+

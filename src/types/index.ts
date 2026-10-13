@@ -34,7 +34,9 @@ export type ActivityActionType =
   | 'freelancer_blocked'
   | 'freelancer_unblocked'
   | 'access_link_regenerated'
-  | 'note_added';
+  | 'note_added'
+  | 'purge_all_leads_global'
+  | 'leads_purged';
 
 export interface Activity {
   id: string;

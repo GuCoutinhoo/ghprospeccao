@@ -39,6 +39,7 @@ import {
   deleteJobFromFirestore,
   deleteActivityFromFirestore,
   syncActivityToFirestore,
+  purgeAllLeadsFromFirestore,
 } from '../firebase/sync';
 
 function normalizeStr(str?: string | null): string {
@@ -1376,11 +1377,90 @@ class Database {
     return true;
   }
 
+  public async purgeAllLeadsGlobal(): Promise<{
+    deletedCount: number;
+    leadIds: string[];
+    jobsCancelled: number;
+    firestoreDeletedCount: number;
+  }> {
+    // 1. Cancela todas as buscas ativas ou pausadas em andamento para impedir recriação
+    let jobsCancelled = 0;
+    if (this.data.search_jobs) {
+      for (const job of this.data.search_jobs) {
+        if (job.status === 'running' || job.status === 'paused') {
+          job.status = 'cancelled';
+          job.finished_at = new Date().toISOString();
+          jobsCancelled++;
+        }
+      }
+    }
+
+    try {
+      const { cancelAllSearchWorkers } = await import('../search/searchWorker');
+      cancelAllSearchWorkers();
+    } catch (workerErr) {
+      console.warn('[DB] Aviso ao cancelar workers de busca:', workerErr);
+    }
+
+    // 2. Coleta todos os IDs conhecidos em todos os workspaces
+    const allLeadIds = (this.data.leads || []).map((l) => l.id);
+    const existingDeletedIds = Array.from(this.deletedLeadIds);
+    const combinedIdsToPurge = Array.from(new Set([...allLeadIds, ...existingDeletedIds]));
+
+    const localDeletedCount = allLeadIds.length;
+
+    // 3. Esvazia completamente leads, notas e reseta registros de leads deletados
+    this.data.leads = [];
+    if (this.data.lead_notes) {
+      this.data.lead_notes = [];
+    }
+    this.data.deleted_lead_ids = [];
+    this.deletedLeadIds.clear();
+    this.workspaceHydration.clear();
+    this.save();
+
+    // 4. Exclusão permanente em lote diretamente da coleção 'leads' e limpeza de 'deleted_leads' no Firestore
+    let firestoreDeletedCount = 0;
+    try {
+      firestoreDeletedCount = await purgeAllLeadsFromFirestore(combinedIdsToPurge);
+    } catch (fsErr) {
+      console.warn('[DB] Erro ao purgar leads do Firestore:', fsErr);
+    }
+
+    // 5. Registro de auditoria do administrador
+    this.logActivity({
+      freelancer_id: 'admin',
+      freelancer_name: 'Administrador',
+      action_type: 'purge_all_leads_global',
+      description: `Limpeza global executada: ${Math.max(localDeletedCount, firestoreDeletedCount)} leads excluídos permanentemente de TODOS os workspaces.`,
+      metadata: {
+        totalLeadsDeleted: Math.max(localDeletedCount, firestoreDeletedCount),
+        jobsCancelled,
+      },
+    });
+
+    return {
+      deletedCount: Math.max(localDeletedCount, firestoreDeletedCount),
+      leadIds: allLeadIds,
+      jobsCancelled,
+      firestoreDeletedCount,
+    };
+  }
+
   public async deleteAllLeads(scope: {
     freelancerId?: string;
     role?: 'admin' | 'freelancer';
   }): Promise<{ deletedCount: number; leadIds: string[] }> {
     const targetFid = scope.role === 'freelancer' ? scope.freelancerId : (scope.freelancerId || 'admin');
+
+    if (targetFid === 'ALL' && scope.role === 'admin') {
+      const globalRes = await this.purgeAllLeadsGlobal();
+      return {
+        deletedCount: globalRes.deletedCount,
+        leadIds: globalRes.leadIds,
+      };
+    }
+
     const leadsToDelete = (this.data.leads || []).filter((l) => isLeadInWorkspace(l, targetFid));
 
     const idsToDelete = leadsToDelete.map((l) => l.id);

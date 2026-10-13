@@ -1,6 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getFirestore,
+  initializeFirestore,
+  setLogLevel,
   doc,
   getDoc,
   setDoc,
@@ -20,6 +22,10 @@ import fs from 'fs';
 import path from 'path';
 import { Place, Lead, LeadNote, SearchJob, SearchArea, AppSettings, Freelancer, Activity } from '../../types';
 import firebaseConfigJson from '../../../firebase-applet-config.json';
+
+try {
+  setLogLevel('error');
+} catch {}
 
 let dbInstance: Firestore | null = null;
 
@@ -42,7 +48,15 @@ export function getFirestoreDb(): Firestore | null {
       config.firestoreDatabaseId ||
       process.env.FIRESTORE_DATABASE_ID ||
       'ai-studio-prospectaplacesb-a0f0acf2-92de-4dc6-84d3-27efdba900e9';
-    dbInstance = getFirestore(app, databaseId);
+
+    try {
+      dbInstance = initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+        ignoreUndefinedProperties: true,
+      }, databaseId);
+    } catch {
+      dbInstance = getFirestore(app, databaseId);
+    }
     return dbInstance;
   } catch (err) {
     console.warn('[Firebase] Não foi possível inicializar Firestore:', err);
@@ -734,3 +748,66 @@ export async function syncActivityToFirestore(activity: Activity): Promise<void>
     console.warn(`[Firebase] Erro ao sincronizar atividade ${activity.id}:`, err);
   }
 }
+
+export async function purgeAllLeadsFromFirestore(knownIds: string[] = []): Promise<number> {
+  const db = getFirestoreDb();
+  if (!db) {
+    throw new Error('Banco de dados Firestore indisponível para exclusão global de leads.');
+  }
+
+  const idsSet = new Set<string>(knownIds.filter(Boolean));
+
+  // Tenta varrer coleção 'leads' caso haja cota de leitura disponível
+  try {
+    const snap = await getDocs(collection(db, 'leads'));
+    if (snap) {
+      snap.forEach((d) => idsSet.add(d.id));
+    }
+  } catch (err) {
+    if (isFirestoreQuotaError(err)) {
+      console.warn('[Firebase] Cota de leitura atingida ao listar leads. Prosseguindo com exclusão em lote dos IDs mapeados...');
+    } else {
+      console.warn('[Firebase] Aviso ao listar coleção leads:', err);
+    }
+  }
+
+  // Tenta varrer coleção 'deleted_leads'
+  try {
+    const delSnap = await getDocs(collection(db, 'deleted_leads'));
+    if (delSnap) {
+      delSnap.forEach((d) => idsSet.add(d.id));
+    }
+  } catch {}
+
+  const allIds = Array.from(idsSet);
+  if (allIds.length === 0) return 0;
+
+  let deletedCount = 0;
+  // 1. Exclui permanentemente todos os leads da coleção 'leads' em lotes de 200
+  for (let i = 0; i < allIds.length; i += 200) {
+    const chunk = allIds.slice(i, i + 200);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(db, 'leads', id));
+    }
+    await batch.commit();
+    deletedCount += chunk.length;
+  }
+
+  // 2. Limpa todos os registros da coleção 'deleted_leads' em lotes de 200
+  for (let i = 0; i < allIds.length; i += 200) {
+    const chunk = allIds.slice(i, i + 200);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(db, 'deleted_leads', id));
+    }
+    try {
+      await batch.commit();
+    } catch (delErr) {
+      console.warn('[Firebase] Aviso ao limpar deleted_leads:', delErr);
+    }
+  }
+
+  return deletedCount;
+}
+

@@ -19,6 +19,8 @@ import {
   Award,
   Zap,
   Plus,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { AdminDashboardStats, Freelancer, PipelineStatus } from '../../types';
 import { api } from '../../lib/api';
@@ -43,6 +45,33 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [selectedPeriod, setSelectedPeriod] = useState<string>('ALL');
   const [selectedState, setSelectedState] = useState<string>('ALL');
   const [freelancersList, setFreelancersList] = useState<Freelancer[]>([]);
+
+  // Limpeza global de leads
+  const [showPurgeModal, setShowPurgeModal] = useState<boolean>(false);
+  const [purgeInput, setPurgeInput] = useState<string>('');
+  const [isPurging, setIsPurging] = useState<boolean>(false);
+  const [purgeFeedback, setPurgeFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleExecuteGlobalPurge = async () => {
+    if (purgeInput.trim().toUpperCase() !== 'ZERAR TUDO') return;
+    setIsPurging(true);
+    setPurgeFeedback(null);
+    try {
+      const res = await api.adminPurgeGlobalLeads('ZERAR_TODOS_OS_LEADS');
+      setPurgeFeedback({
+        type: 'success',
+        message: `Sucesso: ${res.deletedCount} leads foram permanentemente removidos de todos os workspaces!`,
+      });
+      setPurgeInput('');
+      setShowPurgeModal(false);
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao executar limpeza global de leads.';
+      setPurgeFeedback({ type: 'error', message: msg });
+    } finally {
+      setIsPurging(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -454,6 +483,118 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           + Gerenciar / Adicionar Freelancers
         </button>
       </div>
+
+      {/* Zona de Perigo / Manutenção do Banco: Limpeza Global de Leads */}
+      <div className="bg-red-50/70 border border-red-200 rounded-xl p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-red-900 font-bold text-sm">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              Zona Crítica Administrativa: Limpeza Global de Leads
+            </div>
+            <p className="text-xs text-red-700 mt-1 max-w-2xl">
+              Zera <strong>permanentemente todos os leads de TODOS os workspaces</strong> (Admin e todos os freelancers) no banco Firestore e local. Preserva integralmente os cadastros e logins de freelancers, configurações e estruturas de workspace.
+            </p>
+            {purgeFeedback && (
+              <div
+                className={`mt-2 p-2.5 rounded-lg text-xs font-semibold ${
+                  purgeFeedback.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                }`}
+              >
+                {purgeFeedback.message}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => {
+              setPurgeInput('');
+              setShowPurgeModal(true);
+            }}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg transition-colors shrink-0 flex items-center gap-2 shadow-xs cursor-pointer"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Zerar Todos os Leads (Global)
+          </button>
+        </div>
+      </div>
+
+      {/* MODAL DE CONFIRMAÇÃO EXPLÍCITA PARA LIMPEZA GLOBAL */}
+      {showPurgeModal && (
+        <div className="fixed inset-0 z-50 bg-neutral-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-red-200 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="p-3 bg-red-100 rounded-full">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-neutral-900">Confirmação de Exclusão Global</h3>
+                <p className="text-xs text-neutral-500">Operação irreversível de banco de dados</p>
+              </div>
+            </div>
+
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-800 space-y-2">
+              <p className="font-semibold">
+                Atenção: Esta ação excluirá permanentemente todos os leads de TODOS os workspaces:
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-[11px] text-red-700">
+                <li>Exclusão em lotes de toda a coleção <code>leads</code> no Firebase Firestore;</li>
+                <li>Limpeza dos registros em <code>deleted_leads</code> e caches locais;</li>
+                <li>Cancelamento de buscas ativas para impedir recriação;</li>
+                <li>Contas de freelancers, senhas e configurações permanecem 100% preservadas.</li>
+              </ul>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-700 block">
+                Para confirmar, digite exatamente <span className="font-mono text-red-600 font-bold">ZERAR TUDO</span> abaixo:
+              </label>
+              <input
+                type="text"
+                value={purgeInput}
+                onChange={(e) => setPurgeInput(e.target.value)}
+                placeholder="ZERAR TUDO"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                disabled={isPurging}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPurgeModal(false);
+                  setPurgeInput('');
+                }}
+                disabled={isPurging}
+                className="px-4 py-2 border border-neutral-200 text-neutral-700 rounded-lg text-xs font-semibold hover:bg-neutral-50 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExecuteGlobalPurge}
+                disabled={purgeInput.trim().toUpperCase() !== 'ZERAR TUDO' || isPurging}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                {isPurging ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Excluindo no Firestore...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Confirmar e Zerar Definitivamente
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getFirestore,
+  initializeFirestore,
+  setLogLevel,
   collection,
   getDocs,
   doc,
@@ -12,6 +14,10 @@ import {
 import firebaseConfig from '../../../firebase-applet-config.json';
 import { DashboardStats, Lead, PipelineStatus } from '../../types';
 
+try {
+  setLogLevel('error');
+} catch {}
+
 let firestoreInstance: Firestore | null = null;
 
 export function getClientFirestore(): Firestore | null {
@@ -21,7 +27,15 @@ export function getClientFirestore(): Firestore | null {
     const databaseId =
       firebaseConfig.firestoreDatabaseId ||
       'ai-studio-prospectaplacesb-a0f0acf2-92de-4dc6-84d3-27efdba900e9';
-    firestoreInstance = getFirestore(app, databaseId);
+
+    try {
+      firestoreInstance = initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+        ignoreUndefinedProperties: true,
+      }, databaseId);
+    } catch {
+      firestoreInstance = getFirestore(app, databaseId);
+    }
     return firestoreInstance;
   } catch (err) {
     console.warn('[Firebase Client] Falha ao inicializar Firestore no cliente:', err);
@@ -578,3 +592,51 @@ export async function deleteFreelancerDataDirectFromClient(
     invalidateLeadsCache();
   }
 }
+
+export async function purgeAllLeadsDirectFromClient(knownIds: string[] = []): Promise<number> {
+  invalidateLeadsCache();
+  const db = getClientFirestore();
+  if (!db) return 0;
+
+  const idsSet = new Set<string>(knownIds.filter(Boolean));
+
+  try {
+    const snap = await getDocs(collection(db, 'leads')).catch(() => null);
+    if (snap) {
+      snap.forEach((d) => idsSet.add(d.id));
+    }
+    const delSnap = await getDocs(collection(db, 'deleted_leads')).catch(() => null);
+    if (delSnap) {
+      delSnap.forEach((d) => idsSet.add(d.id));
+    }
+  } catch {}
+
+  const allIds = Array.from(idsSet);
+  let deletedCount = 0;
+
+  for (let i = 0; i < allIds.length; i += 200) {
+    const chunk = allIds.slice(i, i + 200);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(db, 'leads', id));
+    }
+    await batch.commit().catch((err) => {
+      console.warn('[Firebase Client] Aviso na exclusão em lote de leads:', err);
+    });
+    deletedCount += chunk.length;
+  }
+
+  // Limpa registros em deleted_leads
+  for (let i = 0; i < allIds.length; i += 200) {
+    const chunk = allIds.slice(i, i + 200);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(db, 'deleted_leads', id));
+    }
+    await batch.commit().catch(() => {});
+  }
+
+  invalidateLeadsCache();
+  return deletedCount;
+}
+

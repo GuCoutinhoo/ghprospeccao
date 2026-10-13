@@ -707,8 +707,52 @@ app.post('/api/admin/freelancers/:id/reset', requireAdmin, async (req: Request, 
   }
 });
 
+// ROTA ADMINISTRATIVA DE LIMPEZA GLOBAL DE LEADS (TODOS OS WORKSPACES) COM CONFIRMAÇÃO EXPLÍCITA
+app.post('/api/admin/leads/purge-global', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const confirmation = (req.body?.confirmation || '').toString().trim().toUpperCase();
+    const validConfirmations = ['ZERAR_TODOS_OS_LEADS', 'ZERAR TUDO', 'CONFIRMAR', 'EXCLUIR_TODOS_OS_LEADS'];
+    
+    if (!validConfirmations.includes(confirmation)) {
+      return res.status(400).json({
+        error: 'Confirmação inválida',
+        message: 'Para zerar permanentemente todos os leads de todos os workspaces, confirme enviando "ZERAR_TODOS_OS_LEADS" ou "ZERAR TUDO".',
+      });
+    }
+
+    const result = await db.purgeAllLeadsGlobal();
+
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      jobsCancelled: result.jobsCancelled,
+      firestoreDeletedCount: result.firestoreDeletedCount,
+      message: `Operação concluída com sucesso: ${result.deletedCount} leads foram permanentemente removidos de todos os workspaces (Admin e Freelancers).`,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
 app.delete('/api/leads/all', requireAuth, async (req: Request, res: Response) => {
   try {
+    const isGlobalRequested = req.query.global === 'true' || req.body?.global === true || req.query.freelancer_id === 'ALL' || req.body?.freelancer_id === 'ALL';
+    
+    if (isGlobalRequested) {
+      if (req.user!.role !== 'admin') {
+        return res.status(403).json({ error: 'Apenas administradores podem executar a limpeza global de todos os workspaces.' });
+      }
+      const result = await db.purgeAllLeadsGlobal();
+      return res.json({
+        success: true,
+        deletedCount: result.deletedCount,
+        jobsCancelled: result.jobsCancelled,
+        firestoreDeletedCount: result.firestoreDeletedCount,
+        message: `Todos os leads de TODOS os workspaces foram excluídos permanentemente (${result.deletedCount} estabelecimentos removidos).`,
+      });
+    }
+
     const scope = resolveWorkspaceScope(req);
     const targetFreelancerId = scope.role === 'freelancer' ? scope.freelancerId : (scope.isInspectingFreelancer ? scope.freelancerId : 'admin');
 
@@ -731,6 +775,22 @@ app.delete('/api/leads/all', requireAuth, async (req: Request, res: Response) =>
 
 app.post('/api/leads/delete-all', requireAuth, async (req: Request, res: Response) => {
   try {
+    const isGlobalRequested = req.query.global === 'true' || req.body?.global === true || req.query.freelancer_id === 'ALL' || req.body?.freelancer_id === 'ALL';
+    
+    if (isGlobalRequested) {
+      if (req.user!.role !== 'admin') {
+        return res.status(403).json({ error: 'Apenas administradores podem executar a limpeza global de todos os workspaces.' });
+      }
+      const result = await db.purgeAllLeadsGlobal();
+      return res.json({
+        success: true,
+        deletedCount: result.deletedCount,
+        jobsCancelled: result.jobsCancelled,
+        firestoreDeletedCount: result.firestoreDeletedCount,
+        message: `Todos os leads de TODOS os workspaces foram excluídos permanentemente (${result.deletedCount} estabelecimentos removidos).`,
+      });
+    }
+
     const scope = resolveWorkspaceScope(req);
     const targetFreelancerId = scope.role === 'freelancer' ? scope.freelancerId : (scope.isInspectingFreelancer ? scope.freelancerId : 'admin');
 

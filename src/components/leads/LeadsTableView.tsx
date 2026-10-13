@@ -149,6 +149,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   // Estados para exclusão de leads (individual e em massa)
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
   const [showConfirmDeleteAll, setShowConfirmDeleteAll] = useState<boolean>(false);
+  const [deleteGlobalScope, setDeleteGlobalScope] = useState<boolean>(false);
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
   const [isDeletingAll, setIsDeletingAll] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -441,7 +442,11 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     if (isDeletingAll) return;
     setIsDeletingAll(true);
     try {
-      const res = await api.deleteAllLeads(effectiveFreelancerId);
+      const isGlobal = userRole === 'admin' && (effectiveFreelancerId === 'ALL' || deleteGlobalScope);
+      const res = isGlobal
+        ? await api.adminPurgeGlobalLeads('ZERAR_TODOS_OS_LEADS')
+        : await api.deleteAllLeads(effectiveFreelancerId);
+
       setLeads([]);
       setTotal(0);
       setTotalOverallLeads(0);
@@ -1731,18 +1736,45 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
               </div>
             </div>
 
-            <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-3.5 text-xs text-rose-950 space-y-1.5">
+            <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-3.5 text-xs text-rose-950 space-y-2">
               <p>
-                Você está prestes a excluir permanentemente todos os <strong className="font-bold">{total} estabelecimentos</strong> cadastrados neste workspace.
+                Você está prestes a excluir permanentemente os leads cadastrados no sistema.
               </p>
-              <p className="text-[11px] text-rose-700 font-mono">
-                {userRole === 'freelancer'
-                  ? `Workspace do freelancer: ${activeFreelancer?.name || 'Freelancer'} (${effectiveFreelancerId || 'privado'})`
-                  : 'Workspace do Administrador'}
-              </p>
-              <p className="text-[11px] text-neutral-500 italic">
-                * Outros freelancers e contas não serão afetados (isolamento total de tenant respeitado).
-              </p>
+
+              {userRole === 'admin' ? (
+                <div className="space-y-1.5 pt-1 border-t border-rose-200/70">
+                  <span className="font-semibold text-rose-900 block text-[11px]">Alcance da Exclusão:</span>
+                  <label className="flex items-center gap-2 text-[11px] cursor-pointer">
+                    <input
+                      type="radio"
+                      name="purgeScope"
+                      checked={!deleteGlobalScope}
+                      onChange={() => setDeleteGlobalScope(false)}
+                      className="text-rose-600 focus:ring-rose-500"
+                    />
+                    <span>Apenas este workspace ({total} leads)</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-rose-800 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="purgeScope"
+                      checked={deleteGlobalScope}
+                      onChange={() => setDeleteGlobalScope(true)}
+                      className="text-rose-600 focus:ring-rose-500"
+                    />
+                    <span>TODOS os workspaces (Global - Admin e todos os Freelancers)</span>
+                  </label>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[11px] text-rose-700 font-mono">
+                    Workspace do freelancer: {activeFreelancer?.name || 'Freelancer'} ({effectiveFreelancerId || 'privado'})
+                  </p>
+                  <p className="text-[11px] text-neutral-500 italic">
+                    * Outros freelancers e contas não serão afetados (isolamento total de tenant respeitado).
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">

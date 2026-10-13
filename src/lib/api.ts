@@ -350,19 +350,51 @@ export const api = {
     return data;
   },
 
-  async deleteAllLeads(freelancer_id?: string): Promise<{ success: boolean; deletedCount: number; message: string }> {
+  async adminPurgeGlobalLeads(confirmation: string = 'ZERAR_TODOS_OS_LEADS'): Promise<{
+    success: boolean;
+    deletedCount: number;
+    jobsCancelled: number;
+    firestoreDeletedCount: number;
+    message: string;
+  }> {
+    invalidateLeadsCache();
+    const res = await fetch('/api/admin/leads/purge-global', {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ confirmation }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || 'Falha ao executar limpeza global de leads.');
+    }
+    const data = await res.json();
+    invalidateLeadsCache();
+    return data;
+  },
+
+  async deleteAllLeads(freelancer_id?: string, isGlobal = false): Promise<{ success: boolean; deletedCount: number; message: string }> {
     invalidateLeadsCache();
     const session = getActiveFreelancerSession();
     const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+    const isGlobalPurge = isGlobal || targetFreelancerId === 'ALL';
 
-    // Constrói URL com freelancer_id na query e envia também no body para suporte total
-    const queryParam = targetFreelancerId ? `?freelancer_id=${encodeURIComponent(targetFreelancerId)}` : '';
-    const res = await fetch(`/api/leads/all${queryParam}`, {
+    // Constrói URL com parâmetros
+    const queryParams = new URLSearchParams();
+    if (isGlobalPurge) {
+      queryParams.set('global', 'true');
+      queryParams.set('freelancer_id', 'ALL');
+    } else if (targetFreelancerId) {
+      queryParams.set('freelancer_id', targetFreelancerId);
+    }
+
+    const queryStr = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    const res = await fetch(`/api/leads/all${queryStr}`, {
       method: 'DELETE',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
-        freelancer_id: targetFreelancerId,
-        workspace_id: targetFreelancerId,
+        global: isGlobalPurge,
+        freelancer_id: isGlobalPurge ? 'ALL' : targetFreelancerId,
+        workspace_id: isGlobalPurge ? 'ALL' : targetFreelancerId,
       }),
     });
     if (!res.ok) {
