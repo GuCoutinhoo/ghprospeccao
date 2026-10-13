@@ -9,11 +9,16 @@ import {
   getDocs,
   deleteDoc,
   writeBatch,
+  query,
+  where,
+  limit,
+  orderBy,
+  getCountFromServer,
   Firestore,
 } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
-import { Place, Lead, LeadNote, SearchJob, AppSettings, Freelancer, Activity } from '../../types';
+import { Place, Lead, LeadNote, SearchJob, SearchArea, AppSettings, Freelancer, Activity } from '../../types';
 import firebaseConfigJson from '../../../firebase-applet-config.json';
 
 let dbInstance: Firestore | null = null;
@@ -45,6 +50,267 @@ export function getFirestoreDb(): Firestore | null {
   }
 }
 
+// --- DETECTORES DE ERRO DE COTA ---
+export function isFirestoreQuotaError(err: unknown): boolean {
+  if (!err) return false;
+  const str = err instanceof Error ? err.message : String(err);
+  return (
+    str.includes('RESOURCE_EXHAUSTED') ||
+    str.includes('Quota exceeded') ||
+    str.includes('quota metric') ||
+    str.includes('Free daily read units') ||
+    (err as any)?.code === 'resource-exhausted'
+  );
+}
+
+export function isGooglePlacesQuotaError(err: unknown): boolean {
+  if (!err) return false;
+  const str = err instanceof Error ? err.message : String(err);
+  return (
+    str.includes('OVER_QUERY_LIMIT') ||
+    str.includes('RESOURCE_EXHAUSTED') ||
+    str.includes('cota') ||
+    str.includes('quota') ||
+    str.includes('rate limit')
+  );
+}
+
+// 1. CARREGAMENTO LEVE DE CONFIGURAÇÕES GLOBAIS (SEM SCAN DE LEADS)
+export async function fetchGlobalConfigFromFirestore(): Promise<{
+  settings?: AppSettings;
+  freelancers: Freelancer[];
+  deletedLeadIds: Set<string>;
+  recentJobs: SearchJob[];
+} | null> {
+  const db = getFirestoreDb();
+  if (!db) return null;
+
+  try {
+    const [settingsSnap, freelancersSnap, deletedSnap, jobsSnap] = await Promise.all([
+      getDoc(doc(db, 'settings', 'config')).catch(() => null),
+      getDocs(collection(db, 'freelancers')).catch(() => null),
+      getDocs(query(collection(db, 'deleted_leads'), limit(500))).catch(() => null),
+      getDocs(query(collection(db, 'search_jobs'), limit(50))).catch(() => null),
+    ]);
+
+    const deletedLeadIds = new Set<string>();
+    if (deletedSnap) {
+      deletedSnap.forEach((d) => deletedLeadIds.add(d.id));
+    }
+
+    const freelancers: Freelancer[] = [];
+    if (freelancersSnap) {
+      freelancersSnap.forEach((d) => {
+        const f = d.data() as Freelancer;
+        if (f && f.id) freelancers.push(f);
+      });
+    }
+
+    const recentJobs: SearchJob[] = [];
+    if (jobsSnap) {
+      jobsSnap.forEach((d) => {
+        const j = d.data() as SearchJob;
+        if (j && j.id) recentJobs.push(j);
+      });
+    }
+
+    const settings = settingsSnap && settingsSnap.exists()
+      ? (settingsSnap.data() as AppSettings)
+      : undefined;
+
+    return { settings, freelancers, deletedLeadIds, recentJobs };
+  } catch (err) {
+    if (isFirestoreQuotaError(err)) {
+      console.warn('[Firebase] COTA EXCEDIDA ao carregar configuração global:', err);
+    } else {
+      console.warn('[Firebase] Erro ao carregar configuração global do Firestore:', err);
+    }
+    return null;
+  }
+}
+
+// 2. CONSULTAS DE LEADS INDEXADAS POR WORKSPACE COM LIMITE E PAGINAÇÃO
+export async function fetchWorkspaceLeadsFromFirestore(
+  workspaceId: string,
+  limitCount = 300
+): Promise<Lead[]> {
+  const db = getFirestoreDb();
+  if (!db) return [];
+
+  const targetClean = (workspaceId || '').toLowerCase().trim().replace(/^free_/, '');
+  const isTargetAdmin = !targetClean || targetClean === 'admin' || targetClean === 'administrador';
+
+  try {
+    let q;
+    if (isTargetAdmin) {
+      q = query(
+        collection(db, 'leads'),
+        where('workspace_id', '==', 'admin'),
+        limit(limitCount)
+      );
+    } else {
+      q = query(
+        collection(db, 'leads'),
+        where('workspace_id', '==', workspaceId),
+        limit(limitCount)
+      );
+    }
+
+    const snap = await getDocs(q);
+    const leads: Lead[] = [];
+    snap.forEach((d) => {
+      const l = d.data() as Lead;
+      if (l && l.id) leads.push(l);
+    });
+
+    // Se freelancer não tiver workspace_id indexado, tenta por freelancer_id
+    if (!isTargetAdmin && leads.length === 0) {
+      const qAlt = query(
+        collection(db, 'leads'),
+        where('freelancer_id', '==', workspaceId),
+        limit(limitCount)
+      );
+      const snapAlt = await getDocs(qAlt);
+      snapAlt.forEach((d) => {
+        const l = d.data() as Lead;
+        if (l && l.id) leads.push(l);
+      });
+    }
+
+    return leads;
+  } catch (err) {
+    if (isFirestoreQuotaError(err)) {
+      console.error('[Firebase] COTA DO FIRESTORE EXCEDIDA ao buscar leads:', err);
+      throw new Error('FIRESTORE_QUOTA_EXCEEDED: Limite de cota do Firestore atingido.');
+    }
+    console.warn(`[Firebase] Erro ao buscar leads indexados para ${workspaceId}:`, err);
+    return [];
+  }
+}
+
+// 3. AGREGAÇÕES SERVER-SIDE (0 DOCUMENT READS)
+export async function countWorkspaceLeadsInFirestore(workspaceId: string): Promise<number> {
+  const db = getFirestoreDb();
+  if (!db) return 0;
+
+  const targetClean = (workspaceId || '').toLowerCase().trim().replace(/^free_/, '');
+  const isTargetAdmin = !targetClean || targetClean === 'admin' || targetClean === 'administrador';
+
+  try {
+    let q;
+    if (isTargetAdmin) {
+      q = query(collection(db, 'leads'), where('workspace_id', '==', 'admin'));
+    } else {
+      q = query(collection(db, 'leads'), where('workspace_id', '==', workspaceId));
+    }
+    const snap = await getCountFromServer(q);
+    return snap.data().count;
+  } catch (err) {
+    if (isFirestoreQuotaError(err)) {
+      console.warn('[Firebase] COTA DO FIRESTORE EXCEDIDA ao agregar contagem de leads:', err);
+    }
+    return 0;
+  }
+}
+
+// 4. PERSISTÊNCIA DURÁVEL E LEITURA DE SEARCH AREAS
+export async function syncSearchAreaToFirestore(area: SearchArea): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !area.id) return;
+  try {
+    await setDoc(doc(db, 'search_areas', area.id), cleanForFirestore(area), { merge: true });
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao sincronizar área ${area.id}:`, err);
+  }
+}
+
+export async function syncSearchAreasToFirestore(areas: SearchArea[]): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !areas || areas.length === 0) return;
+  try {
+    for (let i = 0; i < areas.length; i += 200) {
+      const chunk = areas.slice(i, i + 200);
+      const batch = writeBatch(db);
+      for (const area of chunk) {
+        if (!area || !area.id) continue;
+        batch.set(doc(db, 'search_areas', area.id), cleanForFirestore(area), { merge: true });
+      }
+      await batch.commit();
+    }
+  } catch (err) {
+    console.warn('[Firebase] Erro ao sincronizar lote de search_areas:', err);
+  }
+}
+
+export async function fetchJobAreasFromFirestore(jobId: string): Promise<SearchArea[]> {
+  const db = getFirestoreDb();
+  if (!db || !jobId) return [];
+  try {
+    const q = query(collection(db, 'search_areas'), where('search_job_id', '==', jobId));
+    const snap = await getDocs(q);
+    const list: SearchArea[] = [];
+    snap.forEach((d) => {
+      const a = d.data() as SearchArea;
+      if (a && a.id) list.push(a);
+    });
+    return list;
+  } catch (err) {
+    console.warn(`[Firebase] Erro ao buscar search_areas do job ${jobId}:`, err);
+    return [];
+  }
+}
+
+// 5. GRAVAÇÃO EM LOTE COM CONFIRMAÇÃO DE LEADS E PLACES
+export async function batchSyncLeadsToFirestore(
+  leads: Lead[]
+): Promise<{ success: boolean; count: number; error?: string; quotaExceeded?: boolean }> {
+  const db = getFirestoreDb();
+  if (!db || !leads || leads.length === 0) {
+    return { success: true, count: 0 };
+  }
+
+  try {
+    for (let i = 0; i < leads.length; i += 200) {
+      const chunk = leads.slice(i, i + 200);
+      const batch = writeBatch(db);
+      for (const lead of chunk) {
+        if (!lead || !lead.id) continue;
+        batch.set(doc(db, 'leads', lead.id), cleanForFirestore(lead), { merge: true });
+      }
+      await batch.commit();
+    }
+    return { success: true, count: leads.length };
+  } catch (err) {
+    const quota = isFirestoreQuotaError(err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Firebase] Erro no commit do batch de leads:', msg);
+    return {
+      success: false,
+      count: 0,
+      error: quota ? 'FIRESTORE_QUOTA_EXCEEDED: Limite de cota do Firestore atingido.' : msg,
+      quotaExceeded: quota,
+    };
+  }
+}
+
+export async function batchSyncPlacesToFirestore(places: Place[]): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db || !places || places.length === 0) return;
+  try {
+    for (let i = 0; i < places.length; i += 200) {
+      const chunk = places.slice(i, i + 200);
+      const batch = writeBatch(db);
+      for (const place of chunk) {
+        if (!place || !place.id) continue;
+        batch.set(doc(db, 'places', place.id), cleanForFirestore(place), { merge: true });
+      }
+      await batch.commit();
+    }
+  } catch (err) {
+    console.warn('[Firebase] Erro ao sincronizar batch de places:', err);
+  }
+}
+
 export async function fetchAllFromFirestore(): Promise<{
   places: Place[];
   leads: Lead[];
@@ -58,14 +324,13 @@ export async function fetchAllFromFirestore(): Promise<{
   if (!db) return null;
 
   try {
-    const [leadsSnap, placesSnap, jobsSnap, settingsSnap, freelancersSnap, activitiesSnap, deletedSnap] = await Promise.all([
-      getDocs(collection(db, 'leads')).catch(() => null),
-      getDocs(collection(db, 'places')).catch(() => null),
-      getDocs(collection(db, 'search_jobs')).catch(() => null),
+    // Carrega configuração global e no máximo uma amostra inicial controlada de leads
+    const [settingsSnap, freelancersSnap, deletedSnap, jobsSnap, initialLeadsSnap] = await Promise.all([
       getDoc(doc(db, 'settings', 'config')).catch(() => null),
       getDocs(collection(db, 'freelancers')).catch(() => null),
-      getDocs(collection(db, 'activities')).catch(() => null),
-      getDocs(collection(db, 'deleted_leads')).catch(() => null),
+      getDocs(query(collection(db, 'deleted_leads'), limit(500))).catch(() => null),
+      getDocs(query(collection(db, 'search_jobs'), limit(50))).catch(() => null),
+      getDocs(query(collection(db, 'leads'), limit(200))).catch(() => null),
     ]);
 
     const deletedLeadIds = new Set<string>();
@@ -74,8 +339,8 @@ export async function fetchAllFromFirestore(): Promise<{
     }
 
     const leads: Lead[] = [];
-    if (leadsSnap) {
-      leadsSnap.forEach((d) => {
+    if (initialLeadsSnap) {
+      initialLeadsSnap.forEach((d) => {
         if (!deletedLeadIds.has(d.id)) {
           const l = d.data() as Lead;
           if (l && l.id && !deletedLeadIds.has(l.id)) {
@@ -86,10 +351,6 @@ export async function fetchAllFromFirestore(): Promise<{
     }
 
     const places: Place[] = [];
-    if (placesSnap) {
-      placesSnap.forEach((d) => places.push(d.data() as Place));
-    }
-
     const jobs: SearchJob[] = [];
     if (jobsSnap) {
       jobsSnap.forEach((d) => jobs.push(d.data() as SearchJob));
@@ -101,9 +362,6 @@ export async function fetchAllFromFirestore(): Promise<{
     }
 
     const activities: Activity[] = [];
-    if (activitiesSnap) {
-      activitiesSnap.forEach((d) => activities.push(d.data() as Activity));
-    }
 
     const settings = settingsSnap && settingsSnap.exists()
       ? (settingsSnap.data() as AppSettings)
@@ -139,7 +397,11 @@ export async function syncLeadToFirestore(lead: Lead): Promise<void> {
   try {
     await setDoc(doc(db, 'leads', lead.id), cleanForFirestore(lead), { merge: true });
   } catch (err) {
-    console.warn(`[Firebase] Erro ao sincronizar lead ${lead.id}:`, err);
+    if (isFirestoreQuotaError(err)) {
+      console.warn(`[Firebase] Cota excedida ao sincronizar lead ${lead.id}`);
+    } else {
+      console.warn(`[Firebase] Erro ao sincronizar lead ${lead.id}:`, err);
+    }
   }
 }
 

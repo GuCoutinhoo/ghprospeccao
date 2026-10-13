@@ -19,9 +19,15 @@ import {
 import { calculateLeadScore, DEFAULT_SCORING_WEIGHTS } from '../scoring/leadScore';
 import {
   fetchAllFromFirestore,
+  fetchGlobalConfigFromFirestore,
+  fetchWorkspaceLeadsFromFirestore,
+  countWorkspaceLeadsInFirestore,
   syncLeadToFirestore,
   syncPlaceToFirestore,
   syncJobToFirestore,
+  syncSearchAreaToFirestore,
+  syncSearchAreasToFirestore,
+  fetchJobAreasFromFirestore,
   syncSettingsToFirestore,
   syncFreelancerToFirestore,
   deleteFreelancerFromFirestore,
@@ -184,6 +190,7 @@ class Database {
   private initialized = false;
   private firestoreHydrated = false;
   private initPromise: Promise<void> | null = null;
+  private workspaceHydration = new Map<string, { lastHydrated: number; leadsCount: number }>();
 
   constructor() {
     this.init();
@@ -204,7 +211,7 @@ class Database {
           this.deletedLeadIds.add(id);
         }
 
-        // Filtra apenas freelancers inválidos/sem id se houver
+        // Filtra apenas freelancers válidos se houver
         this.data.freelancers = (this.data.freelancers || []).filter((f) => f && f.id && f.name);
         this.data.activities = (this.data.activities || []).filter((a) => a && a.id);
         this.data.leads = (this.data.leads || [])
@@ -257,8 +264,8 @@ class Database {
     }
     this.initialized = true;
 
-    // Sincroniza em background com o Google Cloud Firestore
-    this.syncFromFirestore().catch(() => {});
+    // Sincroniza em background configurações globais
+    this.ensureInitialized().catch(() => {});
   }
 
   public async ensureInitialized(): Promise<void> {
@@ -274,16 +281,89 @@ class Database {
         this.init();
       }
       try {
-        await this.syncFromFirestore();
+        const globalCfg = await fetchGlobalConfigFromFirestore();
+        if (globalCfg) {
+          if (globalCfg.settings) {
+            this.data.settings = { ...this.data.settings, ...globalCfg.settings };
+          }
+          if (globalCfg.freelancers && globalCfg.freelancers.length > 0) {
+            const demoFreeIds = ['free_7F4K92XQ', 'free_8HKS82MD', 'free_9YPL21BZ', 'free_4TRM67KV'];
+            const freeMap = new Map<string, Freelancer>();
+            for (const f of globalCfg.freelancers) {
+              if (f && f.id && !demoFreeIds.includes(f.id)) freeMap.set(f.id, f);
+            }
+            for (const f of this.data.freelancers || []) {
+              if (!f || !f.id || demoFreeIds.includes(f.id)) continue;
+              if (!freeMap.has(f.id)) freeMap.set(f.id, f);
+            }
+            this.data.freelancers = Array.from(freeMap.values());
+          }
+          if (globalCfg.deletedLeadIds) {
+            for (const id of globalCfg.deletedLeadIds) {
+              this.deletedLeadIds.add(id);
+            }
+            this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
+          }
+          if (globalCfg.recentJobs && globalCfg.recentJobs.length > 0) {
+            const jobMap = new Map<string, SearchJob>();
+            for (const j of globalCfg.recentJobs) {
+              if (j && j.id) jobMap.set(j.id, j);
+            }
+            for (const j of this.data.search_jobs || []) {
+              if (j && j.id && !jobMap.has(j.id)) jobMap.set(j.id, j);
+            }
+            this.data.search_jobs = Array.from(jobMap.values());
+          }
+          this.data.leads = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
+        }
         this.firestoreHydrated = true;
       } catch (syncErr) {
-        console.warn('[DB] Erro ao sincronizar inicialização com Firestore:', syncErr);
+        console.warn('[DB] Erro ao carregar configurações do Firestore:', syncErr);
+        this.firestoreHydrated = true;
       }
     })().finally(() => {
       this.initPromise = null;
     });
 
     return this.initPromise;
+  }
+
+  public async ensureWorkspaceHydrated(workspaceId?: string, force = false): Promise<void> {
+    const targetClean = (workspaceId || '').toLowerCase().trim().replace(/^free_/, '');
+    const isTargetAdmin = !targetClean || targetClean === 'admin' || targetClean === 'administrador';
+    const effective = isTargetAdmin ? 'admin' : (workspaceId || 'admin');
+
+    const now = Date.now();
+    const cached = this.workspaceHydration.get(effective);
+    if (!force && cached && now - cached.lastHydrated < 60000) {
+      return;
+    }
+
+    try {
+      const remoteLeads = await fetchWorkspaceLeadsFromFirestore(effective, 400);
+      if (remoteLeads && remoteLeads.length > 0) {
+        const leadMap = new Map<string, Lead>();
+        for (const l of this.data.leads || []) {
+          if (l && l.id && !this.deletedLeadIds.has(l.id)) {
+            leadMap.set(l.id, l);
+          }
+        }
+        for (const rl of remoteLeads) {
+          if (rl && rl.id && !this.deletedLeadIds.has(rl.id)) {
+            leadMap.set(rl.id, rl);
+          }
+        }
+        this.data.leads = Array.from(leadMap.values());
+        this.save();
+      }
+      const count = (this.data.leads || []).filter((l) => isLeadInWorkspace(l, effective)).length;
+      this.workspaceHydration.set(effective, {
+        lastHydrated: now,
+        leadsCount: count,
+      });
+    } catch (err) {
+      console.warn(`[DB] Erro ao hidratar workspace ${effective}:`, err);
+    }
   }
 
   public async syncFromFirestore(): Promise<{ leadsCount: number; placesCount: number }> {
@@ -532,6 +612,30 @@ class Database {
     this.save();
     syncLeadToFirestore(lead).catch(() => {});
     return { lead, created: true };
+  }
+
+  public addConfirmedLeads(leads: Lead[]): void {
+    if (!leads || leads.length === 0) return;
+    const existingMap = new Map<string, number>();
+    (this.data.leads || []).forEach((l, idx) => {
+      if (l && l.id) existingMap.set(l.id, idx);
+    });
+
+    for (const lead of leads) {
+      if (!lead || !lead.id || this.deletedLeadIds.has(lead.id)) continue;
+      const idx = existingMap.get(lead.id);
+      if (idx !== undefined) {
+        this.data.leads[idx] = {
+          ...this.data.leads[idx],
+          ...lead,
+          updated_at: new Date().toISOString(),
+        };
+      } else {
+        this.data.leads.unshift(lead);
+        existingMap.set(lead.id, 0);
+      }
+    }
+    this.save();
   }
 
   public getLeads(params: {
@@ -1589,10 +1693,31 @@ class Database {
   public addSearchAreas(areas: SearchArea[]) {
     this.data.search_areas.push(...areas);
     this.save();
+    syncSearchAreasToFirestore(areas).catch(() => {});
   }
 
   public getSearchAreas(jobId: string): SearchArea[] {
     return this.data.search_areas.filter((a) => a.search_job_id === jobId);
+  }
+
+  public async ensureSearchAreasLoaded(jobId: string): Promise<SearchArea[]> {
+    const local = this.getSearchAreas(jobId);
+    if (local.length > 0) return local;
+    try {
+      const remote = await fetchJobAreasFromFirestore(jobId);
+      if (remote && remote.length > 0) {
+        for (const ra of remote) {
+          if (!this.data.search_areas.some((a) => a.id === ra.id)) {
+            this.data.search_areas.push(ra);
+          }
+        }
+        this.save();
+        return this.getSearchAreas(jobId);
+      }
+    } catch (err) {
+      console.warn(`[DB] Erro ao carregar search_areas para job ${jobId}:`, err);
+    }
+    return local;
   }
 
   public updateSearchArea(id: string, updates: Partial<SearchArea>) {
@@ -1600,6 +1725,7 @@ class Database {
     if (idx !== -1) {
       this.data.search_areas[idx] = { ...this.data.search_areas[idx], ...updates };
       this.save();
+      syncSearchAreaToFirestore(this.data.search_areas[idx]).catch(() => {});
     }
   }
 

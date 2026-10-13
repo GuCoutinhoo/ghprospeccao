@@ -64,6 +64,42 @@
         "id": { "type": "string" },
         "deleted_at": { "type": "string" }
       }
+    },
+    "SearchArea": {
+      "title": "SearchArea",
+      "description": "Geographical search area within a search job",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "search_job_id": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "status": { "type": "string" },
+        "places_found": { "type": "number" }
+      }
+    },
+    "Freelancer": {
+      "title": "Freelancer",
+      "description": "Freelancer team member account",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "access_code": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Audit log activity entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "action_type": { "type": "string" },
+        "description": { "type": "string" },
+        "created_at": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -82,6 +118,18 @@
     "/search_jobs/{jobId}": {
       "schema": "SearchJob",
       "description": "Prospecting search tasks"
+    },
+    "/search_areas/{areaId}": {
+      "schema": "SearchArea",
+      "description": "Subdivided geographical search units"
+    },
+    "/freelancers/{freelancerId}": {
+      "schema": "Freelancer",
+      "description": "Freelancer team accounts"
+    },
+    "/activities/{activityId}": {
+      "schema": "Activity",
+      "description": "System and user action logs"
     },
     "/settings/{settingId}": {
       "schema": "Setting",

@@ -385,10 +385,10 @@ export const api = {
           return data;
         }
       }
-    } catch {}
-    const allLeads = await fetchAllLeadsFromFirestore();
-    const filtered = allLeads.filter((l) => matchesFreelancerId(l.freelancer_id, id));
-    return { leads: filtered, total: filtered.length };
+    } catch (err) {
+      console.warn(`[API] Erro ao buscar leads do freelancer ${id}:`, err);
+    }
+    return { leads: [], total: 0 };
   },
 
   async adminGetFreelancerSearches(id: string): Promise<SearchJob[]> {
@@ -480,19 +480,7 @@ export const api = {
         }
       }
     } catch (err) {
-      console.warn('[API] /api/dashboard/stats falhou, conectando diretamente ao Google Firestore...', err);
-    }
-
-    // Se o backend retornou 0 (ou falhou na Vercel), busca os dados reais diretamente do Firestore
-    const allLeads = await fetchAllLeadsFromFirestore();
-    let leads = allLeads;
-    const session = getActiveFreelancerSession();
-    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
-    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
-    }
-    if (leads && leads.length > 0) {
-      return computeStatsFromLeads(leads);
+      console.warn('[API] /api/dashboard/stats erro:', err);
     }
 
     return {
@@ -602,27 +590,9 @@ export const api = {
         }
       }
     } catch (err) {
-      console.warn('[API] /api/niches falhou, calculando direto do Firestore...', err);
+      console.warn('[API] /api/niches erro:', err);
     }
-
-    const allLeads = await fetchAllLeadsFromFirestore();
-    let leads = allLeads;
-    const session = getActiveFreelancerSession();
-    const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
-    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
-    }
-    if (params?.onlyFavorites) {
-      leads = leads.filter((l) => l.is_favorite === true);
-    }
-    const counts: Record<string, number> = {};
-    for (const l of leads) {
-      const n = l.niche || 'Geral';
-      counts[n] = (counts[n] || 0) + 1;
-    }
-    return Object.entries(counts)
-      .map(([niche, count]) => ({ niche, count }))
-      .sort((a, b) => b.count - a.count);
+    return [];
   },
 
   async getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string; freelancer_id?: string }): Promise<{ state: string; count: number }[]> {
@@ -639,37 +609,14 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           return data;
         }
       }
     } catch (err) {
-      console.warn('[API] /api/states-summary falhou, calculando direto do Firestore...', err);
+      console.warn('[API] /api/states-summary erro:', err);
     }
-
-    const allLeads = await fetchAllLeadsFromFirestore();
-    let leads = allLeads;
-    const session = getActiveFreelancerSession();
-    const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
-    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
-    }
-    if (params?.onlyFavorites) {
-      leads = leads.filter((l) => l.is_favorite === true);
-    }
-    if (params?.niche && params.niche !== 'ALL') {
-      leads = leads.filter((l) => (l.niche || '').toLowerCase().includes(params.niche!.toLowerCase()));
-    }
-    const counts: Record<string, number> = {};
-    for (const l of leads) {
-      const s = (l.state || '').toUpperCase().trim();
-      if (s) {
-        counts[s] = (counts[s] || 0) + 1;
-      }
-    }
-    return Object.entries(counts)
-      .map(([state, count]) => ({ state, count }))
-      .sort((a, b) => b.count - a.count);
+    return [];
   },
 
   async getLeads(params: {
