@@ -47,9 +47,33 @@ function normalizeStr(str?: string | null): string {
     .trim();
 }
 
-export async function fetchAllLeadsFromFirestore(forceRefresh = false): Promise<Lead[]> {
+export async function fetchAllLeadsFromFirestore(forceRefresh = false, targetFreelancerId?: string): Promise<Lead[]> {
   const now = Date.now();
+  let effectiveTarget = targetFreelancerId;
+
+  if (!effectiveTarget && typeof window !== 'undefined') {
+    const freeSess = localStorage.getItem('gh_freelancer_session');
+    if (freeSess) {
+      try {
+        const parsed = JSON.parse(freeSess);
+        if (parsed?.freelancer?.id) {
+          effectiveTarget = parsed.freelancer.id;
+        }
+      } catch {}
+    }
+    if (!effectiveTarget && !window.location.pathname.startsWith('/admin')) {
+      effectiveTarget = 'admin';
+    }
+  }
+
+  if (!effectiveTarget) {
+    effectiveTarget = 'admin';
+  }
+
   if (!forceRefresh && cachedLeads && now - lastFetchTime < CACHE_TTL_MS) {
+    if (effectiveTarget !== 'ALL') {
+      return cachedLeads.filter((l) => matchesFreelancerId(l.freelancer_id, effectiveTarget));
+    }
     return cachedLeads;
   }
 
@@ -72,7 +96,9 @@ export async function fetchAllLeadsFromFirestore(forceRefresh = false): Promise<
       if (deletedIds.has(d.id)) return;
       const data = d.data() as Lead;
       if (data && data.name && !deletedIds.has(data.id)) {
-        leads.push(data);
+        if (effectiveTarget === 'ALL' || matchesFreelancerId(data.freelancer_id, effectiveTarget)) {
+          leads.push(data);
+        }
       }
     });
 
@@ -197,26 +223,26 @@ export function computeStatsFromLeads(leads: Lead[]): DashboardStats {
 }
 
 export function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
-  if (!targetFid || targetFid === 'ALL') return true;
-  // Leads sem freelancer_id pertencem estritamente à base geral do administrador
-  if (!leadFid) {
-    const tfClean = (targetFid || '').toLowerCase().trim().replace(/^free_/, '');
-    return tfClean === 'admin' || tfClean === 'administrador';
-  }
-  const lf = leadFid.toLowerCase().trim();
-  const tf = targetFid.toLowerCase().trim();
-  if (lf === tf) return true;
-  const cleanLf = lf.startsWith('free_') ? lf.substring(5) : lf;
-  const cleanTf = tf.startsWith('free_') ? tf.substring(5) : tf;
-  if (cleanLf === cleanTf) return true;
+  if (targetFid === 'ALL') return true;
 
-  // Permite equivalência entre variações com e sem sufixo numérico de demonstração (ex: demonstracao e demonstracao-02 / demonstracao-2)
-  const baseLf = cleanLf.replace(/[-_]0*(\d+)$/, '');
-  const baseTf = cleanTf.replace(/[-_]0*(\d+)$/, '');
-  if (baseLf && baseTf && baseLf === baseTf && (baseLf.includes('demonstra') || baseLf.includes('demo'))) {
-    return true;
+  const tfClean = (targetFid || '').toLowerCase().trim().replace(/^free_/, '');
+  const isTargetAdmin = !tfClean || tfClean === 'admin' || tfClean === 'administrador';
+
+  const lfClean = (leadFid || '').toLowerCase().trim().replace(/^free_/, '');
+  const isLeadAdmin = !lfClean || lfClean === 'admin' || lfClean === 'administrador';
+
+  // Se o alvo for o workspace do Admin, o lead DEVE ser do admin (nunca de um freelancer)
+  if (isTargetAdmin) {
+    return isLeadAdmin;
   }
-  return false;
+
+  // Se o alvo for um freelancer específico, o lead NÃO PODE ser do admin
+  if (isLeadAdmin) {
+    return false;
+  }
+
+  // Compara os identificadores de freelancer normalizados (estritamente o mesmo workspace)
+  return lfClean === tfClean;
 }
 
 const NICHE_SYNONYMS: Record<string, string[]> = {

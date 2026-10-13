@@ -94,8 +94,11 @@ export async function createAndPrepareSearchJob(params: {
     }
   }
 
+  const workspaceId = params.freelancerId ? params.freelancerId : 'admin';
+
   const newJob: SearchJob = {
     id: jobId,
+    workspace_id: workspaceId,
     user_id: params.userId,
     freelancer_id: params.freelancerId,
     freelancer_name: params.freelancerName,
@@ -250,9 +253,12 @@ export async function runSearchJob(jobId: string) {
         const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
         if (matchesFilters && isRelevant) {
           const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
-          const leadId = `lead_${job.freelancer_id ? job.freelancer_id + '_' : ''}${normalizedPlace.place_id}`;
+          const workspaceId = job.workspace_id || (job.freelancer_id ? job.freelancer_id : 'admin');
+          const leadPrefix = job.freelancer_id ? `lead_${job.freelancer_id}_` : 'lead_admin_';
+          const leadId = `${leadPrefix}${normalizedPlace.place_id}`;
           const { lead: persistedLead, created } = db.createLead({
             id: leadId,
+            workspace_id: workspaceId,
             user_id: job.user_id,
             freelancer_id: job.freelancer_id,
             freelancer_name: job.freelancer_name,

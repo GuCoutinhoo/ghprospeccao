@@ -48,11 +48,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setLoading(true);
     setError(null);
     try {
-      // Garante token administrativo no cliente
-      if (typeof window !== 'undefined' && !localStorage.getItem('gh_admin_token')) {
-        localStorage.setItem('gh_admin_token', 'admin_master_session_token');
-      }
-
       const [statsData, freelancersData] = await Promise.all([
         api.adminGetDashboardStats({
           freelancer_id: selectedFreelancerId !== 'ALL' ? selectedFreelancerId : undefined,

@@ -505,11 +505,13 @@ class Database {
 
   // --- LEADS ---
   public createLead(lead: Lead): { lead: Lead; created: boolean } {
-    // Deduplicação comercial: único por place_id + niche + escopo do freelancer
+    // Deduplicação comercial: único por place_id + niche + escopo estrito do workspace
     const normNiche = normalizeStr(lead.niche);
-    const scope = lead.freelancer_id || lead.user_id || 'default_user_1';
+    const scope = lead.workspace_id || lead.freelancer_id || 'admin';
     const existingIndex = this.data.leads.findIndex(
-      (l) => l.place_id === lead.place_id && normalizeStr(l.niche) === normNiche && (l.freelancer_id || l.user_id || 'default_user_1') === scope
+      (l) => l.place_id === lead.place_id &&
+             normalizeStr(l.niche) === normNiche &&
+             ((l.workspace_id || l.freelancer_id || 'admin') === scope)
     );
     if (existingIndex >= 0) {
       const prev = this.data.leads[existingIndex];

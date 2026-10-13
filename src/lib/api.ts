@@ -32,14 +32,30 @@ export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Recor
   const headers: Record<string, string> = { ...extraHeaders };
   if (typeof window === 'undefined') return headers;
 
+  const adminToken = localStorage.getItem('gh_admin_token');
   const freelancerToken = localStorage.getItem('gh_freelancer_token');
-  if (freelancerToken) {
+  const pathname = window.location.pathname || '';
+
+  // Se rota ou contexto for administrativo, usa adminToken estritamente
+  if (pathname.startsWith('/admin') || (!freelancerToken && adminToken)) {
+    if (adminToken && adminToken !== 'admin_master_session_token') {
+      headers['Authorization'] = `Bearer ${adminToken}`;
+    }
+    return headers;
+  }
+
+  // Se estiver em modo freelancer, usa freelancerToken exclusivamente
+  if (freelancerToken && freelancerToken.includes('.')) {
     headers['Authorization'] = `Bearer ${freelancerToken}`;
     return headers;
   }
 
-  let adminToken = localStorage.getItem('gh_admin_token') || 'admin_master_session_token';
-  headers['Authorization'] = `Bearer ${adminToken}`;
+  // Se houver adminToken válido
+  if (adminToken && adminToken !== 'admin_master_session_token') {
+    headers['Authorization'] = `Bearer ${adminToken}`;
+    return headers;
+  }
+
   return headers;
 }
 
@@ -75,6 +91,10 @@ export const api = {
     if (data.token) {
       localStorage.setItem('gh_admin_token', data.token);
       localStorage.setItem('gh_admin_user', JSON.stringify(data.user));
+      // Garante remoção absoluta de qualquer resíduo de sessão de freelancer
+      localStorage.removeItem('gh_freelancer_token');
+      localStorage.removeItem('gh_freelancer_session');
+      invalidateLeadsCache();
     }
     return data;
   },
@@ -93,10 +113,12 @@ export const api = {
         method: 'POST',
         headers: getAuthHeaders(),
       });
-    } finally {
-      localStorage.removeItem('gh_admin_token');
-      localStorage.removeItem('gh_admin_user');
-    }
+    } catch {}
+    localStorage.removeItem('gh_admin_token');
+    localStorage.removeItem('gh_admin_user');
+    localStorage.removeItem('gh_freelancer_token');
+    localStorage.removeItem('gh_freelancer_session');
+    invalidateLeadsCache();
     return { success: true };
   },
 
@@ -125,6 +147,10 @@ export const api = {
     if (data.token && data.freelancer) {
       localStorage.setItem('gh_freelancer_token', data.token);
       localStorage.setItem('gh_freelancer_session', JSON.stringify({ token: data.token, freelancer: data.freelancer }));
+      // Garante remoção de credenciais administrativas no workspace de freelancer
+      localStorage.removeItem('gh_admin_token');
+      localStorage.removeItem('gh_admin_user');
+      invalidateLeadsCache();
     }
     return data;
   },
@@ -145,9 +171,18 @@ export const api = {
     return res.json();
   },
 
-  freelancerLogout() {
+  async freelancerLogout() {
+    try {
+      await fetch('/api/freelancer/logout', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+    } catch {}
     localStorage.removeItem('gh_freelancer_token');
     localStorage.removeItem('gh_freelancer_session');
+    localStorage.removeItem('gh_admin_token');
+    localStorage.removeItem('gh_admin_user');
+    invalidateLeadsCache();
   },
 
   async resetFreelancerWorkspace(freelancerId?: string): Promise<{ success: boolean; leadsRemoved: number; message: string }> {
@@ -700,106 +735,81 @@ export const api = {
   },
 
   async getLeadById(id: string): Promise<{ lead: Lead; notes: LeadNote[]; place?: Place }> {
-    try {
-      const res = await fetch(`/api/leads/${id}`);
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (err) {
-      console.warn('[API] Falha em /api/leads/:id, buscando do cache do Firestore...', err);
+    const res = await fetch(`/api/leads/${id}`, {
+      headers: getAuthHeaders(),
+    });
+    if (res.ok) {
+      return await res.json();
     }
-
-    const allLeads = await fetchAllLeadsFromFirestore();
-    const lead = allLeads.find((l) => l.id === id);
-    if (lead) {
-      return { lead, notes: [] };
-    }
-    throw new Error('Lead não encontrado.');
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Lead não encontrado.');
   },
 
   async updateLead(id: string, updates: Partial<Lead>): Promise<Lead> {
-    syncLeadUpdateToFirestoreDirect(id, updates).catch(() => {});
-    try {
-      const res = await fetch(`/api/leads/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (err) {
-      console.warn('[API] Falha ao atualizar via API, gravado no Firestore:', err);
+    const res = await fetch(`/api/leads/${id}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao atualizar lead.');
     }
-    return { id, ...updates } as Lead;
+    invalidateLeadsCache();
+    return res.json();
   },
 
   async registerContactAttempt(id: string, channel: string = 'WhatsApp'): Promise<{ success: boolean; lead: Lead }> {
-    try {
-      const res = await fetch(`/api/leads/${id}/contact-attempt`, {
-        method: 'POST',
-        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ channel }),
-      });
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (err) {
-      console.warn('[API] Falha em contact-attempt:', err);
-    }
-    const updated = await this.updateLead(id, {
-      pipeline_status: 'CONTATADO',
-      contacted_at: new Date().toISOString(),
+    const res = await fetch(`/api/leads/${id}/contact-attempt`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ channel }),
     });
-    return { success: true, lead: updated };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao registrar tentativa de contato.');
+    }
+    invalidateLeadsCache();
+    return res.json();
   },
 
   async registerSale(id: string, value: number): Promise<{ success: boolean; lead: Lead }> {
-    try {
-      const res = await fetch(`/api/leads/${id}/register-sale`, {
-        method: 'POST',
-        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ value }),
-      });
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (err) {
-      console.warn('[API] Falha em register-sale:', err);
-    }
-    const updated = await this.updateLead(id, {
-      pipeline_status: 'FECHADO',
-      sale_value: value,
-      sale_date: new Date().toISOString(),
+    const res = await fetch(`/api/leads/${id}/register-sale`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ value }),
     });
-    return { success: true, lead: updated };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao registrar venda.');
+    }
+    invalidateLeadsCache();
+    return res.json();
   },
 
   async toggleLeadFavorite(id: string): Promise<Lead> {
-    try {
-      const res = await fetch(`/api/leads/${id}/favorite`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        syncLeadUpdateToFirestoreDirect(id, { is_favorite: updated.is_favorite }).catch(() => {});
-        return updated;
-      }
-    } catch (err) {
-      console.warn('[API] Falha ao favoritar via API:', err);
+    const res = await fetch(`/api/leads/${id}/favorite`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao alterar favorito.');
     }
-    syncLeadUpdateToFirestoreDirect(id, { is_favorite: true }).catch(() => {});
-    return { id, is_favorite: true } as Lead;
+    invalidateLeadsCache();
+    return res.json();
   },
 
   async addLeadNote(id: string, content: string): Promise<LeadNote> {
     const res = await fetch(`/api/leads/${id}/notes`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ content }),
     });
-    if (!res.ok) throw new Error('Falha ao salvar nota.');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao salvar nota.');
+    }
     return res.json();
   },
 
@@ -897,23 +907,14 @@ export const api = {
       targetLeads?: number;
     };
   }): Promise<{ job: SearchJob; estimatedQueries: number; totalCities: number; totalAreas: number }> {
-    const effectiveFreelancerId = payload.freelancerId;
-    const effectiveFreelancerName = payload.freelancerName;
-    const fullPayload = {
-      ...payload,
-      freelancerId: effectiveFreelancerId,
-      freelancerName: effectiveFreelancerName,
-    };
-    const query = effectiveFreelancerId ? `?freelancer_id=${encodeURIComponent(effectiveFreelancerId)}` : '';
-
-    const res = await fetch(`/api/search-jobs${query}`, {
+    const res = await fetch('/api/search-jobs', {
       method: 'POST',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(fullPayload),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Falha ao iniciar busca.');
+      throw new Error(err.error || err.message || 'Falha ao iniciar busca.');
     }
     invalidateLeadsCache();
     return res.json();
@@ -935,30 +936,43 @@ export const api = {
   },
 
   async getSearchJob(id: string): Promise<{ job: SearchJob; areas: SearchArea[]; queries: SearchQueryLog[] }> {
-    const res = await fetch(`/api/search-jobs/${id}`);
+    const res = await fetch(`/api/search-jobs/${id}`, {
+      headers: getAuthHeaders(),
+    });
     if (!res.ok) throw new Error('Falha ao carregar busca.');
     return res.json();
   },
 
   async pauseSearchJob(id: string): Promise<boolean> {
-    const res = await fetch(`/api/search-jobs/${id}/pause`, { method: 'POST' });
+    const res = await fetch(`/api/search-jobs/${id}/pause`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
     return res.ok;
   },
 
   async resumeSearchJob(id: string): Promise<boolean> {
-    const res = await fetch(`/api/search-jobs/${id}/resume`, { method: 'POST' });
+    const res = await fetch(`/api/search-jobs/${id}/resume`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
     return res.ok;
   },
 
   async cancelSearchJob(id: string): Promise<boolean> {
-    const res = await fetch(`/api/search-jobs/${id}/cancel`, { method: 'POST' });
+    const res = await fetch(`/api/search-jobs/${id}/cancel`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
     return res.ok;
   },
 
   // Settings
   async getSettings(): Promise<AppSettings & { maskedKey: string }> {
     try {
-      const res = await fetch('/api/settings');
+      const res = await fetch('/api/settings', {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) return await res.json();
     } catch (err) {
       console.warn('[API] Falha ao buscar settings via API:', err);
@@ -984,7 +998,7 @@ export const api = {
   async updateSettings(settings: Partial<AppSettings>): Promise<{ success: boolean; settings: AppSettings }> {
     const res = await fetch('/api/settings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(settings),
     });
     if (!res.ok) throw new Error('Falha ao salvar configurações.');
@@ -994,7 +1008,7 @@ export const api = {
   async testApiKey(key: string): Promise<{ valid: boolean; error?: string; placesFound?: number; samplePlace?: string }> {
     const res = await fetch('/api/settings/test-key', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ key }),
     });
     return res.json();
@@ -1006,7 +1020,10 @@ export const api = {
   },
 
   async syncFirestore(): Promise<{ success: boolean; leadsCount: number; message: string }> {
-    const res = await fetch('/api/sync', { method: 'POST' });
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
     if (!res.ok) throw new Error('Falha na sincronização.');
     return res.json();
   },

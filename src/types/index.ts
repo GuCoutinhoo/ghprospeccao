@@ -126,6 +126,7 @@ export interface Place {
 
 export interface Lead {
   id: string;
+  workspace_id?: string;
   user_id: string;
   freelancer_id?: string;
   freelancer_name?: string;
@@ -175,6 +176,7 @@ export interface SearchJobFilters {
 
 export interface SearchJob {
   id: string;
+  workspace_id?: string;
   user_id: string;
   freelancer_id?: string;
   freelancer_name?: string;
