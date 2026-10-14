@@ -960,7 +960,7 @@ class Database {
 
   public getAllSearchJobs(freelancer_id?: string): SearchJob[] {
     let list = [...this.data.search_jobs];
-    if (freelancer_id !== 'ALL') {
+    if (freelancer_id && freelancer_id !== 'ALL') {
       list = list.filter((j) => matchesFreelancerId(j.freelancer_id, freelancer_id));
     }
     return list.sort(

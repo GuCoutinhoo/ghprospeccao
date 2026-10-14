@@ -9,6 +9,7 @@ import {
   pauseSearchJob,
   resumeSearchJob,
   cancelSearchJob,
+  cleanupStaleJobs,
 } from '../lib/search/searchWorker';
 import { searchPlacesOfficial } from '../lib/google/places';
 import { SUPABASE_MIGRATIONS_SQL } from '../lib/supabase/migrations';
@@ -1368,6 +1369,7 @@ app.post('/api/pipeline/move', requireAuth, (req: Request, res: Response) => {
 // 8. SEARCH JOBS (COM ISOLAMENTO POR WORKSPACE)
 app.get('/api/search-jobs', requireAuth, (req: Request, res: Response) => {
   try {
+    cleanupStaleJobs();
     const scope = resolveWorkspaceScope(req);
     const jobs = db.getAllSearchJobs(scope.freelancerId);
     res.json(jobs);
@@ -1620,12 +1622,13 @@ app.get('/api/supabase/migrations', (_req: Request, res: Response) => {
 // Auto-recuperação de jobs em andamento após reinício do processo
 setTimeout(() => {
   try {
+    cleanupStaleJobs();
     const jobs = db.getAllSearchJobs();
     for (const job of jobs) {
       if (job.status === 'running') {
         const areas = db.getSearchAreas(job.id);
         const hasPending = areas.some((a) => a.status === 'pending' || a.status === 'processing' || a.status === 'failed');
-        if (hasPending) {
+        if (hasPending && areas.length > 0) {
           for (const a of areas) {
             if (a.status === 'processing') {
               db.updateSearchArea(a.id, { status: 'pending' });
@@ -1634,7 +1637,10 @@ setTimeout(() => {
           console.log(`[Server] Retomando busca pendente ${job.id} (${job.niche} em ${job.city})...`);
           runSearchJob(job.id).catch(console.error);
         } else {
-          db.updateSearchJob(job.id, { status: 'completed' });
+          db.updateSearchJob(job.id, {
+            status: 'completed',
+            finished_at: new Date().toISOString(),
+          });
         }
       }
     }

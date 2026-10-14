@@ -235,11 +235,19 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         setLoadError('Não foi possível sincronizar os dados mais recentes. Mantendo dados atuais.');
       }
     } finally {
-      if (thisRequestId === requestIdRef.current && !silent) {
+      if (thisRequestId === requestIdRef.current) {
         setLoading(false);
       }
     }
   }, []);
+
+  // Timer de segurança para garantir que o indicador de sincronização nunca fique preso
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => setLoading(false), 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   const loadNiches = useCallback(async () => {
     try {
@@ -325,7 +333,14 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
       isChecking = true;
       try {
         const jobs = await api.getSearchJobs();
-        const active = jobs.find((j) => j.status === 'running' || j.status === 'pending');
+        const now = Date.now();
+        const active = jobs.find((j) => {
+          if (j.status !== 'running' && j.status !== 'pending') return false;
+          const lastUpdate = j.updated_at ? new Date(j.updated_at).getTime() : new Date(j.created_at).getTime();
+          // Ignora jobs zumbis que não têm atividade há mais de 8 minutos
+          return (now - lastUpdate) <= 8 * 60 * 1000;
+        });
+
         if (active) {
           setRunningJob(active);
           // Atualização silenciosa: não desmonta cards nem ativa tela cheia de loading
@@ -354,6 +369,17 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
       if (interval) clearInterval(interval);
     };
   }, [effectiveFreelancerId, loadLeads, loadNiches, loadStates]);
+
+  const handleCancelRunningJob = async (jobId: string) => {
+    try {
+      await api.cancelSearchJob(jobId);
+      setRunningJob(null);
+      await loadLeads(false);
+    } catch (err) {
+      console.error('Erro ao cancelar varredura:', err);
+      setRunningJob(null);
+    }
+  };
 
   const handleToggleFavorite = async (e: React.MouseEvent, leadId: string) => {
     e.stopPropagation();
@@ -527,14 +553,25 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => loadLeads(false)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-900 bg-white border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs self-start sm:self-auto shrink-0"
-          >
-            <RotateCw className="h-3.5 w-3.5" />
-            <span>Atualizar Agora</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => loadLeads(false)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-900 bg-white border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              <span>Atualizar Agora</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCancelRunningJob(runningJob.id)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-700 bg-white border border-red-200 hover:bg-red-50 hover:border-red-300 transition-colors cursor-pointer shadow-2xs"
+              title="Encerrar ou dispensar esta varredura"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>Encerrar Varredura</span>
+            </button>
+          </div>
         </div>
       )}
 

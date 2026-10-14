@@ -478,3 +478,33 @@ export function cancelAllSearchWorkers(): number {
   return count;
 }
 
+export function isJobWorkerActive(jobId: string): boolean {
+  return activeWorkers.has(jobId);
+}
+
+export function cleanupStaleJobs(): number {
+  let cleaned = 0;
+  try {
+    const allJobs = db.getAllSearchJobs();
+    const now = Date.now();
+    for (const job of allJobs) {
+      if (job.status === 'running') {
+        // Se não há worker ativo em memória e o job não foi atualizado nos últimos 2 minutos
+        const lastUpdated = job.updated_at ? new Date(job.updated_at).getTime() : 0;
+        const isStale = (now - lastUpdated) > 120000;
+        if (!activeWorkers.has(job.id) && isStale) {
+          db.updateSearchJob(job.id, {
+            status: 'completed',
+            finished_at: new Date().toISOString(),
+          });
+          cleaned++;
+          console.log(`[SearchWorker] Job zumbi finalizado automaticamente: ${job.id} (${job.niche})`);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[SearchWorker] Erro ao limpar jobs zumbis:', err);
+  }
+  return cleaned;
+}
+
