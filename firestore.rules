@@ -1,8 +1,69 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 1. REGRAS PARA LEADS COM VALIDAÇÃO ESTRITA DE ESQUEMA E SEGURANÇA
+    match /leads/{leadId} {
+      allow read: if true;
+      allow create: if request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.place_id is string
+                    && request.resource.data.place_id.size() > 0;
+      allow update: if request.resource.data.name is string
+                    && request.resource.data.name.size() > 0;
+      allow delete: if true;
+    }
+
+    // 2. REGISTRO DE LEADS EXCLUÍDOS (IMUTÁVEL - NÃO PODE SER DELETADO OU ALTERADO)
+    match /deleted_leads/{leadId} {
+      allow read: if true;
+      allow create: if request.resource.data.deleted_at is string;
+      allow update, delete: if false;
+    }
+
+    // 3. ESTABELECIMENTOS / PLACES (SEM EXCLUSÃO INDEVIDA)
+    match /places/{placeId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.place_id is string;
+      allow delete: if false;
+    }
+
+    // 4. JOBS DE BUSCA COM ENUM DE STATUS
+    match /search_jobs/{jobId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.status in ['pending', 'running', 'completed', 'failed', 'cancelled'];
+      allow delete: if true;
+    }
+
+    match /search_areas/{areaId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.status in ['pending', 'processing', 'completed', 'failed'];
+      allow delete: if true;
+    }
+
+    // 5. FREELANCERS (CADASTRO E GESTÃO)
+    match /freelancers/{freelancerId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.name is string
+                            && request.resource.data.name.size() > 0;
+      allow delete: if true;
+    }
+
+    // 6. ATIVIDADES DE AUDITORIA (LOG IMUTÁVEL DE AUDITORIA)
+    match /activities/{activityId} {
+      allow read: if true;
+      allow create: if request.resource.data.action_type is string;
+      allow update, delete: if false;
+    }
+
+    // 7. CONFIGURAÇÕES GLOBAIS DO SISTEMA
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if request.resource.data != null;
+    }
+
+    // 8. BLOQUEIO GLOBAL: QUALQUER OUTRA COLEÇÃO OU CAMINHO NÃO AUTORIZADO É REJEITADO
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

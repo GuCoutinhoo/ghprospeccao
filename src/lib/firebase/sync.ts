@@ -146,7 +146,7 @@ export async function fetchGlobalConfigFromFirestore(): Promise<{
 // 2. CONSULTAS DE LEADS INDEXADAS POR WORKSPACE COM LIMITE E PAGINAÇÃO
 export async function fetchWorkspaceLeadsFromFirestore(
   workspaceId: string,
-  limitCount = 300
+  limitCount = 0
 ): Promise<Lead[]> {
   const db = getFirestoreDb();
   if (!db) return [];
@@ -156,18 +156,16 @@ export async function fetchWorkspaceLeadsFromFirestore(
 
   try {
     let q;
-    if (isTargetAdmin) {
-      q = query(
-        collection(db, 'leads'),
-        where('workspace_id', '==', 'admin'),
-        limit(limitCount)
-      );
+    if (workspaceId === 'ALL') {
+      q = collection(db, 'leads');
+    } else if (isTargetAdmin) {
+      q = limitCount > 0
+        ? query(collection(db, 'leads'), where('workspace_id', '==', 'admin'), limit(limitCount))
+        : query(collection(db, 'leads'), where('workspace_id', '==', 'admin'));
     } else {
-      q = query(
-        collection(db, 'leads'),
-        where('workspace_id', '==', workspaceId),
-        limit(limitCount)
-      );
+      q = limitCount > 0
+        ? query(collection(db, 'leads'), where('workspace_id', '==', workspaceId), limit(limitCount))
+        : query(collection(db, 'leads'), where('workspace_id', '==', workspaceId));
     }
 
     const snap = await getDocs(q);
@@ -178,12 +176,10 @@ export async function fetchWorkspaceLeadsFromFirestore(
     });
 
     // Se freelancer não tiver workspace_id indexado, tenta por freelancer_id
-    if (!isTargetAdmin && leads.length === 0) {
-      const qAlt = query(
-        collection(db, 'leads'),
-        where('freelancer_id', '==', workspaceId),
-        limit(limitCount)
-      );
+    if (!isTargetAdmin && workspaceId !== 'ALL' && leads.length === 0) {
+      const qAlt = limitCount > 0
+        ? query(collection(db, 'leads'), where('freelancer_id', '==', workspaceId), limit(limitCount))
+        : query(collection(db, 'leads'), where('freelancer_id', '==', workspaceId));
       const snapAlt = await getDocs(qAlt);
       snapAlt.forEach((d) => {
         const l = d.data() as Lead;
@@ -338,13 +334,15 @@ export async function fetchAllFromFirestore(): Promise<{
   if (!db) return null;
 
   try {
-    // Carrega configuração global e no máximo uma amostra inicial controlada de leads
-    const [settingsSnap, freelancersSnap, deletedSnap, jobsSnap, initialLeadsSnap] = await Promise.all([
+    // Carrega configuração global e toda a base de dados sincronizada sem limites arbitrários
+    const [settingsSnap, freelancersSnap, deletedSnap, jobsSnap, allLeadsSnap, placesSnap, activitiesSnap] = await Promise.all([
       getDoc(doc(db, 'settings', 'config')).catch(() => null),
       getDocs(collection(db, 'freelancers')).catch(() => null),
-      getDocs(query(collection(db, 'deleted_leads'), limit(500))).catch(() => null),
-      getDocs(query(collection(db, 'search_jobs'), limit(50))).catch(() => null),
-      getDocs(query(collection(db, 'leads'), limit(200))).catch(() => null),
+      getDocs(collection(db, 'deleted_leads')).catch(() => null),
+      getDocs(collection(db, 'search_jobs')).catch(() => null),
+      getDocs(collection(db, 'leads')).catch(() => null),
+      getDocs(collection(db, 'places')).catch(() => null),
+      getDocs(query(collection(db, 'activities'), limit(200))).catch(() => null),
     ]);
 
     const deletedLeadIds = new Set<string>();
@@ -353,11 +351,15 @@ export async function fetchAllFromFirestore(): Promise<{
     }
 
     const leads: Lead[] = [];
-    if (initialLeadsSnap) {
-      initialLeadsSnap.forEach((d) => {
+    if (allLeadsSnap) {
+      allLeadsSnap.forEach((d) => {
         if (!deletedLeadIds.has(d.id)) {
           const l = d.data() as Lead;
           if (l && l.id && !deletedLeadIds.has(l.id)) {
+            // Garante consistência de workspace_id no lead
+            if (!l.workspace_id) {
+              l.workspace_id = l.freelancer_id || 'admin';
+            }
             leads.push(l);
           }
         }
@@ -365,17 +367,36 @@ export async function fetchAllFromFirestore(): Promise<{
     }
 
     const places: Place[] = [];
+    if (placesSnap) {
+      placesSnap.forEach((d) => {
+        const p = d.data() as Place;
+        if (p && p.id) places.push(p);
+      });
+    }
+
     const jobs: SearchJob[] = [];
     if (jobsSnap) {
-      jobsSnap.forEach((d) => jobs.push(d.data() as SearchJob));
+      jobsSnap.forEach((d) => {
+        const j = d.data() as SearchJob;
+        if (j && j.id) jobs.push(j);
+      });
     }
 
     const freelancers: Freelancer[] = [];
     if (freelancersSnap) {
-      freelancersSnap.forEach((d) => freelancers.push(d.data() as Freelancer));
+      freelancersSnap.forEach((d) => {
+        const f = d.data() as Freelancer;
+        if (f && f.id) freelancers.push(f);
+      });
     }
 
     const activities: Activity[] = [];
+    if (activitiesSnap) {
+      activitiesSnap.forEach((d) => {
+        const a = d.data() as Activity;
+        if (a && a.id) activities.push(a);
+      });
+    }
 
     const settings = settingsSnap && settingsSnap.exists()
       ? (settingsSnap.data() as AppSettings)
@@ -409,7 +430,11 @@ export async function syncLeadToFirestore(lead: Lead): Promise<void> {
   const db = getFirestoreDb();
   if (!db || !lead.id) return;
   try {
-    await setDoc(doc(db, 'leads', lead.id), cleanForFirestore(lead), { merge: true });
+    const cleanLead = { ...lead };
+    if (!cleanLead.workspace_id) {
+      cleanLead.workspace_id = cleanLead.freelancer_id || 'admin';
+    }
+    await setDoc(doc(db, 'leads', lead.id), cleanForFirestore(cleanLead), { merge: true });
   } catch (err) {
     if (isFirestoreQuotaError(err)) {
       console.warn(`[Firebase] Cota excedida ao sincronizar lead ${lead.id}`);

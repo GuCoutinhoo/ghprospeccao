@@ -270,7 +270,7 @@ class Database {
   }
 
   public async ensureInitialized(): Promise<void> {
-    if (this.firestoreHydrated) {
+    if (this.firestoreHydrated && (this.data.leads || []).length > 0) {
       return;
     }
     if (this.initPromise) {
@@ -282,44 +282,10 @@ class Database {
         this.init();
       }
       try {
-        const globalCfg = await fetchGlobalConfigFromFirestore();
-        if (globalCfg) {
-          if (globalCfg.settings) {
-            this.data.settings = { ...this.data.settings, ...globalCfg.settings };
-          }
-          if (globalCfg.freelancers && globalCfg.freelancers.length > 0) {
-            const demoFreeIds = ['free_7F4K92XQ', 'free_8HKS82MD', 'free_9YPL21BZ', 'free_4TRM67KV'];
-            const freeMap = new Map<string, Freelancer>();
-            for (const f of globalCfg.freelancers) {
-              if (f && f.id && !demoFreeIds.includes(f.id)) freeMap.set(f.id, f);
-            }
-            for (const f of this.data.freelancers || []) {
-              if (!f || !f.id || demoFreeIds.includes(f.id)) continue;
-              if (!freeMap.has(f.id)) freeMap.set(f.id, f);
-            }
-            this.data.freelancers = Array.from(freeMap.values());
-          }
-          if (globalCfg.deletedLeadIds) {
-            for (const id of globalCfg.deletedLeadIds) {
-              this.deletedLeadIds.add(id);
-            }
-            this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
-          }
-          if (globalCfg.recentJobs && globalCfg.recentJobs.length > 0) {
-            const jobMap = new Map<string, SearchJob>();
-            for (const j of globalCfg.recentJobs) {
-              if (j && j.id) jobMap.set(j.id, j);
-            }
-            for (const j of this.data.search_jobs || []) {
-              if (j && j.id && !jobMap.has(j.id)) jobMap.set(j.id, j);
-            }
-            this.data.search_jobs = Array.from(jobMap.values());
-          }
-          this.data.leads = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
-        }
+        await this.syncFromFirestore();
         this.firestoreHydrated = true;
       } catch (syncErr) {
-        console.warn('[DB] Erro ao carregar configurações do Firestore:', syncErr);
+        console.warn('[DB] Erro ao sincronizar banco com Firestore:', syncErr);
         this.firestoreHydrated = true;
       }
     })().finally(() => {
@@ -639,6 +605,10 @@ class Database {
     this.save();
   }
 
+  public getLeadsCount(): number {
+    return (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id)).length;
+  }
+
   public getLeads(params: {
     freelancer_id?: string;
     state?: string;
@@ -659,7 +629,7 @@ class Database {
     let filtered = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
 
     if (params.freelancer_id !== 'ALL') {
-      filtered = filtered.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
+      filtered = filtered.filter((l) => isLeadInWorkspace(l, params.freelancer_id));
     }
 
     if (params.state && params.state !== 'ALL') {
@@ -754,7 +724,7 @@ class Database {
     const counts: Record<string, { display: string; count: number }> = {};
     let leads = this.data.leads;
     if (params?.freelancer_id !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, params?.freelancer_id));
+      leads = leads.filter((l) => isLeadInWorkspace(l, params?.freelancer_id));
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -776,7 +746,7 @@ class Database {
     const counts: Record<string, number> = {};
     let leads = this.data.leads;
     if (params?.freelancer_id !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, params?.freelancer_id));
+      leads = leads.filter((l) => isLeadInWorkspace(l, params?.freelancer_id));
     }
     if (params?.onlyFavorites) {
       leads = leads.filter((l) => l.is_favorite === true);
@@ -871,7 +841,7 @@ class Database {
 
     let list = this.data.leads;
     if (freelancer_id !== 'ALL') {
-      list = list.filter((l) => matchesFreelancerId(l.freelancer_id, freelancer_id));
+      list = list.filter((l) => isLeadInWorkspace(l, freelancer_id));
     }
 
     // Ordenar leads por score decrescente dentro de cada coluna
@@ -894,7 +864,7 @@ class Database {
   public getDashboardStats(freelancer_id?: string): DashboardStats {
     let leads = this.data.leads;
     if (freelancer_id !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, freelancer_id));
+      leads = leads.filter((l) => isLeadInWorkspace(l, freelancer_id));
     }
     const totalLeads = leads.length;
     const newLeads = leads.filter((l) => l.pipeline_status === 'NOVO').length;

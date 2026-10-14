@@ -700,19 +700,34 @@ export const api = {
         ) {
           return data;
         }
+      } else if (res.status === 401 || res.status === 403) {
+        const errJson = await res.json().catch(() => ({}));
+        const authErr = new Error(errJson.message || errJson.error || 'Acesso não autorizado ou sessão expirada.');
+        (authErr as any).status = res.status;
+        throw authErr;
+      } else {
+        console.warn(`[API] /api/leads respondeu com status ${res.status}. Tentando ler via Firestore...`);
       }
-    } catch (err) {
-      console.warn('[API] Falha ao consultar /api/leads, buscando diretamente do Firestore...', err);
+    } catch (err: any) {
+      if (err && (err.status === 401 || err.status === 403 || err.blocked)) {
+        throw err;
+      }
+      console.warn('[API] Falha de comunicação com /api/leads, recorrendo ao Firestore:', err);
     }
 
-    const allLeads = await fetchAllLeadsFromFirestore();
-    const session = getActiveFreelancerSession();
-    const effectiveParams = { ...params };
-    const targetFreelancerId = effectiveParams.freelancer_id || session?.freelancer?.id;
-    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      (effectiveParams as any).freelancer_id = targetFreelancerId;
+    try {
+      const allLeads = await fetchAllLeadsFromFirestore();
+      const session = getActiveFreelancerSession();
+      const effectiveParams = { ...params };
+      const targetFreelancerId = effectiveParams.freelancer_id || session?.freelancer?.id;
+      if (targetFreelancerId && targetFreelancerId !== 'ALL') {
+        (effectiveParams as any).freelancer_id = targetFreelancerId;
+      }
+      return filterLeadsList(allLeads, effectiveParams);
+    } catch (fsErr) {
+      console.error('[API] Falha no fallback do Firestore ao buscar leads:', fsErr);
+      throw new Error('Não foi possível carregar os leads do servidor nem do banco de dados.');
     }
-    return filterLeadsList(allLeads, effectiveParams);
   },
 
   async getLeadById(id: string): Promise<{ lead: Lead; notes: LeadNote[]; place?: Place }> {

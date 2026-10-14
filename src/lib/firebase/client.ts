@@ -61,6 +61,39 @@ function normalizeStr(str?: string | null): string {
     .trim();
 }
 
+export function isLeadInWorkspace(
+  lead: { freelancer_id?: string | null; workspace_id?: string | null; user_id?: string | null },
+  targetWorkspaceId?: string | null
+): boolean {
+  if (targetWorkspaceId === 'ALL') return true;
+
+  const targetClean = (targetWorkspaceId || '').toLowerCase().trim().replace(/^free_/, '');
+  const isTargetAdmin = !targetClean || targetClean === 'admin' || targetClean === 'administrador';
+
+  const fid = (lead.freelancer_id || '').toLowerCase().trim();
+  const wid = (lead.workspace_id || '').toLowerCase().trim();
+  const uid = (lead.user_id || '').toLowerCase().trim();
+
+  const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
+  const cleanWid = wid.startsWith('free_') ? wid.substring(5) : wid;
+  const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
+
+  const isLeadOwnedByFreelancer =
+    (Boolean(cleanFid) && cleanFid !== 'admin' && cleanFid !== 'administrador') ||
+    (Boolean(cleanWid) && cleanWid !== 'admin' && cleanWid !== 'administrador' && cleanWid !== 'default') ||
+    (Boolean(cleanUid) && cleanUid !== 'admin' && cleanUid !== 'administrador');
+
+  if (isTargetAdmin) {
+    return !isLeadOwnedByFreelancer;
+  }
+
+  if (!isLeadOwnedByFreelancer) {
+    return false;
+  }
+
+  return cleanFid === targetClean || cleanWid === targetClean || cleanUid === targetClean;
+}
+
 export async function fetchAllLeadsFromFirestore(forceRefresh = false, targetFreelancerId?: string): Promise<Lead[]> {
   const now = Date.now();
   let effectiveTarget = targetFreelancerId;
@@ -84,15 +117,21 @@ export async function fetchAllLeadsFromFirestore(forceRefresh = false, targetFre
     effectiveTarget = 'admin';
   }
 
+  // Se o cache global estiver válido, filtra sobre a coleção completa já baixada
   if (!forceRefresh && cachedLeads && now - lastFetchTime < CACHE_TTL_MS) {
     if (effectiveTarget !== 'ALL') {
-      return cachedLeads.filter((l) => matchesFreelancerId(l.freelancer_id, effectiveTarget));
+      return cachedLeads.filter((l) => isLeadInWorkspace(l, effectiveTarget));
     }
     return cachedLeads;
   }
 
   const db = getClientFirestore();
-  if (!db) return cachedLeads || [];
+  if (!db) {
+    if (cachedLeads) {
+      return effectiveTarget === 'ALL' ? cachedLeads : cachedLeads.filter((l) => isLeadInWorkspace(l, effectiveTarget));
+    }
+    throw new Error('Instância do Firestore indisponível no cliente');
+  }
 
   try {
     const [snap, deletedSnap] = await Promise.all([
@@ -105,23 +144,32 @@ export async function fetchAllLeadsFromFirestore(forceRefresh = false, targetFre
       deletedSnap.forEach((d) => deletedIds.add(d.id));
     }
 
-    const leads: Lead[] = [];
+    const allLeads: Lead[] = [];
     snap.forEach((d) => {
       if (deletedIds.has(d.id)) return;
       const data = d.data() as Lead;
       if (data && data.name && !deletedIds.has(data.id)) {
-        if (effectiveTarget === 'ALL' || matchesFreelancerId(data.freelancer_id, effectiveTarget)) {
-          leads.push(data);
+        if (!data.workspace_id) {
+          data.workspace_id = data.freelancer_id || 'admin';
         }
+        allLeads.push(data);
       }
     });
 
-    cachedLeads = leads;
+    // CACHE GLOBAL DE TODOS OS LEADS
+    cachedLeads = allLeads;
     lastFetchTime = now;
-    return leads;
+
+    if (effectiveTarget !== 'ALL') {
+      return allLeads.filter((l) => isLeadInWorkspace(l, effectiveTarget));
+    }
+    return allLeads;
   } catch (err) {
     console.warn('[Firebase Client] Erro ao carregar leads do Firestore:', err);
-    return cachedLeads || [];
+    if (cachedLeads && cachedLeads.length > 0) {
+      return effectiveTarget === 'ALL' ? cachedLeads : cachedLeads.filter((l) => isLeadInWorkspace(l, effectiveTarget));
+    }
+    throw err;
   }
 }
 
@@ -321,7 +369,7 @@ export function filterLeadsList(
   let filtered = [...leads];
 
   if (params.freelancer_id && params.freelancer_id !== 'ALL') {
-    filtered = filtered.filter((l) => matchesFreelancerId(l.freelancer_id, params.freelancer_id));
+    filtered = filtered.filter((l) => isLeadInWorkspace(l, params.freelancer_id));
   }
 
   if (params.state && params.state !== 'ALL') {

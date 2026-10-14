@@ -1020,8 +1020,11 @@ app.get('/api/states-summary', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/leads', requireAuth, (req: Request, res: Response) => {
+app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
   try {
+    if (db.getLeadsCount() === 0) {
+      await db.ensureInitialized();
+    }
     const {
       state,
       city,
