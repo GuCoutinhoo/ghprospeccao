@@ -1624,8 +1624,10 @@ setTimeout(() => {
           console.log(`[Server] Retomando busca pendente ${job.id} (${job.niche} em ${job.city})...`);
           runSearchJob(job.id).catch(console.error);
         } else {
+          // Não inventar conclusão após reinício se não houver evidência de término.
           db.updateSearchJob(job.id, {
-            status: 'completed',
+            status: 'failed',
+            error_message: 'Busca interrompida durante a execução. Retome para verificar as áreas pendentes.',
             finished_at: new Date().toISOString(),
           });
         }
