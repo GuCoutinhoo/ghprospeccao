@@ -387,20 +387,18 @@ export const api = {
   },
 
   async adminGetFreelancerLeads(id: string): Promise<{ leads: Lead[]; total: number }> {
-    try {
-      const res = await fetch(`/api/admin/freelancers/${id}/leads`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.leads) && typeof data.total === 'number') {
-          return data;
-        }
-      }
-    } catch (err) {
-      console.warn(`[API] Erro ao buscar leads do freelancer ${id}:`, err);
+    const res = await fetch(`/api/admin/freelancers/${id}/leads`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Falha ao carregar os leads deste freelancer.');
     }
-    return { leads: [], total: 0 };
+    const data = await res.json();
+    if (!data || !Array.isArray(data.leads) || typeof data.total !== 'number') {
+      throw new Error('Resposta inválida ao carregar os leads do freelancer.');
+    }
+    return data;
   },
 
   async adminGetFreelancerSearches(id: string): Promise<SearchJob[]> {
@@ -473,54 +471,21 @@ export const api = {
 
   // Dashboard
   async getDashboardStats(freelancer_id?: string): Promise<DashboardStats> {
-    try {
-      const session = getActiveFreelancerSession();
-      const targetFreelancerId = freelancer_id || session?.freelancer?.id;
-      const url = targetFreelancerId && targetFreelancerId !== 'ALL'
-        ? `/api/dashboard/stats?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
-        : '/api/dashboard/stats';
-      const res = await fetch(url, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (
-          data &&
-          typeof data.totalLeads === 'number'
-        ) {
-          return data;
-        }
-      }
-    } catch (err) {
-      console.warn('[API] /api/dashboard/stats erro:', err);
+    const session = getActiveFreelancerSession();
+    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+    const url = targetFreelancerId && targetFreelancerId !== 'ALL'
+      ? `/api/dashboard/stats?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+      : '/api/dashboard/stats';
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Não foi possível carregar as estatísticas do dashboard.');
     }
-
-    return {
-      totalLeads: 0,
-      newLeads: 0,
-      contactedLeads: 0,
-      interestedLeads: 0,
-      closedLeads: 0,
-      noWebsiteLeads: 0,
-      withPhoneLeads: 0,
-      responseRate: 0,
-      closingRate: 0,
-      leadsByDay: [],
-      leadsByNiche: [],
-      leadsByState: [],
-      pipelineDistribution: [
-        { status: 'NOVO', count: 0 },
-        { status: 'PRÉVIA CRIADA', count: 0 },
-        { status: 'CONTATADO', count: 0 },
-        { status: 'RESPONDEU', count: 0 },
-        { status: 'INTERESSADO', count: 0 },
-        { status: 'REUNIÃO', count: 0 },
-        { status: 'PROPOSTA', count: 0 },
-        { status: 'FECHADO', count: 0 },
-        { status: 'PERDIDO', count: 0 },
-      ],
-      topOpportunities: [],
-    };
+    const data = await res.json();
+    if (!data || typeof data.totalLeads !== 'number') {
+      throw new Error('O servidor retornou estatísticas inválidas.');
+    }
+    return data;
   },
 
   // IBGE
@@ -842,18 +807,14 @@ export const api = {
   },
 
   async getSearchJobs(): Promise<SearchJob[]> {
-    try {
-      const res = await fetch('/api/search-jobs', {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) return data;
-      }
-    } catch (err) {
-      console.warn('[API] Falha ao buscar jobs via API:', err);
+    const res = await fetch('/api/search-jobs', { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Falha ao buscar o histórico de buscas.');
     }
-    return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error('O servidor retornou buscas em formato inválido.');
+    return data;
   },
 
   async getSearchJob(id: string): Promise<{ job: SearchJob; areas: SearchArea[]; queries: SearchQueryLog[] }> {
