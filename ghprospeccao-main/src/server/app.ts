@@ -2,7 +2,7 @@ import 'express-async-errors';
 import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
-import { db, matchesFreelancerId, actorContext } from '../lib/store/db';
+import { db, matchesFreelancerId, isLeadInWorkspace, actorContext } from '../lib/store/db';
 import { storageErrorCode } from '../lib/firebase/admin';
 import { digest } from '../lib/store/repository';
 import { dispatchSearchJobs } from '../lib/search/searchWorker';
@@ -1598,11 +1598,15 @@ app.get('/api/supabase/migrations', requireAdmin, (_req: Request, res: Response)
 app.post('/api/search-jobs/:id/process', requireAuth, async(req,res)=>{
   const job=await db.getSearchJob(req.params.id);
   if(!job)return res.status(404).json({error:'Busca não encontrada.'});
+  if(req.user!.role==='freelancer' && !isLeadInWorkspace(job,req.user!.freelancerId)){
+    return res.status(403).json({error:'Acesso negado: esta busca pertence a outro workspace.'});
+  }
   await runSearchJob(job.id);
   res.json({success:true});
 });
 app.post('/api/leads/:id/preview-link',requireAuth,async(req,res)=>{
   const lead=await db.getLeadById(req.params.id);if(!lead)return res.sendStatus(404);
+  if(req.user!.role==='freelancer' && !isLeadInWorkspace(lead,req.user!.freelancerId))return res.sendStatus(403);
   const expires=String(Date.now()+7*24*3600*1000);
   const signature=crypto.createHmac('sha256',sessionSecret()).update(`preview:${lead.id}:${expires}`).digest('hex');
   res.json({path:`/preview?leadId=${encodeURIComponent(lead.id)}&expires=${expires}&signature=${signature}`});
