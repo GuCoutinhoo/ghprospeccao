@@ -290,8 +290,9 @@ class Database {
         await this.syncFromFirestore();
         this.firestoreHydrated = true;
       } catch (syncErr) {
+        // Não marcar dados desatualizados como hidratados.
         console.warn('[DB] Erro ao sincronizar banco com Firestore:', syncErr);
-        this.firestoreHydrated = true;
+        throw syncErr;
       }
     })().finally(() => {
       this.initPromise = null;
@@ -341,6 +342,9 @@ class Database {
   public async syncFromFirestore(): Promise<{ leadsCount: number; placesCount: number }> {
     try {
       const remote = await fetchAllFromFirestore();
+      if (!remote) {
+        throw new Error('Firestore indisponível: não foi possível validar os dados persistidos.');
+      }
       if (remote) {
         // 1. MERGE SETTINGS
         if (remote.settings) {
@@ -475,11 +479,8 @@ class Database {
         placesCount: (this.data.places || []).length,
       };
     } catch (err) {
-      console.warn('[DB] Erro ao sincronizar com Firestore:', err);
-      return {
-        leadsCount: (this.data.leads || []).length,
-        placesCount: (this.data.places || []).length,
-      };
+      console.error('[DB] Erro ao sincronizar com Firestore:', err);
+      throw err;
     }
   }
 
@@ -799,7 +800,7 @@ class Database {
     const idx = this.data.leads.findIndex((l) => l.id === id);
     if (idx === -1) return undefined;
 
-    if (freelancer_id && this.data.leads[idx].freelancer_id && this.data.leads[idx].freelancer_id !== freelancer_id) {
+    if (freelancer_id && !isLeadInWorkspace(this.data.leads[idx], freelancer_id)) {
       return undefined;
     }
 
