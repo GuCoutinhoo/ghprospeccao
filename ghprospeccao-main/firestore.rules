@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only the server service account accesses data, via IAM and API workspace checks.
+    // Custom HMAC sessions are never accepted as Firebase client credentials.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

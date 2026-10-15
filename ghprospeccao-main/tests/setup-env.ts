@@ -1,0 +1,10 @@
+process.env.NODE_ENV='test';
+process.env.FIREBASE_PROJECT_ID='demo-ghprospeccao';
+process.env.FIRESTORE_DATABASE_ID='(default)';
+if(!process.env.FIRESTORE_EMULATOR_HOST)throw new Error('Start the local Firestore emulator before running tests.');
+process.env.ADMIN_EMAIL='admin@example.test';
+process.env.ADMIN_PASSWORD='isolated-test-password';
+process.env.SESSION_SECRET='isolated-test-secret-that-is-at-least-32-characters';
+process.env.GOOGLE_MAPS_API_KEY='mock-only-not-a-real-key';
+delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
