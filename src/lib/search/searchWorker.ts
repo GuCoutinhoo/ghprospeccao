@@ -372,7 +372,8 @@ export async function runSearchJob(jobId: string) {
     const finalJob = db.getSearchJob(jobId);
     if (finalJob && finalJob.status === 'running') {
       const failedAreas = db.getSearchAreas(jobId).filter((a) => a.status === 'failed');
-      db.updateSearchJob(jobId, failedAreas.length > 0
+      const goalReached = finalJob.target_leads > 0 && finalJob.leads_created >= finalJob.target_leads;
+      db.updateSearchJob(jobId, failedAreas.length > 0 && !goalReached
         ? { status: 'failed', error_message: `${failedAreas.length} área(s) falharam. Tente novamente para retomar.`, finished_at: new Date().toISOString() }
         : { status: 'completed', processed_search_areas: finalJob.total_search_areas, finished_at: new Date().toISOString() });
     }
@@ -484,9 +485,14 @@ export function resumeSearchJob(jobId: string): boolean {
     worker.paused = false;
   }
 
-  // Limpa erro e reseta áreas que falharam para tentar novamente
-  db.updateSearchJob(jobId, { status: 'running', error_message: undefined });
+  // Reprocessar áreas falhas não deve contar duas vezes para o progresso.
   const areas = db.getSearchAreas(jobId);
+  const retriedCount = areas.filter((a) => a.status === 'failed').length;
+  db.updateSearchJob(jobId, {
+    status: 'running',
+    error_message: undefined,
+    processed_search_areas: Math.max(0, job.processed_search_areas - retriedCount),
+  });
   for (const a of areas) {
     if (a.status === 'failed' || a.status === 'processing') {
       db.updateSearchArea(a.id, { status: 'pending', error: undefined });
