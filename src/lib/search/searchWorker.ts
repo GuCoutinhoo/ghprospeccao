@@ -222,6 +222,7 @@ export async function runSearchJob(jobId: string) {
           });
           return;
         } else if (res.error) {
+          // Erro da API não representa área pesquisada com zero resultados.
           queryError = res.error;
         } else {
           rawPlaces = res.places;
@@ -241,6 +242,15 @@ export async function runSearchJob(jobId: string) {
           error_details: queryError,
           created_at: new Date().toISOString(),
         });
+
+        if (queryError) {
+          db.updateSearchArea(area.id, { status: 'failed', error: queryError });
+          const currentJob = db.getSearchJob(jobId);
+          if (currentJob) {
+            db.updateSearchJob(jobId, { processed_search_areas: currentJob.processed_search_areas + 1 });
+          }
+          continue;
+        }
 
         let newPlacesFound = 0;
         let newWithoutWebsite = 0;
@@ -301,7 +311,7 @@ export async function runSearchJob(jobId: string) {
 
             await syncLeadToFirestore(persistedLead);
 
-            newLeadsCreated++;
+            if (created) newLeadsCreated++;
 
             if (targetGoal > 0) {
               const currentTotal = (job.leads_created || 0) + newLeadsCreated;
@@ -358,14 +368,13 @@ export async function runSearchJob(jobId: string) {
       }
     }
 
-    // Conclui o Job garantindo 100% de áreas processadas
+    // Só concluir se as áreas processadas não falharam. Falhas devem ser visíveis e recuperáveis.
     const finalJob = db.getSearchJob(jobId);
     if (finalJob && finalJob.status === 'running') {
-      db.updateSearchJob(jobId, {
-        status: 'completed',
-        processed_search_areas: finalJob.total_search_areas,
-        finished_at: new Date().toISOString(),
-      });
+      const failedAreas = db.getSearchAreas(jobId).filter((a) => a.status === 'failed');
+      db.updateSearchJob(jobId, failedAreas.length > 0
+        ? { status: 'failed', error_message: `${failedAreas.length} área(s) falharam. Tente novamente para retomar.`, finished_at: new Date().toISOString() }
+        : { status: 'completed', processed_search_areas: finalJob.total_search_areas, finished_at: new Date().toISOString() });
     }
 
     if (job.freelancer_id) {
@@ -532,11 +541,12 @@ export function cleanupStaleJobs(): number {
         const isStale = (now - lastUpdated) > 120000;
         if (!activeWorkers.has(job.id) && isStale) {
           db.updateSearchJob(job.id, {
-            status: 'completed',
+            status: 'failed',
+            error_message: 'A execução foi interrompida. Retome a busca para processar as áreas restantes.',
             finished_at: new Date().toISOString(),
           });
           cleaned++;
-          console.log(`[SearchWorker] Job zumbi finalizado automaticamente: ${job.id} (${job.niche})`);
+          console.warn(`[SearchWorker] Busca interrompida detectada: ${job.id} (${job.niche})`);
         }
       }
     }
