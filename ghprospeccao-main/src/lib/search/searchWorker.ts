@@ -55,7 +55,7 @@ export async function runSearchJob(jobId:string,repo:Repository=db,fetchPage:Fet
       const job=await repo.getSearchJob(jobId);
       if(!job || job.status!=='running' || job.lease_token!==token)break;
       const cursor=job.area_cursor||0;const area=job.area_plan?.[cursor];
-      if((job.target_leads>0 && job.leads_created>=job.target_leads) || !area) {
+      if(((job.target_leads||0)>0 && job.leads_created>=(job.target_leads||0)) || !area) {
         await guarded(async(tx,j)=>{
           tx.update(ref,{status:'completed',completion_reason:area?'target_reached':'exhausted',finished_at:now(),lease_token:'',lease_until:0,updated_at:now()});
           tx.set(repo.firestore.collection('activities').doc(`completed_${jobId}`),clean({id:`completed_${jobId}`,freelancer_id:j.freelancer_id||'admin',action_type:'search_completed',description:`Busca concluída com ${j.leads_created} novos leads persistidos.`,metadata:{jobId,leads_created:j.leads_created},created_at:now()}));return true;
@@ -98,7 +98,7 @@ export async function runSearchJob(jobId:string,repo:Repository=db,fetchPage:Fet
         patch.places_without_website=j.places_without_website+(place.website_status==='no_website'?1:0);
         let result='rejected';let leadId:string|undefined;
         if(approved){
-          const lead:Lead=clean({id:leadIdentity(ownerOf(j),place.place_id,j.niche),workspace_id:j.workspace_id,user_id:j.user_id,freelancer_id:j.freelancer_id,freelancer_name:j.freelancer_name,place_id:place.place_id,name:place.name,niche:j.niche,state:place.state,city:place.city,address:place.formatted_address,phone:place.phone,website:place.website,website_status:place.website_status,maps_url:place.maps_url,rating:place.rating,reviews_count:place.reviews_count,lead_score:calculateLeadScore(place,settings.scoringWeights).score,pipeline_status:'NOVO',search_job_ids:[j.id],created_at:now(),updated_at:now()});
+          const lead:Lead=clean({id:leadIdentity(ownerOf(j),place.place_id,j.niche),workspace_id:j.workspace_id,user_id:j.user_id,freelancer_id:j.freelancer_id,freelancer_name:j.freelancer_name,place_id:place.place_id,name:place.name,niche:j.niche,state:place.state,city:place.city,address:place.formatted_address,phone:place.phone,website:place.website,website_status:place.website_status,maps_url:place.maps_url,rating:place.rating||0,reviews_count:place.reviews_count||0,lead_score:calculateLeadScore(place,settings.scoringWeights).score,pipeline_status:'NOVO',search_job_ids:[j.id],created_at:now(),updated_at:now()});
           const saved=await repo.createLeadInTransaction(tx,lead);
           result=saved.isDeleted?'deleted':saved.created?'created':'duplicate';leadId=saved.isDeleted?undefined:saved.lead.id;
           if(!saved.created && !saved.isDeleted)tx.update(repo.firestore.collection('leads').doc(saved.lead.id),{search_job_ids:[...new Set([...(saved.lead.search_job_ids||[]),j.id])]});
