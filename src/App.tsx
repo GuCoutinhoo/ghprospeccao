@@ -698,6 +698,8 @@ export default function App() {
           {currentPath === '/pipeline' && (
             <PipelineKanbanView
               onSelectLead={(lead) => setSelectedLead(lead)}
+              onNavigateToLeads={() => handleNavigate('/leads')}
+              onNavigateToSearch={() => handleNavigate('/search')}
             />
           )}
 

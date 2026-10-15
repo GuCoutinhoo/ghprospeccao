@@ -78,20 +78,25 @@ export function isLeadInWorkspace(
   const cleanWid = wid.startsWith('free_') ? wid.substring(5) : wid;
   const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
 
-  const isLeadOwnedByFreelancer =
-    (Boolean(cleanFid) && cleanFid !== 'admin' && cleanFid !== 'administrador') ||
-    (Boolean(cleanWid) && cleanWid !== 'admin' && cleanWid !== 'administrador' && cleanWid !== 'default') ||
-    (Boolean(cleanUid) && cleanUid !== 'admin' && cleanUid !== 'administrador');
+  const isAdminFid = !cleanFid || cleanFid === 'admin' || cleanFid === 'administrador' || cleanFid.startsWith('admin_');
+  const isAdminWid = !cleanWid || cleanWid === 'admin' || cleanWid === 'administrador' || cleanWid === 'default' || cleanWid.startsWith('admin_');
+  const isAdminUid = !cleanUid || cleanUid === 'admin' || cleanUid === 'administrador' || cleanUid.startsWith('admin_') || cleanUid.startsWith('default_user');
+
+  // Um lead pertence a um freelancer se tiver identificador explícito de freelancer
+  const isLeadOwnedByFreelancer = !isAdminFid || (!isAdminWid && cleanWid !== '') || (uid.startsWith('free_') && !isAdminUid);
 
   if (isTargetAdmin) {
+    // Para o workspace do Admin, o lead pertence ao admin se NÃO pertencer a nenhum freelancer
     return !isLeadOwnedByFreelancer;
   }
 
+  // Para um workspace de freelancer específico:
   if (!isLeadOwnedByFreelancer) {
     return false;
   }
 
-  return cleanFid === targetClean || cleanWid === targetClean || cleanUid === targetClean;
+  const leadOwner = (!isAdminFid && cleanFid) ? cleanFid : ((!isAdminWid && cleanWid) ? cleanWid : cleanUid);
+  return leadOwner === targetClean || cleanFid === targetClean || cleanWid === targetClean || cleanUid === targetClean;
 }
 
 export async function fetchAllLeadsFromFirestore(forceRefresh = false, targetFreelancerId?: string): Promise<Lead[]> {

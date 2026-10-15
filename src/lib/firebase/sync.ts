@@ -435,6 +435,8 @@ export async function syncLeadToFirestore(lead: Lead): Promise<void> {
       cleanLead.workspace_id = cleanLead.freelancer_id || 'admin';
     }
     await setDoc(doc(db, 'leads', lead.id), cleanForFirestore(cleanLead), { merge: true });
+    // Remove de deleted_leads caso tenha sido anteriormente marcado como deletado
+    await deleteDoc(doc(db, 'deleted_leads', lead.id)).catch(() => {});
   } catch (err) {
     if (isFirestoreQuotaError(err)) {
       console.warn(`[Firebase] Cota excedida ao sincronizar lead ${lead.id}`);
@@ -691,10 +693,12 @@ export function isLeadInWorkspace(
   const cleanWid = wid.startsWith('free_') ? wid.substring(5) : wid;
   const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
 
-  const isLeadOwnedByFreelancer =
-    (Boolean(cleanFid) && cleanFid !== 'admin' && cleanFid !== 'administrador') ||
-    (Boolean(cleanWid) && cleanWid !== 'admin' && cleanWid !== 'administrador' && cleanWid !== 'default') ||
-    (Boolean(cleanUid) && cleanUid !== 'admin' && cleanUid !== 'administrador');
+  const isAdminFid = !cleanFid || cleanFid === 'admin' || cleanFid === 'administrador' || cleanFid.startsWith('admin_');
+  const isAdminWid = !cleanWid || cleanWid === 'admin' || cleanWid === 'administrador' || cleanWid === 'default' || cleanWid.startsWith('admin_');
+  const isAdminUid = !cleanUid || cleanUid === 'admin' || cleanUid === 'administrador' || cleanUid.startsWith('admin_') || cleanUid.startsWith('default_user');
+
+  // Um lead pertence a um freelancer se tiver identificador explícito de freelancer
+  const isLeadOwnedByFreelancer = !isAdminFid || (!isAdminWid && cleanWid !== '') || (uid.startsWith('free_') && !isAdminUid);
 
   if (isTargetAdmin) {
     // Para o workspace do Admin, o lead pertence ao admin se NÃO pertencer a nenhum freelancer
@@ -706,7 +710,8 @@ export function isLeadInWorkspace(
     return false;
   }
 
-  return cleanFid === targetClean || cleanWid === targetClean || cleanUid === targetClean;
+  const leadOwner = (!isAdminFid && cleanFid) ? cleanFid : ((!isAdminWid && cleanWid) ? cleanWid : cleanUid);
+  return leadOwner === targetClean || cleanFid === targetClean || cleanWid === targetClean || cleanUid === targetClean;
 }
 
 export async function deleteLeadsForTenantFromFirestore(targetFreelancerId?: string): Promise<number> {

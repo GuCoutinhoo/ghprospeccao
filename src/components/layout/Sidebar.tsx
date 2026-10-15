@@ -14,7 +14,6 @@ import {
   Heart,
   Database,
   Zap,
-  MessageSquareQuote,
   Activity,
   Shield,
   KeyRound,
@@ -69,7 +68,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { label: 'Buscar Leads', path: '/search', icon: Search },
         { label: 'Base de Leads', path: '/leads', icon: Users },
         { label: 'Esteira Relâmpago', path: '/outreach', icon: Zap, badge: '⚡ 1-Click' },
-        { label: 'Modelos de Abordagem', path: '/templates', icon: MessageSquareQuote, badge: 'Copy' },
         { label: 'Favoritos', path: '/favorites', icon: Heart },
         { label: 'Pipeline Comercial', path: '/pipeline', icon: KanbanSquare },
         { label: 'Configurações', path: '/settings', icon: Settings },
@@ -80,7 +78,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { label: 'Esteira Relâmpago', path: '/outreach', icon: Zap, badge: '⚡ 1-Click' },
         { label: 'Pipeline Comercial', path: '/pipeline', icon: KanbanSquare },
         { label: 'Favoritos', path: '/favorites', icon: Heart },
-        { label: 'Modelos de Abordagem', path: '/templates', icon: MessageSquareQuote, badge: 'Copy' },
         { label: 'Meu Dashboard', path: '/dashboard', icon: LayoutDashboard },
       ];
 
