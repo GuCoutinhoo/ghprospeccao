@@ -659,6 +659,8 @@ export const api = {
     onlyWithoutWebsite?: boolean;
     onlyWithPhone?: boolean;
     onlyFavorites?: boolean;
+    excludeHidden?: boolean;
+    onlyHidden?: boolean;
     minRating?: number;
     minReviews?: number;
     minScore?: number;
@@ -679,6 +681,8 @@ export const api = {
       if (params.onlyWithoutWebsite) query.set('onlyWithoutWebsite', 'true');
       if (params.onlyWithPhone) query.set('onlyWithPhone', 'true');
       if (params.onlyFavorites) query.set('onlyFavorites', 'true');
+      if (params.excludeHidden) query.set('excludeHidden', 'true');
+      if (params.onlyHidden) query.set('onlyHidden', 'true');
       if (params.minRating) query.set('minRating', String(params.minRating));
       if (params.minReviews) query.set('minReviews', String(params.minReviews));
       if (params.minScore) query.set('minScore', String(params.minScore));
@@ -791,6 +795,20 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Falha ao alterar favorito.');
+    }
+    invalidateLeadsCache();
+    return res.json();
+  },
+
+  async toggleLeadHide(id: string, explicitValue?: boolean): Promise<Lead> {
+    const res = await fetch(`/api/leads/${id}/hide`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(explicitValue !== undefined ? { is_hidden: explicitValue } : {}),
+    });
+    if (!res.ok) {
+      // Fallback via PATCH
+      return this.updateLead(id, { is_hidden: explicitValue !== undefined ? explicitValue : true });
     }
     invalidateLeadsCache();
     return res.json();

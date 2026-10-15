@@ -7,6 +7,7 @@ import {
   MessageCircle,
   Phone,
   Eye,
+  EyeOff,
   CheckCircle,
   MoreVertical,
   ChevronLeft,
@@ -131,6 +132,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(false);
   const [onlyWithPhone, setOnlyWithPhone] = useState<boolean>(false);
   const [onlyFavorites, setOnlyFavorites] = useState<boolean>(false);
+  const [excludeHidden, setExcludeHidden] = useState<boolean>(false);
   const [minScore, setMinScore] = useState<number>(0);
   const [sortBy, setSortBy] = useState<'score' | 'reviews' | 'rating' | 'recent'>('score');
 
@@ -165,6 +167,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     onlyWithoutWebsite,
     onlyWithPhone,
     onlyFavorites,
+    excludeHidden,
     minScore,
     search,
     sortBy,
@@ -181,6 +184,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     onlyWithoutWebsite,
     onlyWithPhone,
     onlyFavorites,
+    excludeHidden,
     minScore,
     search,
     sortBy,
@@ -207,6 +211,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         onlyWithoutWebsite: current.onlyWithoutWebsite,
         onlyWithPhone: current.onlyWithPhone,
         onlyFavorites: current.onlyFavorites,
+        excludeHidden: current.excludeHidden,
         minScore: current.minScore > 0 ? current.minScore : undefined,
         search: current.search,
         sortBy: current.sortBy,
@@ -395,6 +400,33 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     }
   };
 
+  const handleToggleHide = async (e: React.MouseEvent, leadId: string) => {
+    e.stopPropagation();
+    const targetLead = leads.find((l) => l.id === leadId);
+    const newHiddenState = !targetLead?.is_hidden;
+
+    // Atualização otimista imediata na interface
+    setLeads((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, is_hidden: newHiddenState } : l))
+    );
+
+    setToastMessage({
+      type: 'success',
+      text: newHiddenState
+        ? `"${targetLead?.name || 'Lead'}" ocultado (marcado como cinza).`
+        : `"${targetLead?.name || 'Lead'}" reexibido.`,
+    });
+
+    try {
+      const updated = await api.toggleLeadHide(leadId, newHiddenState);
+      setLeads((prev) =>
+        prev.map((l) => (l.id === leadId ? { ...l, ...updated, is_hidden: newHiddenState } : l))
+      );
+    } catch (err) {
+      console.error('Erro ao alternar ocultação do lead:', err);
+    }
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
@@ -512,6 +544,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     onlyWithoutWebsite ||
     onlyWithPhone ||
     onlyFavorites ||
+    excludeHidden ||
     minScore > 0 ||
     Boolean(search && search.trim() !== '');
 
@@ -523,6 +556,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     setOnlyWithoutWebsite(false);
     setOnlyWithPhone(false);
     setOnlyFavorites(false);
+    setExcludeHidden(false);
     setMinScore(0);
     setSearch('');
     setPage(1);
@@ -989,7 +1023,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         </div>
 
         {/* Dropdowns de Filtragem */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 pt-2 border-t border-neutral-100">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 pt-2 border-t border-neutral-100">
           {/* Ordenação */}
           <div>
             <label className="block text-[10px] font-medium text-neutral-400 mb-1">Ordenar por</label>
@@ -1097,7 +1131,26 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
               />
               <span className="font-medium text-[11px] text-rose-700 flex items-center gap-1">
                 <Heart className={`h-3 w-3 ${onlyFavorites ? 'fill-rose-500' : ''}`} />
-                Apenas favoritos
+                Favoritos
+              </span>
+            </label>
+          </div>
+
+          {/* Esconder leads cinzas / já coletados */}
+          <div className="flex items-end pb-1.5">
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-700">
+              <input
+                type="checkbox"
+                checked={excludeHidden}
+                onChange={(e) => {
+                  setExcludeHidden(e.target.checked);
+                  setPage(1);
+                }}
+                className="rounded-sm border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+              />
+              <span className="font-medium text-[11px] text-neutral-600 flex items-center gap-1" title="Ocultar da lista os leads marcados como cinza / já coletados">
+                <EyeOff className="h-3 w-3 text-neutral-500" />
+                Sem cinzas
               </span>
             </label>
           </div>
@@ -1253,19 +1306,33 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                 <div
                   key={lead.id}
                   onClick={() => onSelectLead(lead)}
-                  className="group rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xs hover:border-neutral-350 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 relative overflow-hidden"
+                  className={`group rounded-2xl border p-5 shadow-2xs transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 relative overflow-hidden ${
+                    lead.is_hidden
+                      ? 'border-neutral-300 bg-neutral-100/90 grayscale-[0.85] opacity-65 hover:opacity-90 ring-1 ring-neutral-300'
+                      : 'border-neutral-200 bg-white hover:border-neutral-350 hover:shadow-md'
+                  }`}
                 >
                   {/* Topo do Card com Ícone, Categoria e Score */}
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-900 text-white shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                          <NicheIcon className="h-5 w-5 text-amber-400" />
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl shrink-0 shadow-2xs group-hover:scale-105 transition-transform ${
+                          lead.is_hidden ? 'bg-neutral-600 text-neutral-200' : 'bg-neutral-900 text-white'
+                        }`}>
+                          <NicheIcon className={`h-5 w-5 ${lead.is_hidden ? 'text-neutral-300' : 'text-amber-400'}`} />
                         </div>
                         <div>
-                          <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider block">
-                            {lead.niche}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider block">
+                              {lead.niche}
+                            </span>
+                            {lead.is_hidden && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-300 text-neutral-800">
+                                <EyeOff className="h-2.5 w-2.5" />
+                                Cinza
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[11px] text-neutral-400 font-mono">
                             {lead.city} - {lead.state}
                           </span>
@@ -1273,6 +1340,24 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Botão de Ocultar / Deixar Cinza */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleHide(e, lead.id)}
+                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                            lead.is_hidden
+                              ? 'bg-neutral-800 text-amber-300 hover:bg-neutral-900 ring-1 ring-neutral-400'
+                              : 'text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100'
+                          }`}
+                          title={lead.is_hidden ? 'Lead marcado como cinza (já coletado). Clique para reexibir normal' : 'Ocultar lead (deixar cinza para não pegar repetido)'}
+                        >
+                          {lead.is_hidden ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+
                         <button
                           type="button"
                           onClick={(e) => handleToggleFavorite(e, lead.id)}
@@ -1311,9 +1396,28 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                       </div>
                     </div>
 
+                    {/* Banner indicativo quando o lead está ocultado/cinza */}
+                    {lead.is_hidden && (
+                      <div className="flex items-center justify-between px-2.5 py-1 bg-neutral-200/90 text-neutral-800 rounded-lg text-[10px] font-semibold border border-neutral-300">
+                        <span className="flex items-center gap-1">
+                          <EyeOff className="h-3 w-3 text-neutral-600" />
+                          Ocultado / Cinza (Já coletado)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleHide(e, lead.id)}
+                          className="text-neutral-900 underline hover:text-black cursor-pointer font-bold"
+                        >
+                          Reexibir
+                        </button>
+                      </div>
+                    )}
+
                     {/* Nome da Loja */}
                     <div>
-                      <h3 className="text-sm font-bold text-neutral-900 group-hover:text-black line-clamp-1 tracking-tight">
+                      <h3 className={`text-sm font-bold group-hover:text-black line-clamp-1 tracking-tight ${
+                        lead.is_hidden ? 'text-neutral-600 line-through' : 'text-neutral-900'
+                      }`}>
                         {lead.name}
                       </h3>
                       <p className="text-[11px] text-neutral-500 line-clamp-1 mt-0.5 flex items-center gap-1">
@@ -1428,6 +1532,32 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                       </button>
                     )}
                   </div>
+
+                  {/* Botão de Ação Direta: Ocultar / Deixar Cinza */}
+                  <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleToggleHide(e, lead.id)}
+                      className={`w-full py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer border shadow-2xs ${
+                        lead.is_hidden
+                          ? 'bg-neutral-800 text-amber-300 border-neutral-700 hover:bg-neutral-900 ring-1 ring-neutral-400'
+                          : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                      title={lead.is_hidden ? 'Reexibir lead normal (remover marcação cinza)' : 'Ocultar lead e deixar cinza para não pegar repetido'}
+                    >
+                      {lead.is_hidden ? (
+                        <>
+                          <Eye className="h-3.5 w-3.5 text-amber-300" />
+                          <span>Reexibir Lead (Remover Cinza)</span>
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="h-3.5 w-3.5 text-neutral-500" />
+                          <span>Ocultar Lead (Deixar Cinza)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -1516,13 +1646,25 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                   return (
                     <tr
                       key={lead.id}
-                      className="hover:bg-neutral-50/70 transition-colors group cursor-pointer"
+                      className={`transition-colors group cursor-pointer ${
+                        lead.is_hidden
+                          ? 'bg-neutral-100/90 text-neutral-500 opacity-60 grayscale-[0.85] hover:bg-neutral-200/70'
+                          : 'hover:bg-neutral-50/70 bg-white'
+                      }`}
                       onClick={() => onSelectLead(lead)}
                     >
                       {/* Empresa */}
                       <td className="px-4 py-3 font-medium text-neutral-900">
-                        <div className="truncate max-w-[200px] font-semibold" title={lead.name}>
-                          {lead.name}
+                        <div className="flex items-center gap-1.5">
+                          <div className={`truncate max-w-[180px] font-semibold ${lead.is_hidden ? 'line-through text-neutral-500' : 'text-neutral-900'}`} title={lead.name}>
+                            {lead.name}
+                          </div>
+                          {lead.is_hidden && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-300 text-neutral-800">
+                              <EyeOff className="h-2.5 w-2.5" />
+                              Cinza
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-neutral-400 font-mono truncate max-w-[200px]">
                           {lead.address || 'Endereço não informado'}
@@ -1594,6 +1736,19 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => handleToggleHide(e, lead.id)}
+                            title={lead.is_hidden ? 'Lead marcado como cinza (já coletado). Clique para reexibir' : 'Ocultar lead (deixar cinza para não pegar repetido)'}
+                            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                              lead.is_hidden
+                                ? 'text-amber-300 bg-neutral-800 hover:bg-neutral-900 ring-1 ring-neutral-400'
+                                : 'text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100'
+                            }`}
+                          >
+                            {lead.is_hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+
                           <button
                             type="button"
                             onClick={(e) => handleToggleFavorite(e, lead.id)}

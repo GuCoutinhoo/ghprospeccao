@@ -31,6 +31,7 @@
         "pipeline_status": { "type": "string" },
         "opportunity_score": { "type": "number" },
         "favorite": { "type": "boolean" },
+        "is_hidden": { "type": "boolean" },
         "updated_at": { "type": "string" }
       }
     },

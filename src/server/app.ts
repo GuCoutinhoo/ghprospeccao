@@ -1053,6 +1053,8 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
       onlyWithoutWebsite: onlyWithoutWebsite === 'true',
       onlyWithPhone: onlyWithPhone === 'true',
       onlyFavorites: onlyFavorites === 'true',
+      excludeHidden: req.query.excludeHidden === 'true',
+      onlyHidden: req.query.onlyHidden === 'true',
       minRating: minRating ? Number(minRating) : undefined,
       minReviews: minReviews ? Number(minReviews) : undefined,
       minScore: minScore ? Number(minScore) : undefined,
@@ -1245,6 +1247,30 @@ app.post('/api/leads/:id/favorite', requireAuth, (req: Request, res: Response) =
     }
 
     const updated = db.toggleFavoriteLead(req.params.id);
+    res.json(updated);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/leads/:id/hide', requireAuth, (req: Request, res: Response) => {
+  try {
+    const lead = db.getLeadById(req.params.id);
+    if (!lead) {
+      return res.status(404).json({ error: 'Lead não encontrado.' });
+    }
+
+    if (
+      req.user!.role === 'freelancer' &&
+      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
+      lead.workspace_id !== req.user!.freelancerId
+    ) {
+      return res.status(403).json({ error: 'Acesso negado: este lead pertence a outro workspace.' });
+    }
+
+    const explicitValue = typeof req.body?.is_hidden === 'boolean' ? req.body.is_hidden : undefined;
+    const updated = db.toggleHideLead(req.params.id, explicitValue);
     res.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

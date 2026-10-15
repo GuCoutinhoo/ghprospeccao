@@ -356,6 +356,8 @@ export function filterLeadsList(
     onlyWithoutWebsite?: boolean;
     onlyWithPhone?: boolean;
     onlyFavorites?: boolean;
+    excludeHidden?: boolean;
+    onlyHidden?: boolean;
     minRating?: number;
     minReviews?: number;
     minScore?: number;
@@ -415,6 +417,14 @@ export function filterLeadsList(
 
   if (params.onlyFavorites) {
     filtered = filtered.filter((l) => l.is_favorite === true);
+  }
+
+  if (params.excludeHidden) {
+    filtered = filtered.filter((l) => !l.is_hidden);
+  }
+
+  if (params.onlyHidden) {
+    filtered = filtered.filter((l) => Boolean(l.is_hidden));
   }
 
   if (params.minRating) {

@@ -147,6 +147,7 @@ export interface Lead {
   lead_score: number;
   pipeline_status: PipelineStatus;
   is_favorite?: boolean;
+  is_hidden?: boolean;
   notes?: string;
   contact_attempts_count?: number;
   sale_value?: number;

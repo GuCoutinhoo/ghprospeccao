@@ -617,6 +617,8 @@ class Database {
     onlyWithoutWebsite?: boolean;
     onlyWithPhone?: boolean;
     onlyFavorites?: boolean;
+    excludeHidden?: boolean;
+    onlyHidden?: boolean;
     minRating?: number;
     minReviews?: number;
     minScore?: number;
@@ -675,6 +677,14 @@ class Database {
 
     if (params.onlyFavorites) {
       filtered = filtered.filter((l) => l.is_favorite === true);
+    }
+
+    if (params.excludeHidden) {
+      filtered = filtered.filter((l) => !l.is_hidden);
+    }
+
+    if (params.onlyHidden) {
+      filtered = filtered.filter((l) => Boolean(l.is_hidden));
     }
 
     if (params.minRating) {
@@ -798,6 +808,18 @@ class Database {
 
     const current = Boolean(this.data.leads[idx].is_favorite);
     this.data.leads[idx].is_favorite = !current;
+    this.data.leads[idx].updated_at = new Date().toISOString();
+    this.save();
+    syncLeadToFirestore(this.data.leads[idx]).catch(() => {});
+    return this.data.leads[idx];
+  }
+
+  public toggleHideLead(id: string, explicitValue?: boolean): Lead | undefined {
+    const idx = this.data.leads.findIndex((l) => l.id === id);
+    if (idx === -1) return undefined;
+
+    const current = Boolean(this.data.leads[idx].is_hidden);
+    this.data.leads[idx].is_hidden = explicitValue !== undefined ? explicitValue : !current;
     this.data.leads[idx].updated_at = new Date().toISOString();
     this.save();
     syncLeadToFirestore(this.data.leads[idx]).catch(() => {});

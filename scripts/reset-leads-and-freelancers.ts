@@ -1,157 +1,146 @@
-import { getFirestoreDb } from '../src/lib/firebase/sync';
-import { collection, getDocs, writeBatch, doc } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  writeBatch,
+  doc,
+} from 'firebase/firestore';
+import firebaseConfig from '../firebase-applet-config.json';
 
-async function resetLeadsAndFreelancers() {
-  console.log('--- INICIANDO RESET DE LEADS E LISTA DE FREELANCERS ---');
+async function resetAllLeadsAndFreelancers() {
+  console.log('--- INICIANDO RESET GERAL DE LEADS E FREELANCERS ---');
 
-  // 1. Limpeza no Firestore
-  const db = getFirestoreDb();
-  if (db) {
-    console.log('[Firestore] Conectado ao Firestore. Excluindo coleções...');
+  // 1. Reset no Firestore
+  try {
+    const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    const databaseId = firebaseConfig.firestoreDatabaseId || 'ai-studio-prospectaplacesb-a0f0acf2-92de-4dc6-84d3-27efdba900e9';
+    const db = getFirestore(app, databaseId);
 
-    // a) Collection: leads
-    try {
-      const leadsSnap = await getDocs(collection(db, 'leads'));
-      console.log(`[Firestore] Encontrados ${leadsSnap.size} documentos na coleção 'leads'`);
-      if (leadsSnap.size > 0) {
-        const docs = leadsSnap.docs;
-        for (let i = 0; i < docs.length; i += 200) {
-          const chunk = docs.slice(i, i + 200);
-          const batch = writeBatch(db);
-          for (const d of chunk) {
-            batch.delete(d.ref);
-          }
-          await batch.commit();
+    console.log(`[Firestore] Conectado ao banco: ${databaseId}`);
+
+    // Limpar 'leads'
+    const leadsSnap = await getDocs(collection(db, 'leads')).catch((err) => {
+      console.warn('[Firestore] Erro ao listar leads:', err.message);
+      return null;
+    });
+
+    if (leadsSnap && !leadsSnap.empty) {
+      console.log(`[Firestore] Encontrados ${leadsSnap.size} leads para exclusão.`);
+      const docs = leadsSnap.docs;
+      for (let i = 0; i < docs.length; i += 200) {
+        const chunk = docs.slice(i, i + 200);
+        const batch = writeBatch(db);
+        for (const d of chunk) {
+          batch.delete(d.ref);
         }
-        console.log(`[Firestore] ${leadsSnap.size} leads excluídos com sucesso.`);
+        await batch.commit();
+        console.log(`[Firestore] Deletados ${Math.min(i + 200, docs.length)} / ${docs.length} leads.`);
       }
-    } catch (err) {
-      console.warn('[Firestore] Erro ao limpar coleção leads:', err);
+    } else {
+      console.log('[Firestore] Nenhum lead para deletar na coleção leads.');
     }
 
-    // b) Collection: deleted_leads
-    try {
-      const delSnap = await getDocs(collection(db, 'deleted_leads'));
-      console.log(`[Firestore] Encontrados ${delSnap.size} documentos na coleção 'deleted_leads'`);
-      if (delSnap.size > 0) {
-        const docs = delSnap.docs;
-        for (let i = 0; i < docs.length; i += 200) {
-          const chunk = docs.slice(i, i + 200);
-          const batch = writeBatch(db);
-          for (const d of chunk) {
-            batch.delete(d.ref);
-          }
-          await batch.commit();
+    // Limpar 'deleted_leads'
+    const delSnap = await getDocs(collection(db, 'deleted_leads')).catch(() => null);
+    if (delSnap && !delSnap.empty) {
+      console.log(`[Firestore] Encontrados ${delSnap.size} registros em deleted_leads.`);
+      const docs = delSnap.docs;
+      for (let i = 0; i < docs.length; i += 200) {
+        const chunk = docs.slice(i, i + 200);
+        const batch = writeBatch(db);
+        for (const d of chunk) {
+          batch.delete(d.ref);
         }
-        console.log(`[Firestore] ${delSnap.size} registros em deleted_leads limpos com sucesso.`);
+        await batch.commit();
       }
-    } catch (err) {
-      console.warn('[Firestore] Erro ao limpar coleção deleted_leads:', err);
+      console.log('[Firestore] Coleção deleted_leads limpa.');
     }
 
-    // c) Collection: freelancers
-    try {
-      const freeSnap = await getDocs(collection(db, 'freelancers'));
-      console.log(`[Firestore] Encontrados ${freeSnap.size} documentos na coleção 'freelancers'`);
-      if (freeSnap.size > 0) {
-        const docs = freeSnap.docs;
-        for (let i = 0; i < docs.length; i += 200) {
-          const chunk = docs.slice(i, i + 200);
-          const batch = writeBatch(db);
-          for (const d of chunk) {
-            batch.delete(d.ref);
-          }
-          await batch.commit();
+    // Limpar 'freelancers'
+    const freeSnap = await getDocs(collection(db, 'freelancers')).catch((err) => {
+      console.warn('[Firestore] Erro ao listar freelancers:', err.message);
+      return null;
+    });
+
+    if (freeSnap && !freeSnap.empty) {
+      console.log(`[Firestore] Encontrados ${freeSnap.size} freelancers para exclusão.`);
+      const docs = freeSnap.docs;
+      for (let i = 0; i < docs.length; i += 200) {
+        const chunk = docs.slice(i, i + 200);
+        const batch = writeBatch(db);
+        for (const d of chunk) {
+          batch.delete(d.ref);
         }
-        console.log(`[Firestore] ${freeSnap.size} freelancers excluídos com sucesso. Lista zerada.`);
+        await batch.commit();
       }
-    } catch (err) {
-      console.warn('[Firestore] Erro ao limpar coleção freelancers:', err);
+      console.log('[Firestore] Coleção freelancers limpa (0 freelancers).');
+    } else {
+      console.log('[Firestore] Nenhum freelancer cadastrado no Firestore.');
     }
 
-    // d) Collection: activities
-    try {
-      const actSnap = await getDocs(collection(db, 'activities'));
-      console.log(`[Firestore] Encontrados ${actSnap.size} documentos na coleção 'activities'`);
-      if (actSnap.size > 0) {
-        const docs = actSnap.docs;
-        for (let i = 0; i < docs.length; i += 200) {
-          const chunk = docs.slice(i, i + 200);
-          const batch = writeBatch(db);
-          for (const d of chunk) {
-            batch.delete(d.ref);
-          }
-          await batch.commit();
+    // Limpar 'activities'
+    const actSnap = await getDocs(collection(db, 'activities')).catch(() => null);
+    if (actSnap && !actSnap.empty) {
+      console.log(`[Firestore] Encontradas ${actSnap.size} atividades de log para exclusão.`);
+      const docs = actSnap.docs;
+      for (let i = 0; i < docs.length; i += 200) {
+        const chunk = docs.slice(i, i + 200);
+        const batch = writeBatch(db);
+        for (const d of chunk) {
+          batch.delete(d.ref);
         }
-        console.log(`[Firestore] ${actSnap.size} atividades limpas com sucesso.`);
+        await batch.commit();
       }
-    } catch (err) {
-      console.warn('[Firestore] Erro ao limpar coleção activities:', err);
+      console.log('[Firestore] Coleção activities limpa.');
     }
-  } else {
-    console.warn('[Firestore] Instância do Firestore não disponível.');
+
+  } catch (err: any) {
+    console.warn('[Firestore] Aviso na comunicação com Firestore:', err.message);
   }
 
-  // 2. Limpeza no arquivo local .data/db.json
+  // 2. Reset em .data/db.json
   const dbPath = path.resolve(process.cwd(), '.data', 'db.json');
   if (fs.existsSync(dbPath)) {
-    console.log(`[Local DB] Lendo ${dbPath}...`);
-    const raw = fs.readFileSync(dbPath, 'utf8');
-    const localDb = JSON.parse(raw);
+    try {
+      const raw = fs.readFileSync(dbPath, 'utf8');
+      const data = JSON.parse(raw);
+      const prevLeadsCount = data.leads?.length || 0;
+      const prevFreeCount = data.freelancers?.length || 0;
 
-    const prevLeads = localDb.leads?.length || 0;
-    const prevFreelancers = localDb.freelancers?.length || 0;
-    const prevActivities = localDb.activities?.length || 0;
-    const prevPlaces = localDb.places?.length || 0;
-    const prevJobs = localDb.search_jobs?.length || 0;
+      // Zera leads, notas e freelancers mantendo places e settings intactos
+      data.leads = [];
+      data.lead_notes = [];
+      data.deleted_lead_ids = [];
+      data.freelancers = [];
+      data.activities = [];
 
-    console.log(`[Local DB] Estado anterior:`, {
-      leads: prevLeads,
-      freelancers: prevFreelancers,
-      activities: prevActivities,
-      places: prevPlaces,
-      jobs: prevJobs,
-    });
-
-    // Reset leads e notas mantendo toda a estrutura intacta
-    localDb.leads = [];
-    localDb.lead_notes = [];
-    localDb.deleted_lead_ids = [];
-
-    // Reset freelancers: lista sem ninguém
-    localDb.freelancers = [];
-    localDb.activities = [];
-
-    // Limpar referências de freelancer em search_jobs sem remover os jobs estruturais
-    if (Array.isArray(localDb.search_jobs)) {
-      for (const job of localDb.search_jobs) {
-        delete job.freelancer_id;
-        delete job.freelancer_name;
-        if (job.status === 'running' || job.status === 'paused') {
-          job.status = 'cancelled';
+      // Desvincula eventuais referências de jobs a freelancers
+      if (Array.isArray(data.search_jobs)) {
+        for (const j of data.search_jobs) {
+          delete j.freelancer_id;
+          delete j.freelancer_name;
         }
       }
+
+      fs.writeFileSync(dbPath, JSON.stringify(data, null, 2), 'utf8');
+      console.log(`[Local db.json] Reset concluído com sucesso!`);
+      console.log(`- Leads resetados: ${prevLeadsCount} -> 0`);
+      console.log(`- Freelancers resetados: ${prevFreeCount} -> 0`);
+      console.log(`- Places preservados: ${data.places?.length || 0}`);
+    } catch (err: any) {
+      console.error('[Local db.json] Erro ao atualizar db.json:', err);
     }
-
-    fs.writeFileSync(dbPath, JSON.stringify(localDb, null, 2), 'utf8');
-
-    console.log(`[Local DB] Salvo com sucesso! Novo estado:`, {
-      leads: localDb.leads.length,
-      freelancers: localDb.freelancers.length,
-      activities: localDb.activities.length,
-      places: localDb.places?.length,
-      jobs: localDb.search_jobs?.length,
-    });
   }
 
   console.log('--- RESET FINALIZADO COM SUCESSO ---');
 }
 
-resetLeadsAndFreelancers()
+resetAllLeadsAndFreelancers()
   .then(() => process.exit(0))
   .catch((err) => {
-    console.error('Erro fatal no reset:', err);
+    console.error('Erro fatal:', err);
     process.exit(1);
   });

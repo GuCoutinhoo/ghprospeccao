@@ -25,6 +25,7 @@ import {
   Home,
   Clock,
   Eye,
+  EyeOff,
   Smartphone,
   ShieldCheck,
   Heart,
@@ -216,6 +217,17 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
     }
   };
 
+  const handleToggleHide = async () => {
+    if (!lead) return;
+    try {
+      const updated = await api.toggleLeadHide(lead.id);
+      setLead(updated);
+      onLeadUpdated(updated);
+    } catch (err) {
+      console.error('Erro ao alternar status de ocultação/cinza do lead:', err);
+    }
+  };
+
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lead || !newNote.trim()) return;
@@ -340,6 +352,29 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
             <div className="flex items-center gap-2 self-start">
               <button
                 type="button"
+                onClick={handleToggleHide}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border shadow-xs cursor-pointer ${
+                  lead.is_hidden
+                    ? 'bg-neutral-800 text-amber-300 border-neutral-600 hover:bg-neutral-900 ring-1 ring-neutral-400'
+                    : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+                }`}
+                title={lead.is_hidden ? 'Reexibir lead normal (remover marcação cinza)' : 'Ocultar lead (deixar cinza para não pegar repetido)'}
+              >
+                {lead.is_hidden ? (
+                  <>
+                    <EyeOff className="h-3.5 w-3.5 text-amber-300" />
+                    <span>Lead Cinza (Oculto)</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-3.5 w-3.5 text-neutral-300" />
+                    <span>Ocultar (Cinza)</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
                 onClick={handleToggleFavorite}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border shadow-xs cursor-pointer ${
                   lead.is_favorite
@@ -440,6 +475,25 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Banner Informativo quando o lead está ocultado/cinza */}
+        {lead.is_hidden && (
+          <div className="bg-neutral-800 text-neutral-200 border-b border-neutral-700 px-6 py-2.5 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <EyeOff className="h-4 w-4 text-amber-400 shrink-0" />
+              <span>
+                Este lead está marcado como <strong>CINZA (OCULTO)</strong> para evitar coletas e abordagens repetidas.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleHide}
+              className="text-amber-400 hover:text-amber-300 underline font-bold cursor-pointer shrink-0 ml-3"
+            >
+              Reexibir Lead Normal
+            </button>
+          </div>
+        )}
 
         {/* Barra de Ações Rápidas em Destaque */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-b border-neutral-100 bg-neutral-50/80">

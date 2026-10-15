@@ -25,6 +25,7 @@ import {
   Bookmark,
   XCircle,
   Eye,
+  EyeOff,
   CheckCircle2,
   Dumbbell,
   Scissors,
@@ -242,6 +243,9 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
   // Leads filtrados para a esteira
   const queue = useMemo(() => {
     return allLeads.filter((l) => {
+      if (l.is_hidden) {
+        return false;
+      }
       if (onlyWithoutWebsite && (Boolean(l.website && l.website.trim()) || l.website_status !== 'no_website')) {
         return false;
       }
@@ -433,6 +437,20 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
     triggerFeedback(
       updated.is_favorite ? '⭐ Lead adicionado aos favoritos!' : 'Lead removido dos favoritos.',
       'favorite'
+    );
+  };
+
+  // Ocultar / Deixar Cinza (Evita pegar repetido)
+  const handleToggleHide = async () => {
+    if (!currentLead) return;
+    const newHidden = !currentLead.is_hidden;
+    await api.toggleLeadHide(currentLead.id, newHidden);
+    setAllLeads((prev) =>
+      prev.map((l) => (l.id === currentLead.id ? { ...l, is_hidden: newHidden } : l))
+    );
+    triggerFeedback(
+      newHidden ? 'Lead ocultado (marcado como cinza para não repetir).' : 'Lead reexibido.',
+      'skip'
     );
   };
 
@@ -867,6 +885,18 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleToggleHide}
+                    className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                      currentLead.is_hidden
+                        ? 'bg-neutral-800 text-amber-300 border-neutral-700'
+                        : 'text-neutral-400 hover:text-neutral-900 border-neutral-200 hover:bg-neutral-50'
+                    }`}
+                    title={currentLead.is_hidden ? 'Reexibir lead' : 'Ocultar lead (deixar cinza para não repetir)'}
+                  >
+                    <EyeOff className="h-4 w-4" />
+                  </button>
+
                   <button
                     onClick={handleToggleFavorite}
                     className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
