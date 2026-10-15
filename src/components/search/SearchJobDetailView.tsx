@@ -167,14 +167,14 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
             </button>
           )}
 
-          {job.status === 'paused' && (
+          {(job.status === 'paused' || job.status === 'failed') && (
             <button
               onClick={handleResume}
               disabled={actionLoading}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 transition-colors"
             >
               <Play className="h-3.5 w-3.5 fill-emerald-800" />
-              <span>Continuar</span>
+              <span>{job.status === 'failed' ? 'Tentar novamente' : 'Continuar'}</span>
             </button>
           )}
 
