@@ -372,7 +372,7 @@ export async function runSearchJob(jobId: string) {
     const finalJob = db.getSearchJob(jobId);
     if (finalJob && finalJob.status === 'running') {
       const failedAreas = db.getSearchAreas(jobId).filter((a) => a.status === 'failed');
-      const goalReached = finalJob.target_leads > 0 && finalJob.leads_created >= finalJob.target_leads;
+      const goalReached = (finalJob.target_leads || 0) > 0 && finalJob.leads_created >= (finalJob.target_leads || 0);
       db.updateSearchJob(jobId, failedAreas.length > 0 && !goalReached
         ? { status: 'failed', error_message: `${failedAreas.length} área(s) falharam. Tente novamente para retomar.`, finished_at: new Date().toISOString() }
         : { status: 'completed', processed_search_areas: finalJob.total_search_areas, finished_at: new Date().toISOString() });
