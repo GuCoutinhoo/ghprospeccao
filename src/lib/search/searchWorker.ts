@@ -141,215 +141,253 @@ export async function runSearchJob(jobId: string) {
   };
   activeWorkers.set(jobId, worker);
 
-  db.updateSearchJob(jobId, {
-    status: 'running',
-    started_at: job.started_at || new Date().toISOString(),
-  });
+  try {
+    db.updateSearchJob(jobId, {
+      status: 'running',
+      started_at: job.started_at || new Date().toISOString(),
+    });
 
-  const areas = db.getSearchAreas(jobId);
-  const pendingAreas = areas.filter((a) => a.status === 'pending' || a.status === 'failed');
-  const settings = db.getSettings();
-  const targetGoal = job.target_leads || 0;
+    const areas = db.getSearchAreas(jobId);
+    const pendingAreas = areas.filter((a) => a.status === 'pending' || a.status === 'failed');
+    const settings = db.getSettings();
+    const targetGoal = job.target_leads || 0;
 
-  const citiesSeen = new Set<string>();
+    const citiesSeen = new Set<string>();
 
-  for (const area of pendingAreas) {
-    try {
-      // Checa se já atingiu a meta de leads desejada pelo usuário
-      if (targetGoal > 0) {
-        const currentJobCheck = db.getSearchJob(jobId);
-        if (currentJobCheck && currentJobCheck.leads_created >= targetGoal) {
-          break;
+    for (const area of pendingAreas) {
+      try {
+        // Checa se já atingiu a meta de leads desejada pelo usuário
+        if (targetGoal > 0) {
+          const currentJobCheck = db.getSearchJob(jobId);
+          if (currentJobCheck && currentJobCheck.leads_created >= targetGoal) {
+            break;
+          }
         }
-      }
-      // Checagem de pausa ou cancelamento
-      const currentWorker = activeWorkers.get(jobId);
-      if (!currentWorker || currentWorker.cancelled) {
-        db.updateSearchJob(jobId, { status: 'cancelled' });
-        activeWorkers.delete(jobId);
-        return;
-      }
+        // Checagem de pausa ou cancelamento
+        const currentWorker = activeWorkers.get(jobId);
+        if (!currentWorker || currentWorker.cancelled) {
+          db.updateSearchJob(jobId, { status: 'cancelled' });
+          return;
+        }
 
-      if (currentWorker.paused) {
-        db.updateSearchJob(jobId, { status: 'paused' });
-        return;
-      }
+        if (currentWorker.paused) {
+          db.updateSearchJob(jobId, { status: 'paused' });
+          return;
+        }
 
-      // Marca área como em processamento
-      db.updateSearchArea(area.id, {
-        status: 'processing',
-        attempts: area.attempts + 1,
-      });
+        // Marca área como em processamento
+        db.updateSearchArea(area.id, {
+          status: 'processing',
+          attempts: area.attempts + 1,
+        });
 
-      const query = `${job.niche} em ${area.city} ${area.state}`;
-      const startTime = Date.now();
+        const query = `${job.niche} em ${area.city} ${area.state}`;
+        const startTime = Date.now();
 
-      let rawPlaces: GooglePlaceRaw[] = [];
-      let isQuotaExceeded = false;
-      let queryError: string | undefined;
+        let rawPlaces: GooglePlaceRaw[] = [];
+        let queryError: string | undefined;
 
-      // Consulta oficial à Google Places API (New) Text Search
-      const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || '';
-      const hasRealCoords = area.lat !== 0 && area.lng !== 0;
-      const res = await searchPlacesOfficial(
-        query,
-        apiKey,
-        hasRealCoords
-          ? {
-              locationBias: {
-                circle: {
-                  center: { latitude: area.lat, longitude: area.lng },
-                  radius: area.radius || 12000,
+        // Consulta oficial à Google Places API (New) Text Search
+        const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || '';
+        const hasRealCoords = area.lat !== 0 && area.lng !== 0;
+        const res = await searchPlacesOfficial(
+          query,
+          apiKey,
+          hasRealCoords
+            ? {
+                locationBias: {
+                  circle: {
+                    center: { latitude: area.lat, longitude: area.lng },
+                    radius: area.radius || 12000,
+                  },
                 },
-              },
-              maxResultCount: 20,
-            }
-          : {
-              maxResultCount: 20,
-            }
-      );
+                maxResultCount: 20,
+              }
+            : {
+                maxResultCount: 20,
+              }
+        );
 
-      if (res.isQuotaExceeded) {
-        isQuotaExceeded = true;
-        queryError = res.error;
-      } else if (res.error) {
-        queryError = res.error;
-      } else {
-        rawPlaces = res.places;
-      }
-
-      const durationMs = Date.now() - startTime;
-
-      // Log da consulta realizada
-      db.logSearchQuery({
-        id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-        search_job_id: jobId,
-        search_area_id: area.id,
-        query,
-        status: queryError ? 'error' : 'success',
-        results_count: rawPlaces.length,
-        duration_ms: durationMs,
-        error_details: queryError,
-        created_at: new Date().toISOString(),
-      });
-
-      let newPlacesFound = 0;
-      let newWithoutWebsite = 0;
-      let newLeadsCreated = 0;
-
-      for (const raw of rawPlaces) {
-        const normalizedPlace = normalizePlace(raw, area.city, area.state);
-        const { isNew } = db.upsertPlace(normalizedPlace);
-        if (isNew) {
-          newPlacesFound++;
-        }
-
-        if ((!normalizedPlace.website || normalizedPlace.website.trim() === '') && normalizedPlace.website_status === 'no_website') {
-          newWithoutWebsite++;
-        }
-
-        // Aplica filtros comerciais e relevância de nicho para criação do Lead
-        const isRelevant = isPlaceRelevantToNiche(normalizedPlace, job.niche);
-        const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
-        if (matchesFilters && isRelevant) {
-          const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
-          const workspaceId = job.workspace_id || (job.freelancer_id ? job.freelancer_id : 'admin');
-          const leadPrefix = job.freelancer_id ? `lead_${job.freelancer_id}_` : 'lead_admin_';
-          const leadId = `${leadPrefix}${normalizedPlace.place_id}`;
-          const { lead: persistedLead, created } = db.createLead({
-            id: leadId,
-            workspace_id: workspaceId,
-            user_id: job.user_id,
-            freelancer_id: job.freelancer_id,
-            freelancer_name: job.freelancer_name,
-            place_id: normalizedPlace.place_id,
-            name: normalizedPlace.name,
-            niche: job.niche,
-            state: normalizedPlace.state,
-            city: normalizedPlace.city,
-            address: normalizedPlace.formatted_address,
-            phone: normalizedPlace.phone,
-            website: normalizedPlace.website,
-            website_status: normalizedPlace.website_status,
-            maps_url: normalizedPlace.maps_url,
-            rating: normalizedPlace.rating || 0,
-            reviews_count: normalizedPlace.reviews_count || 0,
-            lead_score: score,
-            pipeline_status: 'NOVO',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+        if (res.isQuotaExceeded) {
+          db.updateSearchArea(area.id, {
+            status: 'failed',
+            error: res.error || 'Limite de cota da Google Places API excedido.',
           });
+          const curJob = db.getSearchJob(jobId);
+          db.updateSearchJob(jobId, {
+            status: 'failed',
+            error_message: 'Limite de cota da Google Places API excedido. A busca foi interrompida.',
+            processed_search_areas: (curJob?.processed_search_areas || 0) + 1,
+            finished_at: new Date().toISOString(),
+          });
+          return;
+        } else if (res.error) {
+          queryError = res.error;
+        } else {
+          rawPlaces = res.places;
+        }
 
-          await syncLeadToFirestore(persistedLead);
+        const durationMs = Date.now() - startTime;
 
-          // Incrementa leads encontrados no job mesmo se já existia na base de dados
-          newLeadsCreated++;
+        // Log da consulta realizada
+        db.logSearchQuery({
+          id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          search_job_id: jobId,
+          search_area_id: area.id,
+          query,
+          status: queryError ? 'error' : 'success',
+          results_count: rawPlaces.length,
+          duration_ms: durationMs,
+          error_details: queryError,
+          created_at: new Date().toISOString(),
+        });
 
-          if (targetGoal > 0) {
-            const currentTotal = (job.leads_created || 0) + newLeadsCreated;
-            if (currentTotal >= targetGoal) {
-              break;
+        let newPlacesFound = 0;
+        let newWithoutWebsite = 0;
+        let newLeadsCreated = 0;
+
+        for (const raw of rawPlaces) {
+          const normalizedPlace = normalizePlace(raw, area.city, area.state);
+          const { isNew } = db.upsertPlace(normalizedPlace);
+          if (isNew) {
+            newPlacesFound++;
+          }
+
+          if ((!normalizedPlace.website || normalizedPlace.website.trim() === '') && normalizedPlace.website_status === 'no_website') {
+            newWithoutWebsite++;
+          }
+
+          // Aplica filtros comerciais e relevância de nicho para criação do Lead
+          const isRelevant = isPlaceRelevantToNiche(normalizedPlace, job.niche);
+          const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
+          if (matchesFilters && isRelevant) {
+            const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
+            const workspaceId = job.workspace_id || (job.freelancer_id ? job.freelancer_id : 'admin');
+            const leadPrefix = job.freelancer_id ? `lead_${job.freelancer_id}_` : 'lead_admin_';
+            const leadId = `${leadPrefix}${normalizedPlace.place_id}`;
+
+            // Se o lead foi excluído e está tombstoned, não recria
+            if (db.isLeadDeleted(leadId)) {
+              continue;
+            }
+
+            const { lead: persistedLead, created, isDeleted } = db.createLead({
+              id: leadId,
+              workspace_id: workspaceId,
+              user_id: job.user_id,
+              freelancer_id: job.freelancer_id,
+              freelancer_name: job.freelancer_name,
+              place_id: normalizedPlace.place_id,
+              name: normalizedPlace.name,
+              niche: job.niche,
+              state: normalizedPlace.state,
+              city: normalizedPlace.city,
+              address: normalizedPlace.formatted_address,
+              phone: normalizedPlace.phone,
+              website: normalizedPlace.website,
+              website_status: normalizedPlace.website_status,
+              maps_url: normalizedPlace.maps_url,
+              rating: normalizedPlace.rating || 0,
+              reviews_count: normalizedPlace.reviews_count || 0,
+              lead_score: score,
+              pipeline_status: 'NOVO',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+
+            if (isDeleted) {
+              continue;
+            }
+
+            await syncLeadToFirestore(persistedLead);
+
+            newLeadsCreated++;
+
+            if (targetGoal > 0) {
+              const currentTotal = (job.leads_created || 0) + newLeadsCreated;
+              if (currentTotal >= targetGoal) {
+                break;
+              }
             }
           }
         }
-      }
 
-      citiesSeen.add(area.city);
+        citiesSeen.add(area.city);
 
-      // Atualiza status da área
-      db.updateSearchArea(area.id, {
-        status: 'completed',
-        places_found: rawPlaces.length,
-        processed_at: new Date().toISOString(),
-      });
-
-      // Atualiza progresso do Job
-      const updatedJob = db.getSearchJob(jobId);
-      if (updatedJob) {
-        db.updateSearchJob(jobId, {
-          processed_search_areas: updatedJob.processed_search_areas + 1,
-          processed_cities: citiesSeen.size,
-          places_found: updatedJob.places_found + (newPlacesFound || rawPlaces.length),
-          places_without_website: updatedJob.places_without_website + newWithoutWebsite,
-          leads_created: updatedJob.leads_created + newLeadsCreated,
+        // Atualiza status da área
+        db.updateSearchArea(area.id, {
+          status: 'completed',
+          places_found: rawPlaces.length,
+          processed_at: new Date().toISOString(),
         });
-      }
 
-      // Se atingiu a meta de leads, conclui a busca imediatamente
-      if (targetGoal > 0 && updatedJob && (updatedJob.leads_created + newLeadsCreated >= targetGoal)) {
-        break;
-      }
+        // Atualiza progresso do Job
+        const updatedJob = db.getSearchJob(jobId);
+        if (updatedJob) {
+          db.updateSearchJob(jobId, {
+            processed_search_areas: updatedJob.processed_search_areas + 1,
+            processed_cities: citiesSeen.size,
+            places_found: updatedJob.places_found + (newPlacesFound || rawPlaces.length),
+            places_without_website: updatedJob.places_without_website + newWithoutWebsite,
+            leads_created: updatedJob.leads_created + newLeadsCreated,
+          });
+        }
 
-      // Delay de proteção contra rate limit
-      const delay = Math.max(300, settings.requestDelayMs || 600);
-      await new Promise((r) => setTimeout(r, delay));
-    } catch (areaErr) {
-      console.warn(`[SearchWorker] Erro ao processar área ${area.id}:`, areaErr);
-      db.updateSearchArea(area.id, {
-        status: 'failed',
-        error: areaErr instanceof Error ? areaErr.message : String(areaErr),
+        // Se atingiu a meta de leads, conclui a busca imediatamente
+        if (targetGoal > 0 && updatedJob && (updatedJob.leads_created + newLeadsCreated >= targetGoal)) {
+          break;
+        }
+
+        // Delay de proteção contra rate limit
+        const delay = Math.max(300, settings.requestDelayMs || 600);
+        await new Promise((r) => setTimeout(r, delay));
+      } catch (areaErr) {
+        console.warn(`[SearchWorker] Erro ao processar área ${area.id}:`, areaErr);
+        db.updateSearchArea(area.id, {
+          status: 'failed',
+          error: areaErr instanceof Error ? areaErr.message : String(areaErr),
+        });
+        // Avança contagem de áreas para o percentual não travar
+        const currentJob = db.getSearchJob(jobId);
+        if (currentJob) {
+          db.updateSearchJob(jobId, {
+            processed_search_areas: currentJob.processed_search_areas + 1,
+            processed_cities: citiesSeen.size,
+          });
+        }
+      }
+    }
+
+    // Conclui o Job garantindo 100% de áreas processadas
+    const finalJob = db.getSearchJob(jobId);
+    if (finalJob && finalJob.status === 'running') {
+      db.updateSearchJob(jobId, {
+        status: 'completed',
+        processed_search_areas: finalJob.total_search_areas,
+        finished_at: new Date().toISOString(),
       });
     }
-  }
 
-  // Conclui o Job
-  db.updateSearchJob(jobId, {
-    status: 'completed',
-    finished_at: new Date().toISOString(),
-  });
-
-  if (job.freelancer_id) {
-    const finalJob = db.getSearchJob(jobId);
-    db.logActivity({
-      freelancer_id: job.freelancer_id,
-      freelancer_name: job.freelancer_name,
-      action_type: 'search_completed',
-      description: `Busca finalizada: "${job.niche} em ${job.city}, ${job.state}" gerou ${finalJob?.leads_created || 0} novos leads`,
-      metadata: { jobId, leads_created: finalJob?.leads_created || 0 },
+    if (job.freelancer_id) {
+      const completedJob = db.getSearchJob(jobId);
+      db.logActivity({
+        freelancer_id: job.freelancer_id,
+        freelancer_name: job.freelancer_name,
+        action_type: 'search_completed',
+        description: `Busca finalizada: "${job.niche} em ${job.city}, ${job.state}" gerou ${completedJob?.leads_created || 0} novos leads`,
+        metadata: { jobId, leads_created: completedJob?.leads_created || 0 },
+      });
+    }
+  } catch (fatalErr) {
+    console.error(`[SearchWorker] Erro fatal no job ${jobId}:`, fatalErr);
+    db.updateSearchJob(jobId, {
+      status: 'failed',
+      error_message: fatalErr instanceof Error ? fatalErr.message : String(fatalErr),
+      finished_at: new Date().toISOString(),
     });
+  } finally {
+    activeWorkers.delete(jobId);
   }
-
-  activeWorkers.delete(jobId);
 }
 
 function checkLeadFilters(

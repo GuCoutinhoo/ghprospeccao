@@ -239,10 +239,12 @@ export function resolveWorkspaceScope(req: Request): {
       : (req.body?.workspace_id ? String(req.body.workspace_id).trim() : undefined);
     const requestedFid = queryFid || bodyFid;
 
-    if (requestedFid && requestedFid !== 'ALL' && !matchesFreelancerId(userFid, requestedFid)) {
-      const err = new Error('Acesso negado: Você não tem permissão para acessar ou modificar dados de outro workspace.');
-      (err as any).status = 403;
-      throw err;
+    if (requestedFid) {
+      if (requestedFid === 'ALL' || !matchesFreelancerId(userFid, requestedFid)) {
+        const err = new Error('Acesso negado: Você não tem permissão para acessar ou modificar dados de outro workspace.');
+        (err as any).status = 403;
+        throw err;
+      }
     }
 
     return {
@@ -328,8 +330,8 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
 
   // Validação real de credenciais
   const isValidAdmin =
-    (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === 'admin@ghprospeccao.com' || cleanEmail === 'admin') &&
-    (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === 'Admin@2026!' || cleanPass === 'admin');
+    (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === 'admin@ghprospeccao.com') &&
+    cleanPass === ADMIN_DEFAULT_PASSWORD;
 
   if (!isValidAdmin) {
     return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
@@ -828,14 +830,10 @@ app.post('/api/leads/batch-delete', requireAuth, async (req: Request, res: Respo
       }
     }
 
-    let deletedCount = 0;
-    for (const id of leadIds) {
-      const ok = await db.deleteLead(id, {
-        freelancerId: req.user?.freelancerId,
-        role: req.user?.role,
-      });
-      if (ok) deletedCount++;
-    }
+    const deletedCount = await db.deleteMultipleLeads(leadIds, {
+      freelancerId: req.user?.freelancerId,
+      role: req.user?.role,
+    });
 
     res.json({ success: true, deletedCount });
   } catch (err: unknown) {
@@ -1023,9 +1021,7 @@ app.get('/api/states-summary', requireAuth, (req: Request, res: Response) => {
 
 app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
   try {
-    if (db.getLeadsCount() === 0) {
-      await db.ensureInitialized();
-    }
+    await db.ensureInitialized();
     const {
       state,
       city,

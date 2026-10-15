@@ -125,6 +125,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   // Filtros
   const [search, setSearch] = useState<string>('');
+  const [activeSearch, setActiveSearch] = useState<string>('');
   const [stateFilter, setStateFilter] = useState<string>(initialStateFilter || 'ALL');
   const [cityFilter, setCityFilter] = useState<string>('ALL');
   const [nicheFilter, setNicheFilter] = useState<string>(initialNicheFilter || 'ALL');
@@ -169,7 +170,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     onlyFavorites,
     excludeHidden,
     minScore,
-    search,
+    search: activeSearch,
     sortBy,
     page,
     pageSize,
@@ -186,7 +187,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     onlyFavorites,
     excludeHidden,
     minScore,
-    search,
+    search: activeSearch,
     sortBy,
     page,
     pageSize,
@@ -222,14 +223,8 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
       // Se uma requisição mais recente já disparou, descarta a resposta defasada
       if (thisRequestId !== requestIdRef.current) return;
 
-      // Se for atualização silenciosa e a resposta veio vazia enquanto já tínhamos leads,
-      // preserva a lista existente na tela para evitar desaparecimento momentâneo
-      setLeads((prevLeads) => {
-        if (silent && (!data.leads || data.leads.length === 0) && prevLeads.length > 0) {
-          return prevLeads;
-        }
-        return data.leads || [];
-      });
+      // Atualiza os leads com a resposta exata do servidor
+      setLeads(data.leads || []);
       setTotal(data.total ?? 0);
       setTotalPages(data.totalPages || 1);
       setLoadError(null);
@@ -313,6 +308,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     onlyFavorites,
     minScore,
     sortBy,
+    activeSearch,
     refreshTrigger,
     loadLeads,
     loadNiches,
@@ -429,8 +425,8 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setActiveSearch(search.trim());
     setPage(1);
-    loadLeads();
   };
 
   const markAsContacted = async (lead: Lead) => {
@@ -559,6 +555,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     setExcludeHidden(false);
     setMinScore(0);
     setSearch('');
+    setActiveSearch('');
     setPage(1);
     onClearInitialFilters?.();
   };
@@ -931,7 +928,14 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
               type="text"
               placeholder="Buscar por nome da loja, cidade ou telefone..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearch(val);
+                if (val === '') {
+                  setActiveSearch('');
+                  setPage(1);
+                }
+              }}
               className="w-full rounded-lg border border-neutral-200 pl-9 pr-4 py-2 text-xs text-neutral-800 placeholder-neutral-400 shadow-2xs focus:border-neutral-900 focus:outline-hidden"
             />
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-neutral-400" />

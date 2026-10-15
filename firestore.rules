@@ -1,64 +1,79 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Funções auxiliares de segurança e autenticação
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'gustavohcsantos.mm2020@gmail.com' ||
+        request.auth.token.admin == true
+      );
+    }
+
     // 1. REGRAS PARA LEADS COM VALIDAÇÃO ESTRITA DE ESQUEMA E SEGURANÇA
     match /leads/{leadId} {
-      allow read: if true;
-      allow create: if request.resource.data.name is string
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.name is string
                     && request.resource.data.name.size() > 0
                     && request.resource.data.place_id is string
                     && request.resource.data.place_id.size() > 0;
-      allow update: if request.resource.data.name is string
+      allow update: if isSignedIn()
+                    && request.resource.data.name is string
                     && request.resource.data.name.size() > 0;
-      allow delete: if true;
+      allow delete: if isSignedIn();
     }
 
-    // 2. REGISTRO DE LEADS EXCLUÍDOS (IMUTÁVEL - NÃO PODE SER DELETADO OU ALTERADO)
+    // 2. REGISTRO DE LEADS EXCLUÍDOS (IMUTÁVEL - Gravação auditada, exclusão e alteração proibidas)
     match /deleted_leads/{leadId} {
-      allow read: if true;
-      allow create: if request.resource.data.deleted_at is string;
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.deleted_at is string;
       allow update, delete: if false;
     }
 
-    // 3. ESTABELECIMENTOS / PLACES (SEM EXCLUSÃO INDEVIDA)
+    // 3. ESTABELECIMENTOS / PLACES (Cache global: leitura autenticada, sem exclusão arbitrária)
     match /places/{placeId} {
-      allow read: if true;
-      allow create, update: if request.resource.data.place_id is string;
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.resource.data.place_id is string;
       allow delete: if false;
     }
 
-    // 4. JOBS DE BUSCA COM ENUM DE STATUS
+    // 4. JOBS DE BUSCA E ÁREAS COM ENUM DE STATUS E AUTENTICAÇÃO
     match /search_jobs/{jobId} {
-      allow read: if true;
-      allow create, update: if request.resource.data.status in ['pending', 'running', 'completed', 'failed', 'cancelled'];
-      allow delete: if true;
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.resource.data.status in ['pending', 'running', 'completed', 'failed', 'cancelled'];
+      allow delete: if isSignedIn();
     }
 
     match /search_areas/{areaId} {
-      allow read: if true;
-      allow create, update: if request.resource.data.status in ['pending', 'processing', 'completed', 'failed'];
-      allow delete: if true;
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.resource.data.status in ['pending', 'processing', 'completed', 'failed'];
+      allow delete: if isSignedIn();
     }
 
-    // 5. FREELANCERS (CADASTRO E GESTÃO)
+    // 5. FREELANCERS (CADASTRO E GESTÃO: Requer autenticação, exclusão restrita a admin)
     match /freelancers/{freelancerId} {
-      allow read: if true;
-      allow create, update: if request.resource.data.name is string
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+                            && request.resource.data.name is string
                             && request.resource.data.name.size() > 0;
-      allow delete: if true;
+      allow delete: if isAdmin();
     }
 
-    // 6. ATIVIDADES DE AUDITORIA (LOG IMUTÁVEL DE AUDITORIA)
+    // 6. ATIVIDADES DE AUDITORIA (LOG IMUTÁVEL: Leitura autenticada, nunca alterável nem deletável)
     match /activities/{activityId} {
-      allow read: if true;
-      allow create: if request.resource.data.action_type is string;
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.action_type is string;
       allow update, delete: if false;
     }
 
-    // 7. CONFIGURAÇÕES GLOBAIS DO SISTEMA
+    // 7. CONFIGURAÇÕES GLOBAIS DO SISTEMA (Somente Administrador)
     match /settings/{settingId} {
-      allow read: if true;
-      allow write: if request.resource.data != null;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // 8. BLOQUEIO GLOBAL: QUALQUER OUTRA COLEÇÃO OU CAMINHO NÃO AUTORIZADO É REJEITADO

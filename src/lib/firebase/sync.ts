@@ -430,13 +430,17 @@ export async function syncLeadToFirestore(lead: Lead): Promise<void> {
   const db = getFirestoreDb();
   if (!db || !lead.id) return;
   try {
+    // Verifica se o lead possui tombstone ativo em deleted_leads
+    const tombstoneSnap = await getDoc(doc(db, 'deleted_leads', lead.id)).catch(() => null);
+    if (tombstoneSnap && tombstoneSnap.exists()) {
+      return;
+    }
+
     const cleanLead = { ...lead };
     if (!cleanLead.workspace_id) {
       cleanLead.workspace_id = cleanLead.freelancer_id || 'admin';
     }
     await setDoc(doc(db, 'leads', lead.id), cleanForFirestore(cleanLead), { merge: true });
-    // Remove de deleted_leads caso tenha sido anteriormente marcado como deletado
-    await deleteDoc(doc(db, 'deleted_leads', lead.id)).catch(() => {});
   } catch (err) {
     if (isFirestoreQuotaError(err)) {
       console.warn(`[Firebase] Cota excedida ao sincronizar lead ${lead.id}`);

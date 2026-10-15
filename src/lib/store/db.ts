@@ -269,8 +269,13 @@ class Database {
     this.ensureInitialized().catch(() => {});
   }
 
+  public isLeadDeleted(id: string): boolean {
+    if (!id) return false;
+    return this.deletedLeadIds.has(id);
+  }
+
   public async ensureInitialized(): Promise<void> {
-    if (this.firestoreHydrated && (this.data.leads || []).length > 0) {
+    if (this.firestoreHydrated) {
       return;
     }
     if (this.initPromise) {
@@ -381,14 +386,15 @@ class Database {
           leadMap.set(l.id, l);
         }
 
-        // Se estamos na Vercel (onde Firestore é a fonte autoritativa):
-        // NÃO ressuscitamos leads de db.json se eles não existem no Firestore.
-        // Apenas preservamos novos leads locais que acabaram de ser criados nesta execução (ex: buscas ativas) e não foram deletados.
+        // Não ressuscitamos leads de db.json se eles não existem no Firestore.
+        // Apenas preservamos leads locais que acabaram de ser criados nesta sessão/varredura (<60s) e que não estejam tombstoned
+        const nowMs = Date.now();
         for (const l of this.data.leads || []) {
           if (!l || !l.id || this.deletedLeadIds.has(l.id)) continue;
           const existing = leadMap.get(l.id);
           if (!existing) {
-            if (!isVercel) {
+            const ageMs = nowMs - new Date(l.created_at || 0).getTime();
+            if (ageMs < 60000 && !this.deletedLeadIds.has(l.id)) {
               leadMap.set(l.id, l);
               syncLeadToFirestore(l).catch(() => {});
             }
@@ -552,7 +558,12 @@ class Database {
   }
 
   // --- LEADS ---
-  public createLead(lead: Lead): { lead: Lead; created: boolean } {
+  public createLead(lead: Lead): { lead: Lead; created: boolean; isDeleted?: boolean } {
+    // Se o lead foi excluído e está tombstoned, rejeita a recriação definitiva
+    if (lead.id && this.deletedLeadIds.has(lead.id)) {
+      return { lead, created: false, isDeleted: true };
+    }
+
     // Deduplicação comercial: único por place_id + niche + escopo estrito do workspace
     const normNiche = normalizeStr(lead.niche);
     const scope = lead.workspace_id || lead.freelancer_id || 'admin';
@@ -1369,6 +1380,39 @@ class Database {
     return true;
   }
 
+  public async deleteMultipleLeads(
+    ids: string[],
+    scope?: { freelancerId?: string; role?: 'admin' | 'freelancer' }
+  ): Promise<number> {
+    if (!ids || ids.length === 0) return 0;
+    const idsSet = new Set(ids);
+
+    if (scope?.role === 'freelancer' && scope.freelancerId) {
+      for (const id of ids) {
+        const lead = (this.data.leads || []).find((l) => l.id === id);
+        if (lead && !matchesFreelancerId(lead.freelancer_id, scope.freelancerId) && lead.workspace_id !== scope.freelancerId) {
+          throw new Error('Acesso não autorizado: você só pode excluir leads do seu próprio workspace.');
+        }
+      }
+    }
+
+    for (const id of ids) {
+      this.deletedLeadIds.add(id);
+    }
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
+    this.data.leads = (this.data.leads || []).filter((l) => !idsSet.has(l.id));
+    if (this.data.lead_notes) {
+      this.data.lead_notes = this.data.lead_notes.filter((n) => !idsSet.has(n.lead_id));
+    }
+    this.save();
+    try {
+      await deleteMultipleLeadsFromFirestore(ids);
+    } catch (fsErr) {
+      console.warn('[DB] Erro ao excluir lote de leads no Firestore:', fsErr);
+    }
+    return ids.length;
+  }
+
   public async purgeAllLeadsGlobal(): Promise<{
     deletedCount: number;
     leadIds: string[];
@@ -1401,13 +1445,15 @@ class Database {
 
     const localDeletedCount = allLeadIds.length;
 
-    // 3. Esvazia completamente leads, notas e reseta registros de leads deletados
+    // 3. Esvazia completamente leads e notas, mas preserva tombstones para impedir qualquer ressurreição
     this.data.leads = [];
     if (this.data.lead_notes) {
       this.data.lead_notes = [];
     }
-    this.data.deleted_lead_ids = [];
-    this.deletedLeadIds.clear();
+    for (const id of combinedIdsToPurge) {
+      this.deletedLeadIds.add(id);
+    }
+    this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
     this.workspaceHydration.clear();
     this.save();
 
