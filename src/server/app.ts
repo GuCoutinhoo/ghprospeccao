@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
 import { db, matchesFreelancerId } from '../lib/store/db';
+import { isLeadInWorkspace } from '../lib/firebase/sync';
 import { fetchStates, fetchCitiesByState } from '../lib/ibge/ibgeService';
 import {
   createAndPrepareSearchJob,
@@ -40,15 +41,17 @@ app.use('/api', async (req, _res, next) => {
   try {
     await db.ensureInitialized();
   } catch (err) {
-    console.warn('[Server] Falha ao sincronizar com Firestore:', err);
+    console.error('[Server] Falha ao sincronizar com Firestore:', err);
+    // Não servir dados antigos de memória quando a leitura persistente falhou.
+    return _res.status(503).json({ error: 'Banco de dados temporariamente indisponível. Tente novamente.' });
   }
   next();
 });
 
 // --- GERENCIAMENTO DE SESSÕES & AUTENTICAÇÃO CRIPTOGRÁFICA ---
 const ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || 'gustavohcsantos.mm2020@gmail.com';
-const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
-const SESSION_SECRET = process.env.SESSION_SECRET || 'gh-prospeccao-security-token-secret-2026';
+const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || '';
 
 export interface AdminSessionPayload {
   role: 'admin';
@@ -69,13 +72,16 @@ export type SessionPayload = AdminSessionPayload | FreelancerSessionPayload;
 const revokedTokens = new Set<string>();
 
 export function signSession(payload: SessionPayload): string {
+  if (SESSION_SECRET.length < 32) {
+    throw new Error('SESSION_SECRET ou JWT_SECRET deve conter pelo menos 32 caracteres.');
+  }
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
   return `${data}.${signature}`;
 }
 
 export function verifySession(token: string): SessionPayload | null {
-  if (!token || typeof token !== 'string') return null;
+  if (SESSION_SECRET.length < 32 || !token || typeof token !== 'string') return null;
   if (revokedTokens.has(token)) return null;
 
   const parts = token.split('.');
@@ -325,12 +331,15 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Email e senha são obrigatórios.' });
   }
 
+  if (!ADMIN_DEFAULT_PASSWORD || SESSION_SECRET.length < 32) {
+    return res.status(503).json({ error: 'Credenciais ou segredo de sessão do administrador não configurados.' });
+  }
+
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanPass = String(password).trim();
 
-  // Validação real de credenciais
   const isValidAdmin =
-    (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === 'admin@ghprospeccao.com') &&
+    cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() &&
     cleanPass === ADMIN_DEFAULT_PASSWORD;
 
   if (!isValidAdmin) {
@@ -371,39 +380,9 @@ app.post('/api/admin/logout', requireAdmin, (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-// Legacy auth routes compatibilidade
-app.post('/api/auth/login', (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email e senha são obrigatórios.' });
-  }
-  const cleanEmail = String(email).trim().toLowerCase();
-  const cleanPass = String(password).trim();
-
-  const isValidAdmin =
-    (cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() || cleanEmail === 'admin@ghprospeccao.com' || cleanEmail === 'admin') &&
-    (cleanPass === ADMIN_DEFAULT_PASSWORD || cleanPass === 'Admin@2026!' || cleanPass === 'admin' || cleanPass === 'gustavo34');
-
-  if (!isValidAdmin) {
-    return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
-  }
-
-  const token = signSession({
-    role: 'admin',
-    id: 'admin_1',
-    email: cleanEmail,
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
-  });
-
-  return res.json({
-    user: {
-      id: 'admin_1',
-      email: cleanEmail,
-      name: 'Gustavo Santos',
-      role: 'admin',
-    },
-    token,
-  });
+// Rota legada desativada: não aceitar credenciais ou backdoors históricos.
+app.post('/api/auth/login', (_req: Request, res: Response) => {
+  return res.status(410).json({ error: 'Rota desativada. Use /api/admin/login.' });
 });
 
 app.get('/api/auth/me', requireAuth, (req: Request, res: Response) => {
@@ -824,7 +803,7 @@ app.post('/api/leads/batch-delete', requireAuth, async (req: Request, res: Respo
     if (req.user!.role === 'freelancer') {
       for (const id of leadIds) {
         const lead = db.getLeadById(id);
-        if (lead && !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) && lead.workspace_id !== req.user!.freelancerId) {
+        if (lead && !isLeadInWorkspace(lead, req.user!.freelancerId)) {
           return res.status(403).json({ error: 'Acesso negado: um ou mais leads pertencem a outro workspace.' });
         }
       }
@@ -853,8 +832,7 @@ app.delete('/api/leads/:id', requireAuth, async (req: Request, res: Response) =>
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
@@ -881,8 +859,7 @@ app.post('/api/leads/:id/delete', requireAuth, async (req: Request, res: Respons
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
@@ -1078,8 +1055,7 @@ app.get('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
@@ -1102,8 +1078,7 @@ app.patch('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(oldLead.freelancer_id, req.user!.freelancerId) &&
-      oldLead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(oldLead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
@@ -1156,8 +1131,7 @@ app.post('/api/leads/:id/contact-attempt', requireAuth, (req: Request, res: Resp
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
     }
@@ -1196,8 +1170,7 @@ app.post('/api/leads/:id/register-sale', requireAuth, (req: Request, res: Respon
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
     }
@@ -1236,8 +1209,7 @@ app.post('/api/leads/:id/favorite', requireAuth, (req: Request, res: Response) =
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead pertence a outro workspace.' });
     }
@@ -1259,8 +1231,7 @@ app.post('/api/leads/:id/hide', requireAuth, (req: Request, res: Response) => {
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead pertence a outro workspace.' });
     }
@@ -1287,8 +1258,7 @@ app.post('/api/leads/:id/notes', requireAuth, (req: Request, res: Response) => {
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead pertence a outro workspace.' });
     }
@@ -1340,8 +1310,7 @@ app.post('/api/pipeline/move', requireAuth, (req: Request, res: Response) => {
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
     }
@@ -1504,8 +1473,7 @@ app.get('/api/search-jobs/:id', requireAuth, (req: Request, res: Response) => {
     // Se freelancer, valida titularidade
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(job.freelancer_id, req.user!.freelancerId) &&
-      job.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(job, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
@@ -1525,8 +1493,7 @@ app.post('/api/search-jobs/:id/pause', requireAuth, (req: Request, res: Response
     if (!job) return res.status(404).json({ error: 'Search Job não encontrado.' });
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(job.freelancer_id, req.user!.freelancerId) &&
-      job.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(job, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
@@ -1544,8 +1511,7 @@ app.post('/api/search-jobs/:id/resume', requireAuth, (req: Request, res: Respons
     if (!job) return res.status(404).json({ error: 'Search Job não encontrado.' });
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(job.freelancer_id, req.user!.freelancerId) &&
-      job.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(job, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
@@ -1563,8 +1529,7 @@ app.post('/api/search-jobs/:id/cancel', requireAuth, (req: Request, res: Respons
     if (!job) return res.status(404).json({ error: 'Search Job não encontrado.' });
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(job.freelancer_id, req.user!.freelancerId) &&
-      job.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(job, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
