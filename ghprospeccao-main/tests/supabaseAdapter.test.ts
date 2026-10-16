@@ -128,6 +128,53 @@ test('Supabase: freelancer creation persists and access code is unique',async()=
   assert.equal((await repo.getFreelancerById(a.id))?.status,'blocked');
 });
 
+test('Supabase: custom freelancer slugs are unique, PIN-protected, and editable',async()=>{
+  const f=await repo.createFreelancer({name:'Teste',email:'teste@example.test',access_code:'Téste'});
+  assert.equal(f.access_code,'teste');
+  assert.match(f.temporaryPin || '',/^\d{6}$/);
+  const persisted=await repo.getFreelancerById(f.id);
+  assert.equal(persisted?.access_code,'teste');
+  assert.ok(persisted?.pin_hash?.includes(':'));
+  assert.equal(persisted?.pin,undefined);
+  assert.equal((persisted as any)?.temporaryPin,undefined,'Never persist one-time PIN');
+  await assert.rejects(()=>repo.createFreelancer({name:'Outra',email:'outra@example.test',access_code:'TESTE'}),{status:409});
+  const b=await repo.createFreelancer({name:'Ana',email:'ana@example.test',access_code:'ana'});
+  await assert.rejects(()=>repo.updateFreelancer(b.id,{access_code:'teste'}),{status:409});
+  const changed=await repo.updateFreelancer(f.id,{name:'Teste Novo',pin:''});
+  assert.equal(changed?.pin_hash,persisted?.pin_hash,'Blank PIN must not clear the existing hash');
+  const renamed=await repo.updateFreelancer(f.id,{access_code:'teste-novo'});
+  assert.equal(renamed?.access_code,'teste-novo');
+  assert.equal(renamed?.pin_hash,persisted?.pin_hash);
+  assert.equal((await repo.getFreelancerByAccessCode('teste'))?.id,undefined);
+  assert.equal((await repo.getFreelancerByAccessCode('teste-novo'))?.id,f.id);
+  const regenerated=await repo.regenerateFreelancerAccessCode(f.id);
+  assert.equal(regenerated?.accessCode,'teste');
+  assert.equal((await repo.getFreelancerById(f.id))?.id,f.id);
+  const repeated=await repo.regenerateFreelancerAccessCode(f.id);
+  assert.equal(repeated?.accessCode,'teste-2','Regeneration must invalidate previous URL');
+});
+
+test('Supabase: human-readable links require PIN and keep legacy workspaces isolated',async()=>{
+  const request=(await import('supertest')).default;
+  const app=(await import('../src/server/app')).default;
+  const f=await repo.createFreelancer({name:'Segura',email:'segura@example.test',access_code:'segura',pin:'123456'});
+  const missing=await request(app).post('/api/freelancer/auth/verify').send({accessCode:'segura'});
+  assert.equal(missing.status,401);
+  const correct=await request(app).post('/api/freelancer/auth/verify').send({accessCode:'segura',pin:'123456'});
+  assert.equal(correct.status,200);
+  assert.ok(correct.body.token);
+  await repo.setFreelancerStatus(f.id,'blocked');
+  assert.equal((await request(app).post('/api/freelancer/auth/verify').send({accessCode:'segura',pin:'123456'})).status,403);
+  const legacyId='free_'+crypto.randomUUID();
+  await repo.firestore.collection('freelancers').doc(legacyId).create({
+    id:legacyId,name:'Legado',email:'legacy@example.test',access_code:'old-random_TOKEN',
+    status:'blocked',created_at:timestamp(),updated_at:timestamp()
+  });
+  const updated=await repo.updateFreelancer(legacyId,{access_code:'legado'});
+  assert.match(updated?.temporaryPin || '',/^\d{6}$/,'PIN must be assigned to old link converted to slug');
+  assert.equal((await repo.getFreelancerById(legacyId))?.status,'blocked','Changing link must not unblock');
+});
+
 test('Supabase: API authorization and admin login work across requests',async()=>{
   const request=(await import('supertest')).default;
   const app=(await import('../src/server/app')).default;
