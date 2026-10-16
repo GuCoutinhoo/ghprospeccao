@@ -234,7 +234,7 @@ process.on('exit',()=>{globalThis.fetch=originalFetch;});
 
 test('Search filters: maximum, minimum, exact and rating boundary values',async()=>{
   const {checkLeadFilters}=await import('../src/lib/search/searchWorker');
-  const base={website_status:'no_website',website:'',phone:'11999999999',rating:4.5,reviews_count:10};
+  const base={website_status:'no_website' as const,website:'',phone:'11999999999',rating:4.5,reviews_count:10};
   const filters={onlyWithoutWebsite:false,onlyWithPhone:false,minRating:4,minReviews:0,maxReviews:10};
   assert.equal(checkLeadFilters({...base,reviews_count:0},filters),true);
   assert.equal(checkLeadFilters({...base,reviews_count:10},filters),true);
