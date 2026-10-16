@@ -9,12 +9,6 @@ import {
 import { Freelancer } from '../../types';
 import { api } from '../../lib/api';
 
-function normalizeFreelancerCode(raw: string): string {
-  let code = (raw || '').trim().replace(/^https?:\/\/[^/]+\/f\//i, '').replace(/^\/f\//i, '').replace(/\/+$/, '');
-  try { code = decodeURIComponent(code); } catch { /* Preserve invalid percent-escapes. */ }
-  return code.replace(/[\u200B-\u200F\u2060\uFEFF]/g, '').trim();
-}
-
 interface FreelancerAccessViewProps {
   initialCode?: string;
   onWorkspaceReady: (freelancer: Freelancer, token: string) => void;
@@ -34,14 +28,17 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
 
   useEffect(() => {
     if (initialCode && initialCode.trim()) {
-      const normalized = normalizeFreelancerCode(initialCode);
-      setAccessCode(normalized);
-      handleVerify(normalized);
+      handleVerify(initialCode.trim());
     }
   }, [initialCode]);
 
   const handleVerify = async (codeToUse?: string) => {
-    const code = normalizeFreelancerCode(codeToUse || accessCode || '');
+    const raw = (codeToUse || accessCode || '').trim();
+    const code = raw
+      .replace(/^https?:\/\/[^\/]+\/f\//i, '')
+      .replace(/^\/f\//i, '')
+      .replace(/\/+$/, '')
+      .trim();
 
     if (!code) {
       setError('Por favor, informe seu nome ou código de acesso.');

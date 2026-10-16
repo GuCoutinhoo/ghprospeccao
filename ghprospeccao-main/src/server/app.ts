@@ -1,14 +1,8 @@
-import 'express-async-errors';
 import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
-import { db, matchesFreelancerId, isLeadInWorkspace, actorContext } from '../lib/store/db';
-import { storageErrorCode } from '../lib/firebase/admin';
-import { digest } from '../lib/store/repository';
-import { shouldUseSupabase } from '../lib/supabase/admin';
-import { dispatchSearchJobs } from '../lib/search/searchWorker';
-import { verifyPin } from './security';
-import { z } from 'zod';
+import { db, matchesFreelancerId } from '../lib/store/db';
+import { isLeadInWorkspace } from '../lib/firebase/sync';
 import { fetchStates, fetchCitiesByState } from '../lib/ibge/ibgeService';
 import {
   createAndPrepareSearchJob,
@@ -25,13 +19,12 @@ import { Freelancer } from '../types';
 dotenv.config();
 
 const app = express();
-app.set('json replacer',(key:string,value:unknown)=>['pin','pin_hash'].includes(key)?undefined:value);
 
-app.use(express.json({limit:'256kb'}));
-app.use('/api', (_req,res,next)=>{res.setHeader('Cache-Control','no-store, private');next();});
+app.use(express.json());
 
 // CORS & Headers para produção e Vercel
 app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-matched-path, x-forwarded-uri');
   if (req.method === 'OPTIONS') {
@@ -40,14 +33,25 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware assíncrono para garantir sincronização com o Firestore antes de qualquer consulta à API
+app.use('/api', async (req, _res, next) => {
+  if (req.path === '' || req.path === '/') {
+    return next();
+  }
+  try {
+    await db.ensureInitialized();
+  } catch (err) {
+    console.error('[Server] Falha ao sincronizar com Firestore:', err);
+    // Não servir dados antigos de memória quando a leitura persistente falhou.
+    return _res.status(503).json({ error: 'Banco de dados temporariamente indisponível. Tente novamente.' });
+  }
+  next();
+});
+
 // --- GERENCIAMENTO DE SESSÕES & AUTENTICAÇÃO CRIPTOGRÁFICA ---
-const ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || '';
-const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || '';
-function sessionSecret() {
-  const secret=process.env.SESSION_SECRET;
-  if(!secret || secret.length<32)throw new Error('SESSION_SECRET must contain at least 32 random characters.');
-  return secret;
-}
+const ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || 'gustavohcsantos.mm2020@gmail.com';
+const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || 'gustavo34';
+const SESSION_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'ghprospeccao_b2b_secret_key_session_token_min32chars';
 
 export interface AdminSessionPayload {
   role: 'admin';
@@ -65,21 +69,25 @@ export interface FreelancerSessionPayload {
 
 export type SessionPayload = AdminSessionPayload | FreelancerSessionPayload;
 
-const revokedTokens = { async add(token:string) {await db.firestore.collection('revoked_sessions').doc(digest(token)).set({revoked_at:new Date().toISOString()});} };
+const revokedTokens = new Set<string>();
 
 export function signSession(payload: SessionPayload): string {
-  const data = Buffer.from(JSON.stringify({...payload,sid:crypto.randomUUID()})).toString('base64url');
-  const signature = crypto.createHmac('sha256', sessionSecret()).update(data).digest('base64url');
+  if (SESSION_SECRET.length < 32) {
+    throw new Error('SESSION_SECRET ou JWT_SECRET deve conter pelo menos 32 caracteres.');
+  }
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
   return `${data}.${signature}`;
 }
 
 export function verifySession(token: string): SessionPayload | null {
-  if (!token || typeof token !== 'string') return null;
+  if (SESSION_SECRET.length < 32 || !token || typeof token !== 'string') return null;
+  if (revokedTokens.has(token)) return null;
 
   const parts = token.split('.');
   if (parts.length !== 2) return null;
   const [data, signature] = parts;
-  const expectedSig = crypto.createHmac('sha256', sessionSecret()).update(data).digest('base64url');
+  const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
   if (signature.length !== expectedSig.length) return null;
   if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
     return null;
@@ -87,7 +95,7 @@ export function verifySession(token: string): SessionPayload | null {
 
   try {
     const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8')) as SessionPayload;
-    if (!Number.isFinite(payload.exp) || payload.exp <= Date.now() || !['admin','freelancer'].includes(payload.role)) {
+    if (payload.exp && payload.exp < Date.now()) {
       return null;
     }
     return payload;
@@ -124,7 +132,7 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
   }
 
   const payload = verifySession(token);
-  if (!payload || await db.get('revoked_sessions',digest(token))) {
+  if (!payload) {
     req.user = undefined;
     return next();
   }
@@ -140,14 +148,22 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
   }
 
   if (payload.role === 'freelancer') {
-    const freelancer = await db.getFreelancerById(payload.freelancerId);
+    let freelancer = db.getFreelancerById(payload.freelancerId) || db.getFreelancerByAccessCode(payload.accessCode);
+    if (!freelancer) {
+      try {
+        await db.syncFromFirestore();
+        freelancer = db.getFreelancerById(payload.freelancerId) || db.getFreelancerByAccessCode(payload.accessCode);
+      } catch (syncErr) {
+        console.warn('[Server] Falha ao sincronizar com Firestore na autenticação:', syncErr);
+      }
+    }
 
     if (!freelancer) {
       req.user = undefined;
       return next();
     }
 
-    if (freelancer.status !== 'active' || freelancer.access_code !== payload.accessCode) {
+    if (freelancer.status === 'blocked') {
       return res.status(403).json({
         error: 'Acesso desativado',
         blocked: true,
@@ -163,6 +179,7 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
       email: freelancer.email,
       freelancer,
     };
+    db.updateFreelancer(freelancer.id, { last_activity_at: new Date().toISOString() });
     return next();
   }
 
@@ -171,8 +188,6 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
 });
 
 // Middleware de proteção: exige usuário autenticado
-app.use('/api', (req,res,next) => actorContext.run(req.user ? {role:req.user.role,freelancerId:req.user.freelancerId} : {role:'anonymous'},next));
-
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.user) {
     return res.status(401).json({
@@ -282,58 +297,6 @@ export function resolveWorkspaceScope(req: Request): {
 }
 
 // --- ROTAS DA API ---
-app.use(['/api/admin/login','/api/freelancer/auth/verify'],async(req,res,next)=>{
-  if(req.method!=='POST' || req.path==='/api/admin/login')return next();
-  const key=digest(`${req.ip}:${String(req.body.email || req.body.accessCode || '').toLowerCase()}`);
-  const allowed=await db.firestore.runTransaction(async tx=>{
-    const ref=db.firestore.collection('auth_attempts').doc(key);const snap=await tx.get(ref);const data=snap.data();
-    const reset=!data || data.until<Date.now();const count=reset?0:data.count;
-    if(count>=20)return false;
-    tx.set(ref,{count:count+1,until:reset?Date.now()+15*60*1000:data!.until});return true;
-  });
-  if(!allowed)return res.status(429).json({error:'Muitas tentativas. Aguarde antes de tentar novamente.'});next();
-});
-
-// Deployment readiness: safe, read-only check against the actual configured database.
-app.get('/api/health', async (_req:Request,res:Response) => {
-  if(!shouldUseSupabase())return res.status(503).json({status:'not_ready'});
-  try {
-    await db.ensureInitialized();
-    return res.json({status:'ok',storage:'connected',googlePlacesConfigured:Boolean(process.env.GOOGLE_MAPS_API_KEY)});
-  } catch {
-    return res.status(503).json({status:'degraded',storage:'unavailable'});
-  }
-});
-
-// Single-use real Google Places connectivity probe; no credentials or Places data are returned.
-// The atomic marker prevents repeated paid requests. Remove this diagnostic after validation.
-app.get('/api/health/google-once', async (_req:Request,res:Response) => {
-  if(process.env.GH_LIVE_GOOGLE_SMOKE_TEST!=='enabled' && !(process.env.NODE_ENV==='production' && process.env.GH_SUPABASE_SECRET_KEY && process.env.GOOGLE_MAPS_API_KEY))return res.sendStatus(404);
-  if(!shouldUseSupabase())return res.sendStatus(503);
-  try {
-    await db.ensureInitialized();
-    const ref=db.firestore.collection('settings').doc('google_smoke_check_20261015');
-    try {
-      await ref.create({status:'running',started_at:new Date().toISOString()});
-    } catch (err) {
-      const previous=await ref.get();
-      if(!previous.exists)throw err;
-      const stored=previous.data() || {};
-      return res.status(stored.status==='passed'?200:stored.status==='running'?202:503)
-        .json({status:stored.status==='passed'?'ok':stored.status==='running'?'pending':'failed',
-          placesFound:stored.placesFound || 0,alreadyRun:true});
-    }
-    const key=process.env.GOOGLE_MAPS_API_KEY||'';
-    const response=await searchPlacesOfficial('Barbearia em São Paulo SP',key,{maxResultCount:1},1);
-    const success=!response.error && response.places.length>0;
-    const placesFound=response.places.length;
-    await ref.update({status:success?'passed':'failed',placesFound,finished_at:new Date().toISOString(),
-      error_code:success?'':response.error?'GOOGLE_API_ERROR':'NO_RESULTS'});
-    return res.status(success?200:503).json({status:success?'ok':'failed',placesFound});
-  } catch {
-    return res.status(503).json({status:'unavailable'});
-  }
-});
 
 // 0. HEALTH CHECK & SYNC
 app.get('/api', (_req: Request, res: Response) => {
@@ -344,10 +307,10 @@ app.get('/api', (_req: Request, res: Response) => {
   });
 });
 
-app.post('/api/sync', requireAuth, async (_req: Request, res: Response) => {
+app.post('/api/sync', async (_req: Request, res: Response) => {
   try {
     const result = await db.syncFromFirestore();
-    const stats = (await db.getDashboardStats());
+    const stats = db.getDashboardStats();
     res.json({
       success: true,
       message: 'Sincronização com o Firestore concluída com sucesso!',
@@ -357,7 +320,7 @@ app.post('/api/sync', requireAuth, async (_req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
@@ -368,31 +331,27 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Email e senha são obrigatórios.' });
   }
 
+  if (!ADMIN_DEFAULT_PASSWORD || SESSION_SECRET.length < 32) {
+    return res.status(503).json({ error: 'Credenciais ou segredo de sessão do administrador não configurados.' });
+  }
+
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanPass = String(password).trim();
 
-  // Validação real de credenciais
   const isValidAdmin =
-    Boolean(ADMIN_DEFAULT_EMAIL && ADMIN_DEFAULT_PASSWORD.length>=12) &&
     cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() &&
-    crypto.timingSafeEqual(crypto.createHash('sha256').update(cleanPass).digest(),crypto.createHash('sha256').update(ADMIN_DEFAULT_PASSWORD).digest());
+    cleanPass === ADMIN_DEFAULT_PASSWORD;
 
   if (!isValidAdmin) {
-    return res.status(401).json({ error: 'E-mail ou senha incorretos.', code: 'INVALID_ADMIN_CREDENTIALS' });
+    return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
   }
 
-  let token: string;
-  try {
-    token = signSession({
+  const token = signSession({
     role: 'admin',
     id: 'admin_1',
     email: cleanEmail,
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
-    });
-  } catch (error) {
-    console.error('[admin-login] session creation failed:', error instanceof Error ? error.message : 'unknown error');
-    return res.status(503).json({error:'Configuração de sessão indisponível. Contate o administrador.',code:'ADMIN_SESSION_CONFIG_ERROR'});
-  }
+  });
 
   return res.json({
     success: true,
@@ -412,27 +371,29 @@ app.get('/api/admin/me', requireAdmin, (req: Request, res: Response) => {
   });
 });
 
-app.post('/api/admin/logout', requireAdmin, async (req: Request, res: Response) => {
+app.post('/api/admin/logout', requireAdmin, (req: Request, res: Response) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (token) {
-    await revokedTokens.add(token);
+    revokedTokens.add(token);
   }
   res.json({ success: true });
 });
 
-// Legacy auth routes compatibilidade
-app.post('/api/auth/login', (_req, res) => res.status(410).json({error:'Use /api/admin/login.'}));
+// Rota legada desativada: não aceitar credenciais ou backdoors históricos.
+app.post('/api/auth/login', (_req: Request, res: Response) => {
+  return res.status(410).json({ error: 'Rota desativada. Use /api/admin/login.' });
+});
 
 app.get('/api/auth/me', requireAuth, (req: Request, res: Response) => {
   res.json({ user: req.user });
 });
 
-app.post('/api/auth/logout', async (req: Request, res: Response) => {
+app.post('/api/auth/logout', (req: Request, res: Response) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (token) {
-    await revokedTokens.add(token);
+    revokedTokens.add(token);
   }
   res.json({ success: true });
 });
@@ -444,7 +405,15 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Código de acesso do freelancer é obrigatório.' });
   }
 
-  const freelancer = await db.getFreelancerByAccessCode(String(accessCode));
+  let freelancer = db.getFreelancerByAccessCode(accessCode) || db.getFreelancerById(accessCode);
+  if (!freelancer) {
+    try {
+      await db.syncFromFirestore();
+      freelancer = db.getFreelancerByAccessCode(accessCode) || db.getFreelancerById(accessCode);
+    } catch (err) {
+      console.warn('[Server] Falha ao sincronizar Firestore ao verificar código:', err);
+    }
+  }
 
   if (!freelancer) {
     return res.status(404).json({
@@ -478,50 +447,41 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
 
-  // Audit writes must never invalidate a successfully verified PIN.
-  const audit = await Promise.allSettled([
-    db.updateFreelancer(freelancer.id, {
-      last_access_at: new Date().toISOString(),
-      last_activity_at: new Date().toISOString(),
-    }),
-    db.logActivity({
-      freelancer_id: freelancer.id,
-      freelancer_name: freelancer.name,
-      action_type: 'login',
-      description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
-      metadata: { access_code: freelancer.access_code },
-    }),
-  ]);
-  for (const outcome of audit) {
-    if (outcome.status === 'rejected') {
-      console.error('Non-critical freelancer login audit failed', {
-        code: storageErrorCode(outcome.reason),
-      });
-    }
-  }
+  const updated = db.updateFreelancer(freelancer.id, {
+    last_access_at: new Date().toISOString(),
+    last_activity_at: new Date().toISOString(),
+  });
+
+  db.logActivity({
+    freelancer_id: freelancer.id,
+    freelancer_name: freelancer.name,
+    action_type: 'login',
+    description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
+    metadata: { access_code: freelancer.access_code },
+  });
 
   return res.json({
     success: true,
     token,
-    freelancer: audit[0].status === 'fulfilled' ? (audit[0].value || freelancer) : freelancer,
+    freelancer: updated || freelancer,
   });
 });
 
-app.post('/api/freelancer/logout', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/freelancer/logout', requireAuth, (req: Request, res: Response) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (token) {
-    await revokedTokens.add(token);
+    revokedTokens.add(token);
   }
   res.json({ success: true });
 });
 
-app.get('/api/freelancer/me', async (req: Request, res: Response) => {
+app.get('/api/freelancer/me', (req: Request, res: Response) => {
   if (!req.user || req.user.role !== 'freelancer' || !req.user.freelancer) {
     return res.status(401).json({ error: 'Sessão de freelancer não encontrada ou expirada.' });
   }
 
-  const f = (await db.getFreelancerById(req.user.freelancer.id));
+  const f = db.getFreelancerById(req.user.freelancer.id);
   if (!f || f.status === 'blocked') {
     return res.status(403).json({
       error: 'Acesso desativado',
@@ -538,7 +498,6 @@ app.post('/api/freelancer/workspace/reset', requireAuth, async (req: Request, re
   try {
     let freelancerId: string | undefined;
     if (req.user!.role === 'freelancer') {
-      if(req.body?.freelancerId && !matchesFreelancerId(req.body.freelancerId,req.user!.freelancerId))return res.status(403).json({error:'Acesso negado.'});
       freelancerId = req.user!.freelancerId;
     } else {
       freelancerId = req.body?.freelancerId || (req.query.freelancer_id as string);
@@ -554,42 +513,42 @@ app.post('/api/freelancer/workspace/reset', requireAuth, async (req: Request, re
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
 // 3. ADMIN FREELANCER MANAGEMENT ENDPOINTS (PROTEGIDOS POR ADMIN)
-app.get('/api/admin/dashboard/stats', requireAdmin, async (req: Request, res: Response) => {
+app.get('/api/admin/dashboard/stats', requireAdmin, (req: Request, res: Response) => {
   try {
-    const stats = (await db.getAdminDashboardStats({
+    const stats = db.getAdminDashboardStats({
       freelancer_id: req.query.freelancer_id as string,
       period: req.query.period as string,
       state: req.query.state as string,
       niche: req.query.niche as string,
       status: req.query.status as string,
-    }));
+    });
     res.json(stats);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.get('/api/admin/freelancers', requireAdmin, async (_req: Request, res: Response) => {
+app.get('/api/admin/freelancers', requireAdmin, (_req: Request, res: Response) => {
   try {
-    const freelancers = (await db.getFreelancers());
+    const freelancers = db.getFreelancers();
     // Enriquece com métricas de desempenho individuais
-    const enriched = freelancers.map(async (f) => {
-      const perf = (await db.getFreelancerPerformance(f.id));
+    const enriched = freelancers.map((f) => {
+      const perf = db.getFreelancerPerformance(f.id);
       return {
         ...f,
         performance: perf,
       };
     });
-    res.json(await Promise.all(enriched));
+    res.json(enriched);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
@@ -609,86 +568,84 @@ app.post('/api/admin/freelancers', requireAdmin, async (req: Request, res: Respo
       status: status || 'active',
     });
 
-    const perf = (await db.getFreelancerPerformance(freelancer.id));
+    const perf = db.getFreelancerPerformance(freelancer.id);
 
     res.status(201).json({
       success: true,
       freelancer: { ...freelancer, performance: perf },
       accessLink: `/f/${freelancer.access_code}`,
-      temporaryPin: freelancer.temporaryPin,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: [400,409].includes((err as any)?.status) ? message : (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.get('/api/admin/freelancers/:id', requireAdmin, async (req: Request, res: Response) => {
+app.get('/api/admin/freelancers/:id', requireAdmin, (req: Request, res: Response) => {
   try {
-    const f = (await db.getFreelancerById(req.params.id));
+    const f = db.getFreelancerById(req.params.id);
     if (!f) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
-    const performance = (await db.getFreelancerPerformance(f.id));
+    const performance = db.getFreelancerPerformance(f.id);
     res.json({ freelancer: f, performance });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.patch('/api/admin/freelancers/:id', requireAdmin, async (req: Request, res: Response) => {
+app.patch('/api/admin/freelancers/:id', requireAdmin, (req: Request, res: Response) => {
   try {
-    const updated = (await db.updateFreelancer(req.params.id, req.body));
+    const updated = db.updateFreelancer(req.params.id, req.body);
     if (!updated) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
-    const perf = (await db.getFreelancerPerformance(updated.id));
-    res.json({ success: true, freelancer: { ...updated, performance: perf }, temporaryPin: updated.temporaryPin });
+    const perf = db.getFreelancerPerformance(updated.id);
+    res.json({ success: true, freelancer: { ...updated, performance: perf } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: [400,409].includes((err as any)?.status) ? message : (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/admin/freelancers/:id/block', requireAdmin, async (req: Request, res: Response) => {
+app.post('/api/admin/freelancers/:id/block', requireAdmin, (req: Request, res: Response) => {
   try {
-    const updated = (await db.setFreelancerStatus(req.params.id, 'blocked'));
-    if (!updated) {
-      return res.status(404).json({ error: 'Freelancer não encontrado.' });
-    }
-    res.json({ success: true, freelancer: updated });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
-  }
-});
-
-app.post('/api/admin/freelancers/:id/unblock', requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const updated = (await db.setFreelancerStatus(req.params.id, 'active'));
+    const updated = db.setFreelancerStatus(req.params.id, 'blocked');
     if (!updated) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
     res.json({ success: true, freelancer: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: [400,409].includes((err as any)?.status) ? message : (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/admin/freelancers/:id/regenerate-link', requireAdmin, async (req: Request, res: Response) => {
+app.post('/api/admin/freelancers/:id/unblock', requireAdmin, (req: Request, res: Response) => {
   try {
-    const result = await db.regenerateFreelancerAccessCode(req.params.id);
-    if (!result) {
+    const updated = db.setFreelancerStatus(req.params.id, 'active');
+    if (!updated) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
-    const updated = await db.getFreelancerById(req.params.id);
-    res.json({ success: true, accessCode: result.accessCode, accessLink: `/f/${result.accessCode}`,
-      freelancer: updated, temporaryPin: result.temporaryPin });
+    res.json({ success: true, freelancer: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: [400,409].includes((err as any)?.status) ? message : (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/admin/freelancers/:id/regenerate-link', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const newCode = db.regenerateFreelancerAccessCode(req.params.id);
+    if (!newCode) {
+      return res.status(404).json({ error: 'Freelancer não encontrado.' });
+    }
+    const updated = db.getFreelancerById(req.params.id);
+    res.json({ success: true, accessCode: newCode, accessLink: `/f/${newCode}`, freelancer: updated });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
   }
 });
 
@@ -705,7 +662,7 @@ app.delete('/api/admin/freelancers/:id', requireAdmin, async (req: Request, res:
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
@@ -719,7 +676,7 @@ app.post('/api/admin/freelancers/:id/reset', requireAdmin, async (req: Request, 
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
@@ -747,7 +704,7 @@ app.post('/api/admin/leads/purge-global', requireAdmin, async (req: Request, res
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
@@ -836,14 +793,17 @@ app.post('/api/leads/batch-delete', requireAuth, async (req: Request, res: Respo
 
     if (req.user!.role === 'freelancer') {
       for (const id of leadIds) {
-        const lead = (await db.getLeadById(id));
-        if (lead && !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) && lead.workspace_id !== req.user!.freelancerId) {
+        const lead = db.getLeadById(id);
+        if (lead && !isLeadInWorkspace(lead, req.user!.freelancerId)) {
           return res.status(403).json({ error: 'Acesso negado: um ou mais leads pertencem a outro workspace.' });
         }
       }
     }
 
-    const deletedCount = await db.deleteMultipleLeads(leadIds, req.user?.freelancerId);
+    const deletedCount = await db.deleteMultipleLeads(leadIds, {
+      freelancerId: req.user?.freelancerId,
+      role: req.user?.role,
+    });
 
     res.json({ success: true, deletedCount });
   } catch (err: unknown) {
@@ -856,20 +816,22 @@ app.post('/api/leads/batch-delete', requireAuth, async (req: Request, res: Respo
 app.delete('/api/leads/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const leadId = req.params.id;
-    const lead = (await db.getLeadById(leadId));
+    const lead = db.getLeadById(leadId);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
 
-    await db.deleteLead(leadId, req.user?.freelancerId);
+    await db.deleteLead(leadId, {
+      freelancerId: req.user?.freelancerId,
+      role: req.user?.role,
+    });
     res.json({ success: true, message: 'Lead excluído com sucesso.' });
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -881,20 +843,22 @@ app.delete('/api/leads/:id', requireAuth, async (req: Request, res: Response) =>
 app.post('/api/leads/:id/delete', requireAuth, async (req: Request, res: Response) => {
   try {
     const leadId = req.params.id;
-    const lead = (await db.getLeadById(leadId));
+    const lead = db.getLeadById(leadId);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
 
-    await db.deleteLead(leadId, req.user?.freelancerId);
+    await db.deleteLead(leadId, {
+      freelancerId: req.user?.freelancerId,
+      role: req.user?.role,
+    });
     res.json({ success: true, message: 'Lead excluído com sucesso.' });
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -903,49 +867,49 @@ app.post('/api/leads/:id/delete', requireAuth, async (req: Request, res: Respons
   }
 });
 
-app.get('/api/admin/freelancers/:id/leads', requireAdmin, async (req: Request, res: Response) => {
+app.get('/api/admin/freelancers/:id/leads', requireAdmin, (req: Request, res: Response) => {
   try {
-    const leads = (await db.getLeads({ freelancer_id: req.params.id, limit: 500 }));
+    const leads = db.getLeads({ freelancer_id: req.params.id, limit: 500 });
     res.json(leads);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.get('/api/admin/freelancers/:id/searches', requireAdmin, async (req: Request, res: Response) => {
+app.get('/api/admin/freelancers/:id/searches', requireAdmin, (req: Request, res: Response) => {
   try {
-    const searches = (await db.getAllSearchJobs(req.params.id));
+    const searches = db.getAllSearchJobs(req.params.id);
     res.json(searches);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.get('/api/admin/freelancers/:id/activities', requireAdmin, async (req: Request, res: Response) => {
+app.get('/api/admin/freelancers/:id/activities', requireAdmin, (req: Request, res: Response) => {
   try {
-    const result = (await db.getActivities({ freelancer_id: req.params.id, limit: 100 }));
+    const result = db.getActivities({ freelancer_id: req.params.id, limit: 100 });
     res.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.get('/api/admin/activities', requireAdmin, async (req: Request, res: Response) => {
+app.get('/api/admin/activities', requireAdmin, (req: Request, res: Response) => {
   try {
     const { freelancer_id, action_type, limit, offset } = req.query;
-    const result = (await db.getActivities({
+    const result = db.getActivities({
       freelancer_id: freelancer_id as string,
       action_type: action_type as string,
       limit: limit ? Number(limit) : 50,
       offset: offset ? Number(offset) : 0,
-    }));
+    });
     res.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
@@ -956,7 +920,7 @@ app.get('/api/ibge/states', async (_req: Request, res: Response) => {
     res.json(states);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
@@ -967,7 +931,7 @@ app.get('/api/ibge/cities', async (req: Request, res: Response) => {
     res.json(cities);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
@@ -978,15 +942,15 @@ app.get('/api/ibge/cities/:uf', async (req: Request, res: Response) => {
     res.json(cities);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
 // 5. DASHBOARD STATS (COM ISOLAMENTO ESTRITO POR WORKSPACE)
-app.get('/api/dashboard/stats', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/dashboard/stats', requireAuth, (req: Request, res: Response) => {
   try {
     const scope = resolveWorkspaceScope(req);
-    const stats = (await db.getDashboardStats(scope.freelancerId));
+    const stats = db.getDashboardStats(scope.freelancerId);
     res.json(stats);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -996,11 +960,11 @@ app.get('/api/dashboard/stats', requireAuth, async (req: Request, res: Response)
 });
 
 // 6. LEADS & NICHES
-app.get('/api/niches', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/niches', requireAuth, (req: Request, res: Response) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === 'true';
     const scope = resolveWorkspaceScope(req);
-    const niches = (await db.getNichesSummary({ onlyFavorites, freelancer_id: scope.freelancerId }));
+    const niches = db.getNichesSummary({ onlyFavorites, freelancer_id: scope.freelancerId });
     res.json(niches);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -1009,12 +973,12 @@ app.get('/api/niches', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/states-summary', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/states-summary', requireAuth, (req: Request, res: Response) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === 'true';
     const niche = req.query.niche as string;
     const scope = resolveWorkspaceScope(req);
-    const states = (await db.getStatesSummary({ onlyFavorites, niche, freelancer_id: scope.freelancerId }));
+    const states = db.getStatesSummary({ onlyFavorites, niche, freelancer_id: scope.freelancerId });
     res.json(states);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -1045,8 +1009,7 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
 
     const scope = resolveWorkspaceScope(req);
 
-    const result = (await db.getLeads({
-      search_job_id: req.query.search_job_id as string | undefined,
+    const result = db.getLeads({
       freelancer_id: scope.freelancerId,
       state: state as string,
       city: city as string,
@@ -1064,7 +1027,7 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
       sortBy: sortBy as 'score' | 'reviews' | 'rating' | 'recent',
       page: page ? Number(page) : 1,
       limit: limit === 'all' || limit === '0' || limit === '-1' ? 0 : (limit ? Number(limit) : 50),
-    }));
+    });
 
     res.json(result);
   } catch (err: unknown) {
@@ -1074,41 +1037,39 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/leads/:id', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
   try {
-    const lead = (await db.getLeadById(req.params.id));
+    const lead = db.getLeadById(req.params.id);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
 
-    const notes = (await db.getLeadNotes(lead.id));
-    const place = (await db.getPlaceByPlaceId(lead.place_id));
+    const notes = db.getLeadNotes(lead.id);
+    const place = db.getPlaceByPlaceId(lead.place_id);
     res.json({ lead, notes, place });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.patch('/api/leads/:id', requireAuth, async (req: Request, res: Response) => {
+app.patch('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
   try {
-    const oldLead = (await db.getLeadById(req.params.id));
+    const oldLead = db.getLeadById(req.params.id);
     if (!oldLead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(oldLead.freelancer_id, req.user!.freelancerId) &&
-      oldLead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(oldLead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
@@ -1120,7 +1081,7 @@ app.patch('/api/leads/:id', requireAuth, async (req: Request, res: Response) => 
     delete safeUpdates.user_id;
 
     const freelancerId = req.user!.role === 'freelancer' ? req.user!.freelancerId : undefined;
-    const updated = (await db.updateLead(req.params.id, safeUpdates, freelancerId));
+    const updated = db.updateLead(req.params.id, safeUpdates, freelancerId);
     if (!updated) {
       return res.status(404).json({ error: 'Lead não encontrado ou acesso não autorizado.' });
     }
@@ -1137,188 +1098,187 @@ app.patch('/api/leads/:id', requireAuth, async (req: Request, res: Response) => 
       else if (safeUpdates.pipeline_status === 'NEGOCIACAO') actionType = 'negotiation_started';
       else if (safeUpdates.pipeline_status === 'FECHADO') actionType = 'sale_registered';
 
-      (await db.logActivity({
+      db.logActivity({
         freelancer_id: actorId,
         freelancer_name: actorName,
         action_type: actionType,
         description: `${actorName} moveu "${updated.name}" para ${safeUpdates.pipeline_status}`,
         metadata: { lead_id: updated.id, old_status: oldLead.pipeline_status, new_status: safeUpdates.pipeline_status },
-      }));
+      });
     }
 
     res.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
 // Ações rápidas de contato, resposta e venda com log de auditoria
-app.post('/api/leads/:id/contact-attempt', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/leads/:id/contact-attempt', requireAuth, (req: Request, res: Response) => {
   try {
-    const lead = (await db.getLeadById(req.params.id));
+    const lead = db.getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
     }
 
     const currentAttempts = lead.contact_attempts_count || (lead.contacted_at ? 1 : 0);
     const newStatus = lead.pipeline_status === 'NOVO' || lead.pipeline_status === 'PRÉVIA CRIADA' ? 'CONTATADO' : lead.pipeline_status;
-    const updated = await db.contactLead(lead.id);
+    const updated = db.updateLead(lead.id, {
+      contacted_at: new Date().toISOString(),
+      contact_attempts_count: currentAttempts + 1,
+      pipeline_status: newStatus,
+    });
 
     const actorId = req.user!.freelancerId || lead.freelancer_id || 'admin_1';
     const actorName = req.user!.name || lead.freelancer_name || 'Usuário';
 
-    (await db.logActivity({
+    db.logActivity({
       freelancer_id: actorId,
       freelancer_name: actorName,
       action_type: 'lead_contacted',
       description: `${actorName} registrou tentativa de contato com "${lead.name}" (${currentAttempts + 1}ª abordagem)`,
       metadata: { lead_id: lead.id, channel: req.body.channel || 'WhatsApp' },
-    }));
+    });
 
     res.json({ success: true, lead: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/leads/:id/register-sale', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/leads/:id/register-sale', requireAuth, (req: Request, res: Response) => {
   try {
     const { value } = req.body;
-    const lead = (await db.getLeadById(req.params.id));
+    const lead = db.getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
     }
 
     const saleVal = Number(value) || 0;
-    const updated = (await db.updateLead(lead.id, {
+    const updated = db.updateLead(lead.id, {
       pipeline_status: 'FECHADO',
       sale_value: saleVal,
       sale_date: new Date().toISOString(),
-    }));
+    });
 
     const actorId = req.user!.freelancerId || lead.freelancer_id || 'admin_1';
     const actorName = req.user!.name || lead.freelancer_name || 'Usuário';
 
-    (await db.logActivity({
+    db.logActivity({
       freelancer_id: actorId,
       freelancer_name: actorName,
       action_type: 'sale_registered',
       description: `${actorName} registrou VENDA FECHADA para "${lead.name}" (R$ ${saleVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`,
       metadata: { lead_id: lead.id, sale_value: saleVal },
-    }));
+    });
 
     res.json({ success: true, lead: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/leads/:id/favorite', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/leads/:id/favorite', requireAuth, (req: Request, res: Response) => {
   try {
-    const lead = (await db.getLeadById(req.params.id));
+    const lead = db.getLeadById(req.params.id);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead pertence a outro workspace.' });
     }
 
-    const updated = (await db.toggleFavoriteLead(req.params.id));
+    const updated = db.toggleFavoriteLead(req.params.id);
     res.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/leads/:id/hide', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/leads/:id/hide', requireAuth, (req: Request, res: Response) => {
   try {
-    const lead = (await db.getLeadById(req.params.id));
+    const lead = db.getLeadById(req.params.id);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead pertence a outro workspace.' });
     }
 
     const explicitValue = typeof req.body?.is_hidden === 'boolean' ? req.body.is_hidden : undefined;
-    const updated = (await db.toggleHideLead(req.params.id, explicitValue));
+    const updated = db.toggleHideLead(req.params.id, explicitValue);
     res.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/leads/:id/notes', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/leads/:id/notes', requireAuth, (req: Request, res: Response) => {
   try {
     const { content } = req.body;
     if (!content || !content.trim()) {
       return res.status(400).json({ error: 'Conteúdo da observação não pode ser vazio.' });
     }
-    const lead = (await db.getLeadById(req.params.id));
+    const lead = db.getLeadById(req.params.id);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: este lead pertence a outro workspace.' });
     }
 
     const userId = req.user!.role === 'freelancer' ? req.user!.freelancerId! : req.user!.id;
-    const note = (await db.addLeadNote(req.params.id, userId, content.trim()));
+    const note = db.addLeadNote(req.params.id, userId, content.trim());
 
     const actorId = req.user!.freelancerId || lead.freelancer_id || 'admin_1';
     const actorName = req.user!.name || lead.freelancer_name || 'Usuário';
-    (await db.logActivity({
+    db.logActivity({
       freelancer_id: actorId,
       freelancer_name: actorName,
       action_type: 'note_added',
       description: `${actorName} adicionou anotação em "${lead.name}"`,
       metadata: { lead_id: lead.id },
-    }));
+    });
 
     res.json(note);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
 // 7. PIPELINE (COM ISOLAMENTO)
-app.get('/api/pipeline', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/pipeline', requireAuth, (req: Request, res: Response) => {
   try {
     const scope = resolveWorkspaceScope(req);
-    const board = (await db.getPipelineBoard(scope.freelancerId));
+    const board = db.getPipelineBoard(scope.freelancerId);
     res.json(board);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -1327,22 +1287,21 @@ app.get('/api/pipeline', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/pipeline/move', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/pipeline/move', requireAuth, (req: Request, res: Response) => {
   try {
     const { leadId, toStatus } = req.body;
     if (!leadId || !toStatus) {
       return res.status(400).json({ error: 'leadId e toStatus são obrigatórios.' });
     }
 
-    const lead = (await db.getLeadById(leadId));
+    const lead = db.getLeadById(leadId);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
 
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(lead.freelancer_id, req.user!.freelancerId) &&
-      lead.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(lead, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso não autorizado a este lead.' });
     }
@@ -1361,7 +1320,7 @@ app.post('/api/pipeline/move', requireAuth, async (req: Request, res: Response) 
       updates.sale_date = new Date().toISOString();
     }
 
-    const updated = toStatus==='CONTATADO' ? await db.contactLead(leadId) : await db.updateLead(leadId, updates);
+    const updated = db.updateLead(leadId, updates);
 
     // Auditoria de atividade
     const actorId = req.user!.freelancerId || lead.freelancer_id || 'admin_1';
@@ -1374,27 +1333,27 @@ app.post('/api/pipeline/move', requireAuth, async (req: Request, res: Response) 
     else if (toStatus === 'NEGOCIACAO') actionType = 'negotiation_started';
     else if (toStatus === 'FECHADO') actionType = 'sale_registered';
 
-    (await db.logActivity({
+    db.logActivity({
       freelancer_id: actorId,
       freelancer_name: actorName,
       action_type: actionType,
       description: `${actorName} moveu "${lead.name}" para ${toStatus}`,
       metadata: { lead_id: lead.id, toStatus },
-    }));
+    });
 
     res.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
 // 8. SEARCH JOBS (COM ISOLAMENTO POR WORKSPACE)
-app.get('/api/search-jobs', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/search-jobs', requireAuth, (req: Request, res: Response) => {
   try {
     cleanupStaleJobs();
     const scope = resolveWorkspaceScope(req);
-    const jobs = (await db.getAllSearchJobs(scope.freelancerId));
+    const jobs = db.getAllSearchJobs(scope.freelancerId);
     res.json(jobs);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -1405,12 +1364,7 @@ app.get('/api/search-jobs', requireAuth, async (req: Request, res: Response) => 
 
 app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) => {
   try {
-    const parsed=z.object({state:z.string().regex(/^[A-Z]{2}$/),city:z.string().trim().min(1).max(100),niche:z.string().trim().min(2).max(120),filters:z.object({onlyWithoutWebsite:z.boolean(),onlyWithPhone:z.boolean(),minRating:z.number().min(0).max(5),minReviews:z.number().int().min(0),maxReviews:z.number().int().min(0).optional(),targetLeads:z.number().int().min(0).max(10000).optional()})}).safeParse(req.body);
-    if(!parsed.success)return res.status(400).json({error:'Parâmetros de busca inválidos.'});
-    const { state, city, niche, filters } = parsed.data;
-    if (filters.maxReviews !== undefined && filters.maxReviews < filters.minReviews) {
-      return res.status(400).json({error:'O máximo de avaliações não pode ser menor que o mínimo.'});
-    }
+    const { state, city, niche, filters } = req.body;
     if (!state || !city || !niche) {
       return res.status(400).json({ error: 'Estado, cidade e nicho são obrigatórios.' });
     }
@@ -1434,7 +1388,7 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
     } else {
       // Admin: busca normal realizada no Admin sempre pertence ao workspace Admin!
       if (req.body.targetFreelancerId) {
-        const targetF = (await db.getFreelancerById(req.body.targetFreelancerId));
+        const targetF = db.getFreelancerById(req.body.targetFreelancerId);
         if (targetF) {
           jobFreelancerId = targetF.id;
           jobFreelancerName = targetF.name;
@@ -1461,9 +1415,9 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
       onlyWithPhone: Boolean(filters?.onlyWithPhone),
       minRating: Number(filters?.minRating ?? 0),
       minReviews: Number(filters?.minReviews ?? 0),
-      targetLeads: filters.targetLeads ?? 0,
+      targetLeads: filters?.targetLeads !== undefined && filters?.targetLeads !== null && filters?.targetLeads !== '' ? Number(filters.targetLeads) : 0,
     };
-    if (filters.maxReviews !== undefined) {
+    if (filters?.maxReviews !== undefined && filters?.maxReviews !== null && filters?.maxReviews !== '') {
       cleanFilters.maxReviews = Number(filters.maxReviews);
     }
 
@@ -1481,28 +1435,28 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
 
     // Registra atividade de busca iniciada
     if (jobFreelancerId) {
-      (await db.logActivity({
+      db.logActivity({
         freelancer_id: jobFreelancerId,
         freelancer_name: jobFreelancerName,
         action_type: 'search_performed',
         description: `${jobFreelancerName} iniciou busca: "${niche} em ${city}, ${state}"`,
         metadata: { jobId: job.id, niche, city, state, target_leads: job.target_leads },
-      }));
+      });
     }
 
     // Inicia worker em segundo plano
-    // Job is committed; the durable dispatcher will claim it.
+    runSearchJob(job.id).catch(console.error);
 
     res.json({ job, estimatedQueries, totalCities, totalAreas });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.get('/api/search-jobs/:id', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/search-jobs/:id', requireAuth, (req: Request, res: Response) => {
   try {
-    const job = (await db.getSearchJob(req.params.id));
+    const job = db.getSearchJob(req.params.id);
     if (!job) {
       return res.status(404).json({ error: 'Search Job não encontrado.' });
     }
@@ -1510,82 +1464,78 @@ app.get('/api/search-jobs/:id', requireAuth, async (req: Request, res: Response)
     // Se freelancer, valida titularidade
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(job.freelancer_id, req.user!.freelancerId) &&
-      job.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(job, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
 
-    const areas = (await db.getSearchAreas(job.id));
-    const queries = (await db.getSearchQueries(job.id));
+    const areas = db.getSearchAreas(job.id);
+    const queries = db.getSearchQueries(job.id);
     res.json({ job, areas, queries });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/search-jobs/:id/pause', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/search-jobs/:id/pause', requireAuth, (req: Request, res: Response) => {
   try {
-    const job = (await db.getSearchJob(req.params.id));
+    const job = db.getSearchJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Search Job não encontrado.' });
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(job.freelancer_id, req.user!.freelancerId) &&
-      job.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(job, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
-    const ok = await pauseSearchJob(req.params.id);
+    const ok = pauseSearchJob(req.params.id);
     res.json({ success: ok });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/search-jobs/:id/resume', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/search-jobs/:id/resume', requireAuth, (req: Request, res: Response) => {
   try {
-    const job = (await db.getSearchJob(req.params.id));
+    const job = db.getSearchJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Search Job não encontrado.' });
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(job.freelancer_id, req.user!.freelancerId) &&
-      job.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(job, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
-    const ok = await resumeSearchJob(req.params.id);
+    const ok = resumeSearchJob(req.params.id);
     res.json({ success: ok });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/search-jobs/:id/cancel', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/search-jobs/:id/cancel', requireAuth, (req: Request, res: Response) => {
   try {
-    const job = (await db.getSearchJob(req.params.id));
+    const job = db.getSearchJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Search Job não encontrado.' });
     if (
       req.user!.role === 'freelancer' &&
-      !matchesFreelancerId(job.freelancer_id, req.user!.freelancerId) &&
-      job.workspace_id !== req.user!.freelancerId
+      !isLeadInWorkspace(job, req.user!.freelancerId)
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
-    const ok = await cancelSearchJob(req.params.id);
+    const ok = cancelSearchJob(req.params.id);
     res.json({ success: ok });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
 // 9. SETTINGS & TEST KEY (ADMIN ONLY)
-app.get('/api/settings', requireAdmin, async (req: Request, res: Response) => {
+app.get('/api/settings', requireAdmin, (req: Request, res: Response) => {
   try {
-    const settings = (await db.getSettings());
+    const settings = db.getSettings();
     const maskedKey = settings.googleMapsApiKey
       ? `${settings.googleMapsApiKey.substring(0, 6)}...${settings.googleMapsApiKey.substring(settings.googleMapsApiKey.length - 4)}`
       : '';
@@ -1596,21 +1546,21 @@ app.get('/api/settings', requireAdmin, async (req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
-app.post('/api/settings', requireAdmin, async (req: Request, res: Response) => {
+app.post('/api/settings', requireAdmin, (req: Request, res: Response) => {
   try {
     const updates = req.body;
     if (updates.googleMapsApiKey && updates.googleMapsApiKey.includes('••••')) {
       delete updates.googleMapsApiKey;
     }
-    const updated = (await db.updateSettings(updates));
-    res.json({ success: true, settings: {...updated,googleMapsApiKey:updated.googleMapsApiKey?'••••••••••••••••':''} });
+    const updated = db.updateSettings(updates);
+    res.json({ success: true, settings: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status(500).json({ error: message });
   }
 });
 
@@ -1618,7 +1568,7 @@ app.post('/api/settings/test-key', requireAdmin, async (req: Request, res: Respo
   try {
     let keyToTest = req.body.key;
     if (!keyToTest || keyToTest.includes('••••')) {
-      keyToTest = (await db.getSettings()).googleMapsApiKey;
+      keyToTest = db.getSettings().googleMapsApiKey;
     }
 
     if (!keyToTest || keyToTest.trim() === '') {
@@ -1642,47 +1592,42 @@ app.post('/api/settings/test-key', requireAdmin, async (req: Request, res: Respo
 });
 
 // 10. SUPABASE MIGRATIONS
-app.get('/api/supabase/migrations', requireAdmin, (_req: Request, res: Response) => {
+app.get('/api/supabase/migrations', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.send(SUPABASE_MIGRATIONS_SQL);
 });
 
-
-app.post('/api/search-jobs/:id/process', requireAuth, async(req,res)=>{
-  const job=await db.getSearchJob(req.params.id);
-  if(!job)return res.status(404).json({error:'Busca não encontrada.'});
-  if(req.user!.role==='freelancer' && !isLeadInWorkspace(job,req.user!.freelancerId)){
-    return res.status(403).json({error:'Acesso negado: esta busca pertence a outro workspace.'});
+// Auto-recuperação de jobs em andamento após reinício do processo
+setTimeout(() => {
+  try {
+    cleanupStaleJobs();
+    const jobs = db.getAllSearchJobs();
+    for (const job of jobs) {
+      if (job.status === 'running') {
+        const areas = db.getSearchAreas(job.id);
+        const hasPending = areas.some((a) => a.status === 'pending' || a.status === 'processing' || a.status === 'failed');
+        if (hasPending && areas.length > 0) {
+          for (const a of areas) {
+            if (a.status === 'processing') {
+              db.updateSearchArea(a.id, { status: 'pending' });
+            }
+          }
+          console.log(`[Server] Retomando busca pendente ${job.id} (${job.niche} em ${job.city})...`);
+          runSearchJob(job.id).catch(console.error);
+        } else {
+          // Não inventar conclusão após reinício se não houver evidência de término.
+          db.updateSearchJob(job.id, {
+            status: 'failed',
+            error_message: 'Busca interrompida durante a execução. Retome para verificar as áreas pendentes.',
+            finished_at: new Date().toISOString(),
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Server] Falha ao verificar jobs anteriores:', err);
   }
-  await runSearchJob(job.id);
-  res.json({success:true});
-});
-app.post('/api/leads/:id/preview-link',requireAuth,async(req,res)=>{
-  const lead=await db.getLeadById(req.params.id);if(!lead)return res.sendStatus(404);
-  if(req.user!.role==='freelancer' && !isLeadInWorkspace(lead,req.user!.freelancerId))return res.sendStatus(403);
-  const expires=String(Date.now()+7*24*3600*1000);
-  const signature=crypto.createHmac('sha256',sessionSecret()).update(`preview:${lead.id}:${expires}`).digest('hex');
-  res.json({path:`/preview?leadId=${encodeURIComponent(lead.id)}&expires=${expires}&signature=${signature}`});
-});
-app.get('/api/public-preview/:id',async(req,res)=>{
-  const {expires,signature}=req.query;
-  if(typeof expires!=='string'||typeof signature!=='string'||!/^\d+$/.test(expires)||Number(expires)<=Date.now())return res.sendStatus(403);
-  const expected=crypto.createHmac('sha256',sessionSecret()).update(`preview:${req.params.id}:${expires}`).digest('hex');
-  if(signature.length!==expected.length || !crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(expected)))return res.sendStatus(403);
-  const lead=await db.getLeadById(req.params.id);if(!lead)return res.sendStatus(404);
-  const fields=['id','name','niche','city','state','address','phone','rating','reviews_count','maps_url'];
-  res.json({lead:Object.fromEntries(Object.entries(lead).filter(([k])=>fields.includes(k)))});
-});
-app.get('/api/internal/search-dispatch', async(req,res)=>{
-  const expected=process.env.CRON_SECRET;
-  if(!expected || expected.length<32 || req.headers.authorization!==`Bearer ${expected}`)return res.sendStatus(401);
-  const jobId=await dispatchSearchJobs();res.json({jobId});
-});
-app.use((err:any,_req:Request,res:Response,_next:NextFunction)=>{
-  const code = storageErrorCode(err);
-  const status = err.status>=400 && err.status<500 ? err.status : 503;
-  console.error('[api-error]', {path:_req.path,method:_req.method,status,code,message:err instanceof Error ? err.message : String(err)});
-  res.status(status).json({error:code==='STORAGE_POOL_TIMEOUT'?'Banco de dados sobrecarregado. Tente novamente em instantes.':'Não foi possível concluir a operação.',code});
-});
+}, 2000);
+
 export { app };
 export default app;

@@ -192,10 +192,17 @@ export class Repository {
   async getFreelancers() {return (await this.list<Freelancer>('freelancers')).filter(f=>!(f as any).deleted_at);}
   async getFreelancerById(id:string) {const f=await this.get<Freelancer>('freelancers',id);return (f as any)?.deleted_at?undefined:f;}
   async getFreelancerByAccessCode(code:string) {
-    const clean = code.trim().toLowerCase();
+    const clean = code.trim().toLowerCase().replace(/^https?:\/\/[^/]+\/f\//i, '').replace(/^\/f\//i, '').replace(/\/+$/, '');
     return (await this.getFreelancers()).find(f => {
-      const fCode = f.access_code?.toLowerCase();
-      return fCode === clean || (clean === 'test' && fCode === 'teste') || (clean === 'teste' && fCode === 'test');
+      const fCode = (f.access_code || '').toLowerCase().trim();
+      const fName = (f.name || '').toLowerCase().trim();
+      const fId = (f.id || '').toLowerCase().trim();
+      return fCode === clean ||
+             fName === clean ||
+             fId === clean ||
+             fId === `free_${clean}` ||
+             (clean === 'test' && (fCode === 'teste' || fId === 'free_teste' || fName === 'teste')) ||
+             (clean === 'teste' && (fCode === 'test' || fId === 'free_test' || fName === 'test'));
     });
   }
   // Friendly paths are public identifiers, NOT authentication secrets. A PIN protects every new slug.

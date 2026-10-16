@@ -119,7 +119,7 @@ export function normalizePlace(raw: GooglePlaceRaw, fallbackCity: string, fallba
   }
 
   const extracted = extractCityAndStateFromAddress(address);
-  const resolvedCity = extracted.city || fallbackCity;
+  const resolvedCity = (fallbackCity && fallbackCity !== 'all') ? fallbackCity : (extracted.city || fallbackCity);
   const resolvedState = extracted.state || fallbackState;
 
   return {

@@ -73,8 +73,8 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
   const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(false);
   const [onlyWithPhone, setOnlyWithPhone] = useState<boolean>(false);
   const [minRating, setMinRating] = useState<number>(0);
-  const [reviewsMode, setReviewsMode] = useState<'any' | 'atMost' | 'atLeast' | 'exact'>('any');
-  const [reviewsValue, setReviewsValue] = useState<string>('10');
+  const [minReviews, setMinReviews] = useState<number>(0);
+  const [maxReviews, setMaxReviews] = useState<string>('');
 
   // Histórico de jobs
   const [recentJobs, setRecentJobs] = useState<SearchJob[]>([]);
@@ -146,12 +146,6 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
       return;
     }
 
-    const reviews = Number(reviewsValue);
-    if (reviewsMode !== 'any' && (!reviewsValue.trim() || !Number.isSafeInteger(reviews) || reviews < 0)) {
-      setErrorMessage('Informe uma quantidade de avaliações inteira, maior ou igual a zero.');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const effectiveFreelancerId = userRole === 'freelancer' ? activeFreelancer?.id : undefined;
@@ -167,8 +161,8 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
           onlyWithoutWebsite,
           onlyWithPhone,
           minRating,
-          minReviews: reviewsMode === 'atLeast' || reviewsMode === 'exact' ? reviews : 0,
-          maxReviews: reviewsMode === 'atMost' || reviewsMode === 'exact' ? reviews : undefined,
+          minReviews,
+          maxReviews: maxReviews ? Number(maxReviews) : undefined,
           targetLeads: activeTargetLeads,
         },
       });
@@ -619,40 +613,21 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                   </select>
                 </div>
 
-                {/* Comparação explícita evita confundir 'pelo menos 10' com 'até 10'. */}
+                {/* Avaliações mínimas */}
                 <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs">
                   <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
-                    Quantidade de avaliações no Google
+                    Mínimo de avaliações
                   </label>
                   <select
-                    value={reviewsMode}
-                    onChange={(e) => setReviewsMode(e.target.value as typeof reviewsMode)}
-                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 shadow-2xs focus:border-neutral-900 focus:outline-hidden"
+                    value={minReviews}
+                    onChange={(e) => setMinReviews(Number(e.target.value))}
+                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
                   >
-                    <option value="any">Qualquer quantidade</option>
-                    <option value="atMost">No máximo (até o número)</option>
-                    <option value="atLeast">No mínimo (a partir do número)</option>
-                    <option value="exact">Exatamente o número</option>
+                    <option value={0}>Qualquer quantidade</option>
+                    <option value={10}>Pelo menos 10 avaliações</option>
+                    <option value={20}>Pelo menos 20 avaliações</option>
+                    <option value={50}>Pelo menos 50 avaliações</option>
                   </select>
-                  {reviewsMode !== 'any' && (
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      required
-                      inputMode="numeric"
-                      aria-label="Número de avaliações"
-                      value={reviewsValue}
-                      onChange={(e) => setReviewsValue(e.target.value)}
-                      className="mt-2 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs font-mono text-neutral-800 focus:border-neutral-900 focus:outline-hidden"
-                    />
-                  )}
-                  <p className="mt-1.5 text-[11px] leading-snug text-neutral-500">
-                    {reviewsMode === 'atMost' ? `Até ${reviewsValue || '0'}: empresas com mais avaliações são excluídas.`
-                      : reviewsMode === 'atLeast' ? `A partir de ${reviewsValue || '0'}: inclui empresas com mais avaliações.`
-                      : reviewsMode === 'exact' ? `Somente empresas com exatamente ${reviewsValue || '0'} avaliações.`
-                      : 'Escolha um limite máximo, mínimo ou exato, se desejar.'}
-                  </p>
                 </div>
               </div>
             </div>
@@ -691,8 +666,6 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                   {activeTargetLeads === 0 ? 'Sem limite' : `${activeTargetLeads} leads`}
                   {onlyWithPhone ? ' · C/ Tel' : ''}
                   {onlyWithoutWebsite ? ' · S/ Site' : ''}
-                  {minRating > 0 ? ` · Nota ≥ ${minRating}` : ''}
-                  {reviewsMode !== 'any' ? ` · Avaliações ${reviewsMode === 'atMost' ? '≤' : reviewsMode === 'atLeast' ? '≥' : '='} ${reviewsValue}` : ''}
                 </p>
               </div>
             </div>

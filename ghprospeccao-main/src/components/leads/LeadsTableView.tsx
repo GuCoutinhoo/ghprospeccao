@@ -74,8 +74,6 @@ const STATE_NAMES: Record<string, string> = {
 };
 
 interface LeadsTableViewProps {
-  searchJobId?: string;
-  onClearSearchJob?: () => void;
   onSelectLead: (lead: Lead) => void;
   initialNicheFilter?: string;
   initialStateFilter?: string;
@@ -100,8 +98,6 @@ function getNicheIcon(niche: string) {
 
 export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   onSelectLead,
-  searchJobId,
-  onClearSearchJob,
   initialNicheFilter,
   initialStateFilter,
   onClearInitialFilters,
@@ -164,7 +160,6 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   // Ref sempre atualizada com os filtros vigentes para evitar closures defasadas
   const latestFiltersRef = useRef({
-    searchJobId,
     effectiveFreelancerId,
     stateFilter,
     cityFilter,
@@ -182,7 +177,6 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   });
 
   latestFiltersRef.current = {
-    searchJobId,
     effectiveFreelancerId,
     stateFilter,
     cityFilter,
@@ -200,15 +194,9 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   };
 
   const requestIdRef = useRef(0);
-  const requestController = useRef<AbortController | null>(null);
-  const mountedRef = useRef(true);
-  useEffect(() => {mountedRef.current=true;return()=>{mountedRef.current=false;requestIdRef.current++;requestController.current?.abort();};},[]);
 
   const loadLeads = useCallback(async (silent = false) => {
     const thisRequestId = ++requestIdRef.current;
-    requestController.current?.abort();
-    const controller = new AbortController();
-    requestController.current = controller;
     if (!silent) {
       setLoading(true);
     }
@@ -216,7 +204,6 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
     try {
       const data = await api.getLeads({
-        search_job_id: current.searchJobId,
         freelancer_id: current.effectiveFreelancerId,
         state: current.stateFilter,
         city: current.cityFilter,
@@ -231,17 +218,18 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         sortBy: current.sortBy,
         page: current.page,
         limit: current.pageSize,
-      },controller.signal);
+      });
 
-      if (!mountedRef.current || thisRequestId !== requestIdRef.current || JSON.stringify(current)!==JSON.stringify(latestFiltersRef.current)) return;
+      // Se uma requisição mais recente já disparou, descarta a resposta defasada
+      if (thisRequestId !== requestIdRef.current) return;
 
       // Atualiza os leads com a resposta exata do servidor
-      setLeads(data.leads);
+      setLeads(data.leads || []);
       setTotal(data.total ?? 0);
       setTotalPages(data.totalPages || 1);
       setLoadError(null);
     } catch (err) {
-      if (!controller.signal.aborted && mountedRef.current && thisRequestId === requestIdRef.current) {
+      if (thisRequestId === requestIdRef.current) {
         console.error('Erro ao carregar leads:', err);
         // Em falha de consulta, jamais limpa os dados válidos que já estão na tela
         setLoadError('Não foi possível sincronizar os dados mais recentes. Mantendo dados atuais.');
@@ -308,8 +296,6 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     loadNiches();
     loadStates();
   }, [
-    searchJobId,
-    excludeHidden,
     effectiveFreelancerId,
     page,
     pageSize,
@@ -348,13 +334,16 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
       isChecking = true;
       try {
         const jobs = await api.getSearchJobs();
+        const now = Date.now();
         const active = jobs.find((j) => {
-          return j.status === 'running' || j.status === 'pending';
+          if (j.status !== 'running' && j.status !== 'pending') return false;
+          const lastUpdate = j.updated_at ? new Date(j.updated_at).getTime() : new Date(j.created_at).getTime();
+          // Ignora jobs zumbis que não têm atividade há mais de 8 minutos
+          return (now - lastUpdate) <= 8 * 60 * 1000;
         });
 
         if (active) {
           setRunningJob(active);
-          await api.processSearchJob(active.id);
           // Atualização silenciosa: não desmonta cards nem ativa tela cheia de loading
           await loadLeads(true);
         } else {
@@ -412,28 +401,25 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     const targetLead = leads.find((l) => l.id === leadId);
     const newHiddenState = !targetLead?.is_hidden;
 
+    // Atualização otimista imediata na interface
+    setLeads((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, is_hidden: newHiddenState } : l))
+    );
+
+    setToastMessage({
+      type: 'success',
+      text: newHiddenState
+        ? `"${targetLead?.name || 'Lead'}" ocultado (marcado como cinza).`
+        : `"${targetLead?.name || 'Lead'}" reexibido.`,
+    });
+
     try {
-      // Só confirma a mudança visual depois da gravação persistente no servidor.
       const updated = await api.toggleLeadHide(leadId, newHiddenState);
-      if (!updated || updated.is_hidden !== newHiddenState) {
-        throw new Error('O servidor não confirmou a ocultação do lead.');
-      }
       setLeads((prev) =>
-        prev.map((l) => (l.id === leadId ? { ...l, ...updated } : l))
+        prev.map((l) => (l.id === leadId ? { ...l, ...updated, is_hidden: newHiddenState } : l))
       );
-      setToastMessage({
-        type: 'success',
-        text: newHiddenState
-          ? `"${targetLead?.name || 'Lead'}" ocultado (marcado como cinza).`
-          : `"${targetLead?.name || 'Lead'}" reexibido.`,
-      });
     } catch (err) {
       console.error('Erro ao alternar ocultação do lead:', err);
-      setToastMessage({
-        type: 'error',
-        text: 'Não foi possível salvar a alteração. A marcação anterior foi mantida.',
-      });
-      void loadLeads(true);
     }
   };
 
@@ -576,7 +562,6 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {searchJobId && <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm"><span>Somente resultados da varredura selecionada (filtros originais aplicados no servidor)</span><button onClick={()=>{onClearSearchJob?.();handleClearAllFilters();}} className="underline">Ver base geral</button></div>}
       {/* Banner de Varredura em Andamento em Tempo Real */}
       {runningJob && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-blue-200 bg-blue-50/90 text-blue-900 shadow-2xs animate-pulse">

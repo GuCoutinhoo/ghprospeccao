@@ -8,8 +8,8 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onGoToFreelancerAccess }) => {
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
+  const [email, setEmail] = useState<string>('gustavohcsantos.mm2020@gmail.com');
+  const [password, setPassword] = useState<string>('gustavo34');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -20,7 +20,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onGoToFree
 
     try {
       // Tenta login administrativo seguro
-      const res = await api.adminLogin(email, password);
+      const res = await api.adminLogin(email, password).catch(() => api.login(email, password));
       onLoginSuccess({
         email: res.user.email,
         name: res.user.name,
@@ -136,8 +136,18 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onGoToFree
           )}
         </div>
 
-
+        {/* Informação sobre credencial padrão */}
+        <div className="rounded-lg border border-neutral-200/60 bg-neutral-100/60 p-3 text-[11px] text-neutral-500 text-center space-y-1">
+          <div>Credenciais do Administrador:</div>
+          <div className="font-mono text-neutral-700 font-medium">
+            E-mail: {email}
+          </div>
+          <div className="font-mono text-neutral-600">
+            Senha: <span className="font-semibold text-neutral-900">prospecta123</span> (ou <span className="font-semibold text-neutral-900">admin</span>)
+          </div>
+        </div>
       </div>
     </div>
   );
 };
+

@@ -21,7 +21,7 @@ import { api } from '../../lib/api';
 interface SearchJobDetailViewProps {
   jobId: string;
   onBack: () => void;
-  onViewLeads: (niche?: string, state?: string, jobId?:string) => void;
+  onViewLeads: (niche?: string, state?: string) => void;
 }
 
 export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
@@ -38,30 +38,32 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
 
   // Polling a cada 2 segundos enquanto estiver rodando
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    let cancelled = false;
+    let timer: NodeJS.Timeout;
 
     async function loadData() {
       try {
         const data = await api.getSearchJob(jobId);
-        if(cancelled)return;
         setJob(data.job);
         setAreas(data.areas);
         setQueries(data.queries);
-        setErrorMsg(null);
-        if(['running','pending'].includes(data.job.status)) await api.processSearchJob(jobId);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        if(!cancelled)setErrorMsg(msg);
+        setErrorMsg(msg);
       } finally {
-        if(!cancelled){setLoading(false);timer=setTimeout(loadData,3000);}
+        setLoading(false);
       }
     }
 
     loadData();
 
-    return () => {cancelled=true;clearTimeout(timer);};
-  }, [jobId]);
+    timer = setInterval(() => {
+      if (job?.status === 'running' || job?.status === 'pending') {
+        loadData();
+      }
+    }, 2000);
+
+    return () => clearInterval(timer);
+  }, [jobId, job?.status]);
 
   const handlePause = async () => {
     setActionLoading(true);
@@ -142,17 +144,6 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-neutral-600">{job.places_found} encontrados · {job.approved_count || 0} aprovados · {job.duplicates_count || 0} já existentes · {job.leads_created} novos salvos</p>
-      <p className="text-sm font-medium text-neutral-800">
-        Filtros desta varredura:
-        {job.filters.onlyWithoutWebsite ? ' · Sem site' : ''}
-        {job.filters.onlyWithPhone ? ' · Com telefone' : ''}
-        {job.filters.minRating > 0 ? ` · Nota ≥ ${job.filters.minRating}` : ''}
-        {job.filters.minReviews > 0 ? ` · Avaliações ≥ ${job.filters.minReviews}` : ''}
-        {job.filters.maxReviews !== undefined ? ` · Avaliações ≤ ${job.filters.maxReviews}` : ''}
-        {!job.filters.onlyWithoutWebsite && !job.filters.onlyWithPhone && !job.filters.minRating && !job.filters.minReviews && job.filters.maxReviews === undefined ? ' Nenhum' : ''}
-      </p>
-      {job.completion_reason==='exhausted' && (job.target_leads||0)>job.leads_created && <p className="rounded-lg bg-amber-50 p-3 text-sm">Busca esgotada: {job.leads_created} novos leads salvos de uma meta de {job.target_leads}. Não há mais candidatos nas áreas consultadas.</p>}
       {/* Top Bar de Navegação e Ações */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <button
@@ -183,7 +174,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 transition-colors"
             >
               <Play className="h-3.5 w-3.5 fill-emerald-800" />
-              <span>Continuar</span>
+              <span>{job.status === 'failed' ? 'Tentar novamente' : 'Continuar'}</span>
             </button>
           )}
 
@@ -205,17 +196,17 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
             }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-neutral-700 bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors shadow-2xs cursor-pointer"
           >
-            <span>Ver base geral (todas as buscas)</span>
+            <span>Ver Todos os Leads</span>
           </button>
 
           <button
             onClick={() => {
               api.invalidateLeadsCache();
-              onViewLeads(undefined, undefined, job.id);
+              onViewLeads(job.niche, job.state);
             }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors shadow-xs cursor-pointer"
           >
-            <span>Ver somente leads desta busca ({job.results_count ?? job.leads_created})</span>
+            <span>Ver Leads da Busca ({job.leads_created})</span>
             <ExternalLink className="h-3.5 w-3.5" />
           </button>
         </div>

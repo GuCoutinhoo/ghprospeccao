@@ -57,12 +57,6 @@ interface SessionBootstrap {
   authMode: 'admin' | 'freelancer';
 }
 
-function sanitizeWorkspaceCode(value: string): string {
-  let decoded = value;
-  try { decoded = decodeURIComponent(value); } catch { /* Keep original. */ }
-  return decoded.replace(/[\u200B-\u200F\u2060\uFEFF]/g, '').trim().toLowerCase();
-}
-
 function getInitialSessionContext(): SessionBootstrap {
   if (typeof window === 'undefined') {
     return {
@@ -92,7 +86,7 @@ function getInitialSessionContext(): SessionBootstrap {
     rawCode = firstSegment;
   }
 
-  const cleanCode = sanitizeWorkspaceCode(rawCode);
+  const cleanCode = rawCode.toLowerCase();
 
   // Se o código for 'admin' ou 'administrador'
   if (cleanCode === 'admin' || cleanCode === 'administrador') {
@@ -154,13 +148,12 @@ export default function App() {
 
   // Navegação
   const [currentPath, setCurrentPath] = useState<string>(bootstrap.initialPath);
-  const [activeSearchJobId, setActiveSearchJobId] = useState<string | null>(window.location.pathname.startsWith('/search/') ? window.location.pathname.split('/')[2] : null);
+  const [activeSearchJobId, setActiveSearchJobId] = useState<string | null>(null);
   const [selectedFreelancerIdForDetail, setSelectedFreelancerIdForDetail] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   // Filtros contextuais passados para a tabela de leads
   const [leadsNicheFilter, setLeadsNicheFilter] = useState<string | undefined>(undefined);
-  const [leadsJobFilter,setLeadsJobFilter] = useState<string | undefined>(new URLSearchParams(window.location.search).get('search_job_id') || undefined);
   const [leadsStateFilter, setLeadsStateFilter] = useState<string | undefined>(undefined);
 
   // Mobile sidebar
@@ -278,7 +271,7 @@ export default function App() {
     if (leadId) {
       setLoadingPublicPreview(true);
       api
-        .getPublicPreview(leadId,urlParams.toString())
+        .getLeadById(leadId)
         .then((res) => {
           if (res?.lead) {
             setPublicPreviewLead(res.lead);
@@ -357,6 +350,10 @@ export default function App() {
     if (!path.startsWith('/admin/freelancers/')) {
       setSelectedFreelancerIdForDetail(null);
     }
+    if (path === '/leads') {
+      setLeadsNicheFilter(undefined);
+      setLeadsStateFilter(undefined);
+    }
   };
 
   const handleJobStarted = (jobId: string) => {
@@ -369,9 +366,7 @@ export default function App() {
     setCurrentPath(`/search/${jobId}`);
   };
 
-  const handleViewLeadsFromJob = (niche?: string, state?: string, jobId?:string) => {
-    setLeadsJobFilter(jobId);
-    window.history.replaceState(null,'',jobId ? `/leads?search_job_id=${encodeURIComponent(jobId)}` : '/leads');
+  const handleViewLeadsFromJob = (niche?: string, state?: string) => {
     setLeadsNicheFilter(niche);
     setLeadsStateFilter(state);
     setCurrentPath('/leads');
@@ -518,7 +513,9 @@ export default function App() {
       return (
         <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-6">
           <div className="h-8 w-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mb-3" />
-          <span className="text-xs font-medium text-neutral-400">Verificando sessão segura...</span>
+          <span className="text-xs font-medium text-neutral-400">
+            {bootstrap.initialFreelancerCode ? 'Carregando workspace do freelancer...' : 'Verificando sessão segura...'}
+          </span>
         </div>
       );
     }
@@ -664,8 +661,6 @@ export default function App() {
             <LeadsTableView
               onSelectLead={(lead) => setSelectedLead(lead)}
               initialNicheFilter={leadsNicheFilter}
-              searchJobId={leadsJobFilter}
-              onClearSearchJob={() => {setLeadsJobFilter(undefined);window.history.replaceState(null,'','/leads');}}
               initialStateFilter={leadsStateFilter}
               onClearInitialFilters={() => {
                 setLeadsNicheFilter(undefined);

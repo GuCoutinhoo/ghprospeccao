@@ -182,7 +182,7 @@ export async function fetchStates(): Promise<IBGEState[]> {
   return BRAZILIAN_STATES;
 }
 
-export async function fetchCitiesByState(uf: string, requireComplete = false): Promise<IBGECity[]> {
+export async function fetchCitiesByState(uf: string): Promise<IBGECity[]> {
   const upperUf = uf.toUpperCase().trim();
   if (memoryCitiesCache.has(upperUf)) {
     return memoryCitiesCache.get(upperUf)!;
@@ -206,12 +206,12 @@ export async function fetchCitiesByState(uf: string, requireComplete = false): P
     // fallback
   }
 
-  if(requireComplete)throw new Error('IBGE_UNAVAILABLE: a lista completa de cidades não foi obtida.');
-  // Suggestions only; incomplete data must never enter the authoritative cache.
+  // Fallback com cidades populares
   const popular = POPULAR_CITIES_BY_STATE[upperUf] || ['Capital', 'Região Central', 'Interior'];
   const fallbackCities: IBGECity[] = popular.map((name, index) => ({
     id: 1000 + index,
     nome: name,
   }));
+  memoryCitiesCache.set(upperUf, fallbackCities);
   return fallbackCities;
 }

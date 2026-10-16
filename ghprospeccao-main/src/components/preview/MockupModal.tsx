@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Monitor,
@@ -31,12 +31,9 @@ export const MockupModal: React.FC<MockupModalProps> = ({
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [statusUpdated, setStatusUpdated] = useState<boolean>(lead.pipeline_status === 'PRÉVIA CRIADA');
 
-  const [previewUrl,setPreviewUrl]=useState('');
-  const [linkError,setLinkError]=useState('');
-  useEffect(()=>{let cancelled=false;api.getPreviewLink(lead.id).then(({path})=>{if(!cancelled)setPreviewUrl(window.location.origin+path);}).catch(()=>{if(!cancelled)setLinkError('Não foi possível gerar o link. Reabra a prévia para tentar novamente.');});return()=>{cancelled=true;};},[lead.id]);
+  const previewUrl = `${window.location.origin}/preview?leadId=${lead.id}`;
 
   const handleCopyLink = () => {
-    if(!previewUrl)return;
     navigator.clipboard.writeText(previewUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
@@ -53,7 +50,7 @@ export const MockupModal: React.FC<MockupModalProps> = ({
   };
 
   const handleSendViaWhatsApp = () => {
-    if (!lead.phone || !previewUrl) return;
+    if (!lead.phone) return;
     const clean = lead.phone.replace(/\D/g, '');
     const fullNumber = clean.startsWith('55') ? clean : `55${clean}`;
     const ratingStr = typeof lead.rating === 'number' && !isNaN(lead.rating) ? lead.rating.toFixed(1) : '5.0';
@@ -70,7 +67,6 @@ Dá uma olhada no celular e me conta o que achou!`;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950/85 backdrop-blur-md overflow-hidden">
-      {linkError && <p role="alert" className="bg-red-50 p-3 text-sm text-red-700">{linkError}</p>}
       {/* Barra Superior do Vendedor */}
       <div className="bg-neutral-900 border-b border-neutral-800 px-4 sm:px-6 py-3 flex items-center justify-between text-white shrink-0">
         <div className="flex items-center gap-3">
@@ -162,7 +158,7 @@ Dá uma olhada no celular e me conta o que achou!`;
           )}
 
           <a
-            href={previewUrl || undefined}
+            href={previewUrl}
             target="_blank"
             rel="noreferrer"
             className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"

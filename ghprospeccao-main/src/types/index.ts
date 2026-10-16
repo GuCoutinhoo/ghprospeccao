@@ -12,7 +12,6 @@ export interface Freelancer {
   status: FreelancerStatus;
   notes?: string;
   pin?: string;
-  pin_hash?: string;
   created_at: string;
   updated_at: string;
   last_access_at?: string;
@@ -128,7 +127,6 @@ export interface Place {
 }
 
 export interface Lead {
-  search_job_ids?: string[];
   id: string;
   workspace_id?: string;
   user_id: string;
@@ -180,23 +178,6 @@ export interface SearchJobFilters {
 }
 
 export interface SearchJob {
-  version?: number;
-  area_plan?: SearchArea[];
-  area_cursor?: number;
-  candidate_cursor?: number;
-  candidates?: import('../lib/google/places').GooglePlaceRaw[] | null;
-  page_token?: string;
-  next_page_token?: string;
-  lease_token?: string;
-  lease_until?: number;
-  retry_at?: number;
-  attempts?: number;
-  approved_count?: number;
-  duplicates_count?: number;
-  rejected_count?: number;
-  deleted_count?: number;
-  results_count?: number;
-  completion_reason?: 'target_reached' | 'exhausted';
   id: string;
   workspace_id?: string;
   user_id: string;

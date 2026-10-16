@@ -16,7 +16,9 @@ import {
   FreelancerPerformance,
 } from '../types';
 import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
-import { invalidateLeadsCache } from './firebase/client';
+import {
+  invalidateLeadsCache,
+} from './firebase/client';
 
 export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extraHeaders };
@@ -66,9 +68,6 @@ export function getActiveFreelancerSession(): { token: string; freelancer: Freel
 }
 
 export const api = {
-  async getPreviewLink(id:string):Promise<{path:string}>{return requestJson(`/api/leads/${encodeURIComponent(id)}/preview-link`,{method:'POST'});},
-  async getPublicPreview(id:string,query:string):Promise<{lead:Lead}>{return requestJson(`/api/public-preview/${encodeURIComponent(id)}?${query}`);},
-  async processSearchJob(id:string){return requestJson(`/api/search-jobs/${encodeURIComponent(id)}/process`,{method:'POST'});},
   // Admin Authentication
   async adminLogin(email: string, pass: string) {
     const res = await fetch('/api/admin/login', {
@@ -233,7 +232,7 @@ export const api = {
     notes?: string;
     pin?: string;
     status?: 'active' | 'blocked' | 'inactive';
-  }): Promise<{ success: boolean; freelancer: Freelancer; accessLink: string; temporaryPin?: string }> {
+  }): Promise<{ success: boolean; freelancer: Freelancer; accessLink: string }> {
     invalidateLeadsCache();
     const res = await fetch('/api/admin/freelancers', {
       method: 'POST',
@@ -256,13 +255,13 @@ export const api = {
     return res.json();
   },
 
-  async adminUpdateFreelancer(id: string, updates: Partial<Freelancer>): Promise<{ success: boolean; freelancer: Freelancer; temporaryPin?: string }> {
+  async adminUpdateFreelancer(id: string, updates: Partial<Freelancer>): Promise<{ success: boolean; freelancer: Freelancer }> {
     const res = await fetch(`/api/admin/freelancers/${id}`, {
       method: 'PATCH',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(updates),
     });
-    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(error.error || 'Falha ao atualizar dados do freelancer.'); }
+    if (!res.ok) throw new Error('Falha ao atualizar dados do freelancer.');
     return res.json();
   },
 
@@ -280,20 +279,41 @@ export const api = {
       method: 'POST',
       headers: getAuthHeaders(),
     });
-    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(error.error || 'Falha ao desbloquear freelancer.'); }
+    if (!res.ok) throw new Error('Falha ao desbloquear freelancer.');
     return res.json();
   },
 
-  async adminRegenerateLink(id: string): Promise<{ success: boolean; accessCode: string; accessLink: string; freelancer: Freelancer; temporaryPin?: string }> {
+  async adminRegenerateLink(id: string): Promise<{ success: boolean; accessCode: string; accessLink: string; freelancer: Freelancer }> {
     const res = await fetch(`/api/admin/freelancers/${id}/regenerate-link`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
-    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(error.error || 'Falha ao regenerar link do freelancer.'); }
+    if (!res.ok) throw new Error('Falha ao regenerar link do freelancer.');
     return res.json();
   },
 
-  async adminDeleteFreelancer(id:string):Promise<{success:boolean;message?:string}>{return requestJson('/api/admin/freelancers/'+encodeURIComponent(id),{method:'DELETE'});},
+  async adminDeleteFreelancer(id: string): Promise<{ success: boolean; message?: string }> {
+    // Somente a API autenticada pode apagar um freelancer e seus dados.
+    // Não executar operações destrutivas diretamente no navegador.
+    const res = await fetch(`/api/admin/freelancers/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+
+    invalidateLeadsCache();
+
+    // Se a sessão local pertencia a esse freelancer, encerra-a
+    const session = getActiveFreelancerSession();
+    if (session && (session.freelancer.id === id || session.freelancer.access_code === id)) {
+      this.freelancerLogout();
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao excluir freelancer.');
+    }
+    return res.json();
+  },
 
   async deleteLead(id: string): Promise<{ success: boolean }> {
     invalidateLeadsCache();
@@ -366,7 +386,20 @@ export const api = {
     return data;
   },
 
-  async adminGetFreelancerLeads(id:string):Promise<{leads:Lead[];total:number}>{return requestJson('/api/admin/freelancers/'+encodeURIComponent(id)+'/leads');},
+  async adminGetFreelancerLeads(id: string): Promise<{ leads: Lead[]; total: number }> {
+    const res = await fetch(`/api/admin/freelancers/${id}/leads`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Falha ao carregar os leads deste freelancer.');
+    }
+    const data = await res.json();
+    if (!data || !Array.isArray(data.leads) || typeof data.total !== 'number') {
+      throw new Error('Resposta inválida ao carregar os leads do freelancer.');
+    }
+    return data;
+  },
 
   async adminGetFreelancerSearches(id: string): Promise<SearchJob[]> {
     const res = await fetch(`/api/admin/freelancers/${id}/searches`, {
@@ -437,7 +470,23 @@ export const api = {
   },
 
   // Dashboard
-  async getDashboardStats(freelancer_id?:string):Promise<DashboardStats>{return requestJson('/api/dashboard/stats'+scopeQuery(freelancer_id));},
+  async getDashboardStats(freelancer_id?: string): Promise<DashboardStats> {
+    const session = getActiveFreelancerSession();
+    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+    const url = targetFreelancerId && targetFreelancerId !== 'ALL'
+      ? `/api/dashboard/stats?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+      : '/api/dashboard/stats';
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Não foi possível carregar as estatísticas do dashboard.');
+    }
+    const data = await res.json();
+    if (!data || typeof data.totalLeads !== 'number') {
+      throw new Error('O servidor retornou estatísticas inválidas.');
+    }
+    return data;
+  },
 
   // IBGE
   async getStates(): Promise<IBGEState[]> {
@@ -500,15 +549,106 @@ export const api = {
   },
 
   // Leads & Niches
-  async getNiches(params?:{onlyFavorites?:boolean;freelancer_id?:string}){return requestJson('/api/niches?'+new URLSearchParams(Object.entries(params||{}).filter(([,v])=>v!==undefined).map(([k,v])=>[k,String(v)])));},
+  async getNiches(params?: { onlyFavorites?: boolean; freelancer_id?: string }): Promise<{ niche: string; count: number }[]> {
+    try {
+      const session = getActiveFreelancerSession();
+      const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
+      const query = new URLSearchParams();
+      if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
+      if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
+      const url = `/api/niches${query.toString() ? '?' + query.toString() : ''}`;
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn('[API] /api/niches erro:', err);
+    }
+    return [];
+  },
 
-  async getStatesSummary(params?:{onlyFavorites?:boolean;freelancer_id?:string;niche?:string}){return requestJson('/api/states-summary?'+new URLSearchParams(Object.entries(params||{}).filter(([,v])=>v!==undefined).map(([k,v])=>[k,String(v)])));},
+  async getStatesSummary(params?: { onlyFavorites?: boolean; niche?: string; freelancer_id?: string }): Promise<{ state: string; count: number }[]> {
+    try {
+      const session = getActiveFreelancerSession();
+      const targetFreelancerId = params?.freelancer_id || session?.freelancer?.id;
+      const query = new URLSearchParams();
+      if (params?.onlyFavorites) query.set('onlyFavorites', 'true');
+      if (params?.niche && params.niche !== 'ALL') query.set('niche', params.niche);
+      if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
+      const url = `/api/states-summary${query.toString() ? '?' + query.toString() : ''}`;
+      const res = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn('[API] /api/states-summary erro:', err);
+    }
+    return [];
+  },
 
-  async getLeads(params: {freelancer_id?:string;search_job_id?:string;state?:string;city?:string;niche?:string;onlyWithoutWebsite?:boolean;onlyWithPhone?:boolean;onlyFavorites?:boolean;excludeHidden?:boolean;onlyHidden?:boolean;minRating?:number;minReviews?:number;minScore?:number;status?:string;search?:string;sortBy?:'score'|'reviews'|'rating'|'recent';page?:number;limit?:number}, signal?:AbortSignal): Promise<{leads:Lead[];total:number;page:number;totalPages:number}> {
- const query=new URLSearchParams();for(const [k,v] of Object.entries(params))if(v!==undefined)query.set(k,String(v));
- const data=await requestJson('/api/leads?'+query,{signal});
- if(!Array.isArray(data.leads)||!Number.isInteger(data.total)||data.total<0)throw new Error('Resposta de leads inválida.');return data;
- },
+  async getLeads(params: {
+    freelancer_id?: string;
+    state?: string;
+    city?: string;
+    niche?: string;
+    onlyWithoutWebsite?: boolean;
+    onlyWithPhone?: boolean;
+    onlyFavorites?: boolean;
+    excludeHidden?: boolean;
+    onlyHidden?: boolean;
+    minRating?: number;
+    minReviews?: number;
+    minScore?: number;
+    status?: string;
+    search?: string;
+    sortBy?: 'score' | 'reviews' | 'rating' | 'recent';
+    page?: number;
+    limit?: number;
+  }): Promise<{ leads: Lead[]; total: number; page: number; totalPages: number }> {
+    const session = getActiveFreelancerSession();
+    const targetFreelancerId = params.freelancer_id || session?.freelancer?.id;
+    const query = new URLSearchParams();
+    if (params.state) query.set('state', params.state);
+    if (params.city) query.set('city', params.city);
+    if (params.niche) query.set('niche', params.niche);
+    if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
+    if (params.onlyWithoutWebsite) query.set('onlyWithoutWebsite', 'true');
+    if (params.onlyWithPhone) query.set('onlyWithPhone', 'true');
+    if (params.onlyFavorites) query.set('onlyFavorites', 'true');
+    if (params.excludeHidden) query.set('excludeHidden', 'true');
+    if (params.onlyHidden) query.set('onlyHidden', 'true');
+    if (params.minRating) query.set('minRating', String(params.minRating));
+    if (params.minReviews) query.set('minReviews', String(params.minReviews));
+    if (params.minScore) query.set('minScore', String(params.minScore));
+    if (params.status) query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.sortBy) query.set('sortBy', params.sortBy);
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit !== undefined) query.set('limit', String(params.limit));
+
+    const res = await fetch(`/api/leads?${query.toString()}`, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || body.error || `Não foi possível buscar leads (HTTP ${res.status}).`);
+    }
+    const data = await res.json();
+    if (!data || !Array.isArray(data.leads) || typeof data.total !== 'number') {
+      throw new Error('O servidor retornou uma resposta inválida para a listagem de leads.');
+    }
+    // Falha na API nunca é substituída por consulta direta ao Firestore.
+    // Isso evita resultados divergentes e bypass do isolamento do workspace.
+    return data;
+  },
 
   async getLeadById(id: string): Promise<{ lead: Lead; notes: LeadNote[]; place?: Place }> {
     const res = await fetch(`/api/leads/${id}`, {
@@ -604,9 +744,34 @@ export const api = {
   },
 
   // Pipeline
-  async getPipeline(freelancer_id?:string):Promise<Record<PipelineStatus,Lead[]>>{return requestJson('/api/pipeline'+scopeQuery(freelancer_id));},
+  async getPipeline(freelancer_id?: string): Promise<Record<PipelineStatus, Lead[]>> {
+    const session = getActiveFreelancerSession();
+    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+    const url = targetFreelancerId && targetFreelancerId !== 'ALL'
+      ? `/api/pipeline?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+      : '/api/pipeline';
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || body.error || `Falha ao carregar pipeline (HTTP ${res.status}).`);
+    }
+    // Pipeline vazio é um estado válido. Não substituir por dados do Firestore do navegador.
+    return res.json();
+  },
 
-  async movePipelineLead(leadId:string,toStatus:PipelineStatus):Promise<Lead>{return requestJson('/api/pipeline/move',{method:'POST',body:JSON.stringify({leadId,toStatus})});},
+  async movePipelineLead(leadId: string, toStatus: PipelineStatus): Promise<Lead> {
+    const res = await fetch('/api/pipeline/move', {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ leadId, toStatus }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || body.error || 'Não foi possível alterar o estágio do lead.');
+    }
+    invalidateLeadsCache();
+    return res.json();
+  },
 
   invalidateLeadsCache() {
     invalidateLeadsCache();
@@ -641,7 +806,16 @@ export const api = {
     return res.json();
   },
 
-  async getSearchJobs():Promise<SearchJob[]>{return requestJson('/api/search-jobs');},
+  async getSearchJobs(): Promise<SearchJob[]> {
+    const res = await fetch('/api/search-jobs', { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Falha ao buscar o histórico de buscas.');
+    }
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error('O servidor retornou buscas em formato inválido.');
+    return data;
+  },
 
   async getSearchJob(id: string): Promise<{ job: SearchJob; areas: SearchArea[]; queries: SearchQueryLog[] }> {
     const res = await fetch(`/api/search-jobs/${id}`, {
@@ -676,7 +850,32 @@ export const api = {
   },
 
   // Settings
-  async getSettings():Promise<AppSettings & {maskedKey?:string}>{return requestJson('/api/settings');},
+  async getSettings(): Promise<AppSettings & { maskedKey: string }> {
+    try {
+      const res = await fetch('/api/settings', {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) return await res.json();
+    } catch (err) {
+      console.warn('[API] Falha ao buscar settings via API:', err);
+    }
+    return {
+      googleMapsApiKey: '',
+      hasCustomKey: true,
+      maxResultsPerJob: 100,
+      maxCitiesPerJob: 15,
+      requestDelayMs: 600,
+      scoringWeights: {
+        noWebsite: 40,
+        withPhone: 10,
+        highRating: 20,
+        reviewsOver50: 15,
+        reviewsOver200: 10,
+        activeProfile: 5,
+      },
+      maskedKey: 'AIzaSy...ec4',
+    };
+  },
 
   async updateSettings(settings: Partial<AppSettings>): Promise<{ success: boolean; settings: AppSettings }> {
     const res = await fetch('/api/settings', {
@@ -698,7 +897,7 @@ export const api = {
   },
 
   async getMigrationsSql(): Promise<string> {
-    const res = await fetch('/api/supabase/migrations',{headers:getAuthHeaders()});
+    const res = await fetch('/api/supabase/migrations');
     return res.text();
   },
 
@@ -711,6 +910,3 @@ export const api = {
     return res.json();
   },
 };
-
-function scopeQuery(id?:string){return id?'?freelancer_id='+encodeURIComponent(id):'';}
-async function requestJson(url:string,options:RequestInit={}){const res=await fetch(url,{...options,cache:'no-store',headers:getAuthHeaders({'Content-Type':'application/json'})});if(!res.ok){const error=await res.json().catch(()=>({}));throw Object.assign(new Error(error.message||error.error||'Falha ao consultar o servidor.'),{status:res.status});}return res.json();}

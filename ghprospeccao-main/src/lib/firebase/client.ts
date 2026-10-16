@@ -1,2 +1,705 @@
-// Compatibility hook for views. All data now travels through the authenticated API.
-export function invalidateLeadsCache() {}
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getFirestore,
+  initializeFirestore,
+  setLogLevel,
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  deleteDoc,
+  writeBatch,
+  Firestore,
+} from 'firebase/firestore';
+import firebaseConfig from '../../../firebase-applet-config.json';
+import { DashboardStats, Lead, PipelineStatus } from '../../types';
+
+try {
+  setLogLevel('error');
+} catch {}
+
+let firestoreInstance: Firestore | null = null;
+
+export function getClientFirestore(): Firestore | null {
+  if (firestoreInstance) return firestoreInstance;
+  try {
+    const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    const databaseId =
+      firebaseConfig.firestoreDatabaseId ||
+      'ai-studio-prospectaplacesb-a0f0acf2-92de-4dc6-84d3-27efdba900e9';
+
+    try {
+      firestoreInstance = initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+        ignoreUndefinedProperties: true,
+      }, databaseId);
+    } catch {
+      firestoreInstance = getFirestore(app, databaseId);
+    }
+    return firestoreInstance;
+  } catch (err) {
+    console.warn('[Firebase Client] Falha ao inicializar Firestore no cliente:', err);
+    return null;
+  }
+}
+
+let cachedLeads: Lead[] | null = null;
+let lastFetchTime = 0;
+const CACHE_TTL_MS = 15000; // 15 segundos de cache em memória para navegação rápida
+
+export function invalidateLeadsCache() {
+  cachedLeads = null;
+  lastFetchTime = 0;
+}
+
+function normalizeStr(str?: string | null): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+export function isLeadInWorkspace(
+  lead: { freelancer_id?: string | null; workspace_id?: string | null; user_id?: string | null },
+  targetWorkspaceId?: string | null
+): boolean {
+  if (targetWorkspaceId === 'ALL') return true;
+
+  const targetClean = (targetWorkspaceId || '').toLowerCase().trim().replace(/^free_/, '');
+  const isTargetAdmin = !targetClean || targetClean === 'admin' || targetClean === 'administrador';
+
+  const fid = (lead.freelancer_id || '').toLowerCase().trim();
+  const wid = (lead.workspace_id || '').toLowerCase().trim();
+  const uid = (lead.user_id || '').toLowerCase().trim();
+
+  const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
+  const cleanWid = wid.startsWith('free_') ? wid.substring(5) : wid;
+  const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
+
+  const isAdminFid = !cleanFid || cleanFid === 'admin' || cleanFid === 'administrador' || cleanFid.startsWith('admin_');
+  const isAdminWid = !cleanWid || cleanWid === 'admin' || cleanWid === 'administrador' || cleanWid === 'default' || cleanWid.startsWith('admin_');
+  const isAdminUid = !cleanUid || cleanUid === 'admin' || cleanUid === 'administrador' || cleanUid.startsWith('admin_') || cleanUid.startsWith('default_user');
+
+  // Um lead pertence a um freelancer se tiver identificador explícito de freelancer
+  const isLeadOwnedByFreelancer = !isAdminFid || (!isAdminWid && cleanWid !== '') || (uid.startsWith('free_') && !isAdminUid);
+
+  if (isTargetAdmin) {
+    // Para o workspace do Admin, o lead pertence ao admin se NÃO pertencer a nenhum freelancer
+    return !isLeadOwnedByFreelancer;
+  }
+
+  // Para um workspace de freelancer específico:
+  if (!isLeadOwnedByFreelancer) {
+    return false;
+  }
+
+  const leadOwner = (!isAdminFid && cleanFid) ? cleanFid : ((!isAdminWid && cleanWid) ? cleanWid : cleanUid);
+  return leadOwner === targetClean || cleanFid === targetClean || cleanWid === targetClean || cleanUid === targetClean;
+}
+
+export async function fetchAllLeadsFromFirestore(forceRefresh = false, targetFreelancerId?: string): Promise<Lead[]> {
+  const now = Date.now();
+  let effectiveTarget = targetFreelancerId;
+
+  if (!effectiveTarget && typeof window !== 'undefined') {
+    const freeSess = localStorage.getItem('gh_freelancer_session');
+    if (freeSess) {
+      try {
+        const parsed = JSON.parse(freeSess);
+        if (parsed?.freelancer?.id) {
+          effectiveTarget = parsed.freelancer.id;
+        }
+      } catch {}
+    }
+    if (!effectiveTarget && !window.location.pathname.startsWith('/admin')) {
+      effectiveTarget = 'admin';
+    }
+  }
+
+  if (!effectiveTarget) {
+    effectiveTarget = 'admin';
+  }
+
+  // Se o cache global estiver válido, filtra sobre a coleção completa já baixada
+  if (!forceRefresh && cachedLeads && now - lastFetchTime < CACHE_TTL_MS) {
+    if (effectiveTarget !== 'ALL') {
+      return cachedLeads.filter((l) => isLeadInWorkspace(l, effectiveTarget));
+    }
+    return cachedLeads;
+  }
+
+  const db = getClientFirestore();
+  if (!db) {
+    if (cachedLeads) {
+      return effectiveTarget === 'ALL' ? cachedLeads : cachedLeads.filter((l) => isLeadInWorkspace(l, effectiveTarget));
+    }
+    throw new Error('Instância do Firestore indisponível no cliente');
+  }
+
+  try {
+    const [snap, deletedSnap] = await Promise.all([
+      getDocs(collection(db, 'leads')),
+      getDocs(collection(db, 'deleted_leads')).catch(() => null),
+    ]);
+
+    const deletedIds = new Set<string>();
+    if (deletedSnap) {
+      deletedSnap.forEach((d) => deletedIds.add(d.id));
+    }
+
+    const allLeads: Lead[] = [];
+    snap.forEach((d) => {
+      if (deletedIds.has(d.id)) return;
+      const data = d.data() as Lead;
+      if (data && data.name && !deletedIds.has(data.id)) {
+        if (!data.workspace_id) {
+          data.workspace_id = data.freelancer_id || 'admin';
+        }
+        allLeads.push(data);
+      }
+    });
+
+    // CACHE GLOBAL DE TODOS OS LEADS
+    cachedLeads = allLeads;
+    lastFetchTime = now;
+
+    if (effectiveTarget !== 'ALL') {
+      return allLeads.filter((l) => isLeadInWorkspace(l, effectiveTarget));
+    }
+    return allLeads;
+  } catch (err) {
+    console.warn('[Firebase Client] Erro ao carregar leads do Firestore:', err);
+    if (cachedLeads && cachedLeads.length > 0) {
+      return effectiveTarget === 'ALL' ? cachedLeads : cachedLeads.filter((l) => isLeadInWorkspace(l, effectiveTarget));
+    }
+    throw err;
+  }
+}
+
+export function computeStatsFromLeads(leads: Lead[]): DashboardStats {
+  const totalLeads = leads.length;
+  let newLeads = 0;
+  let contactedLeads = 0;
+  let interestedLeads = 0;
+  let closedLeads = 0;
+  let noWebsiteLeads = 0;
+  let withPhoneLeads = 0;
+
+  const nicheMap: Record<string, number> = {};
+  const stateMap: Record<string, number> = {};
+  const statusCounts: Record<PipelineStatus, number> = {
+    'NOVO': 0,
+    'PRÉVIA CRIADA': 0,
+    'CONTATADO': 0,
+    'RESPONDEU': 0,
+    'INTERESSADO': 0,
+    'FOLLOW_UP': 0,
+    'NEGOCIACAO': 0,
+    'REUNIÃO': 0,
+    'PROPOSTA': 0,
+    'FECHADO': 0,
+    'PERDIDO': 0,
+    'NAO_INTERESSADO': 0,
+    'SEM_RESPOSTA': 0,
+  };
+
+  const dayMap: Record<string, number> = {};
+  // Inicializa últimos 7 dias
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dayStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    dayMap[dayStr] = 0;
+  }
+
+  for (const lead of leads) {
+    const status = lead.pipeline_status || 'NOVO';
+    if (statusCounts[status] !== undefined) {
+      statusCounts[status]++;
+    } else {
+      statusCounts['NOVO']++;
+    }
+
+    if (status === 'NOVO') newLeads++;
+    if (status === 'CONTATADO') contactedLeads++;
+    if (status === 'INTERESSADO') interestedLeads++;
+    if (status === 'FECHADO') closedLeads++;
+
+    if ((!lead.website || lead.website.trim() === '') && (lead.website_status === 'no_website' || !lead.website_status)) {
+      noWebsiteLeads++;
+    }
+    if (lead.phone && lead.phone.trim().length >= 8) {
+      withPhoneLeads++;
+    }
+
+    const niche = lead.niche || 'Geral';
+    nicheMap[niche] = (nicheMap[niche] || 0) + 1;
+
+    const state = (lead.state || 'OUTRO').toUpperCase();
+    stateMap[state] = (stateMap[state] || 0) + 1;
+
+    if (lead.created_at) {
+      const createdDate = new Date(lead.created_at);
+      const dayStr = `${String(createdDate.getDate()).padStart(2, '0')}/${String(createdDate.getMonth() + 1).padStart(2, '0')}`;
+      if (dayMap[dayStr] !== undefined) {
+        dayMap[dayStr]++;
+      }
+    }
+  }
+
+  const responseRate = contactedLeads > 0 ? Math.round(((statusCounts['RESPONDEU'] + interestedLeads + closedLeads) / contactedLeads) * 100) : 0;
+  const closingRate = contactedLeads > 0 ? Math.round((closedLeads / contactedLeads) * 100) : 0;
+
+  const leadsByNiche = Object.entries(nicheMap)
+    .map(([niche, count]) => ({ niche, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const leadsByState = Object.entries(stateMap)
+    .map(([state, count]) => ({ state, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const leadsByDay = Object.entries(dayMap).map(([date, count]) => ({ date, count }));
+
+  const pipelineDistribution = Object.entries(statusCounts).map(([status, count]) => ({
+    status: status as PipelineStatus,
+    count,
+  }));
+
+  const topOpportunities = [...leads]
+    .sort((a, b) => (b.lead_score || 0) - (a.lead_score || 0))
+    .slice(0, 5);
+
+  return {
+    totalLeads,
+    newLeads,
+    contactedLeads,
+    interestedLeads,
+    closedLeads,
+    noWebsiteLeads,
+    withPhoneLeads,
+    responseRate,
+    closingRate,
+    leadsByDay,
+    leadsByNiche,
+    leadsByState,
+    pipelineDistribution,
+    topOpportunities,
+  };
+}
+
+export function matchesFreelancerId(leadFid: string | undefined | null, targetFid: string | undefined | null): boolean {
+  if (targetFid === 'ALL') return true;
+
+  const tfClean = (targetFid || '').toLowerCase().trim().replace(/^free_/, '');
+  const isTargetAdmin = !tfClean || tfClean === 'admin' || tfClean === 'administrador';
+
+  const lfClean = (leadFid || '').toLowerCase().trim().replace(/^free_/, '');
+  const isLeadAdmin = !lfClean || lfClean === 'admin' || lfClean === 'administrador';
+
+  // Se o alvo for o workspace do Admin, o lead DEVE ser do admin (nunca de um freelancer)
+  if (isTargetAdmin) {
+    return isLeadAdmin;
+  }
+
+  // Se o alvo for um freelancer específico, o lead NÃO PODE ser do admin
+  if (isLeadAdmin) {
+    return false;
+  }
+
+  // Compara os identificadores de freelancer normalizados (estritamente o mesmo workspace)
+  return lfClean === tfClean;
+}
+
+const NICHE_SYNONYMS: Record<string, string[]> = {
+  barbearia: ['barber', 'barbearia', 'barbeiro', 'corte masculino', 'hair_care', 'beauty_salon', 'cabelereiro', 'salao'],
+  odontologia: ['dentista', 'odonto', 'odontologica', 'odontologico', 'consultorio odontologico', 'clinica odontologica', 'dental_clinic', 'dentist'],
+  restaurante: ['restaurante', 'bistro', 'gastronomia', 'churrascaria', 'pizzaria', 'restaurant', 'food', 'lanchonete', 'hamburgueria'],
+  clinica: ['clinica', 'medico', 'consultorio', 'saude', 'hospital', 'doctor', 'health'],
+  estetica: ['estetica', 'salao de beleza', 'manicure', 'depilacao', 'spa', 'beauty_salon', 'estetica automotiva'],
+  academia: ['academia', 'fitness', 'crossfit', 'treino', 'gym', 'musculacao'],
+  advocacia: ['advogado', 'advocacia', 'juridico', 'direito', 'lawyer'],
+  contabilidade: ['contabilidade', 'contador', 'fiscal', 'accounting'],
+  mecanica: ['oficina', 'mecanica', 'auto', 'car_repair', 'oficina mecanica'],
+  imobiliaria: ['imobiliaria', 'corretor', 'imoveis', 'real_estate_agency'],
+  pet: ['pet shop', 'veterinario', 'banho e tosa', 'veterinary_care', 'pet'],
+  eletricista: ['eletricista', 'eletrica', 'solar', 'energia solar', 'energia', 'electrician'],
+};
+
+export function clientMatchesNiche(text: string, niche: string): boolean {
+  if (!text || !niche) return false;
+  const normText = normalizeStr(text);
+  const normNiche = normalizeStr(niche);
+  if (normText.includes(normNiche) || normNiche.includes(normText)) return true;
+
+  for (const [key, synonyms] of Object.entries(NICHE_SYNONYMS)) {
+    const keyMatchedByNiche = normNiche.includes(key) || key.includes(normNiche) || synonyms.some((s) => normNiche.includes(normalizeStr(s)));
+    const keyMatchedByText = normText.includes(key) || key.includes(normText) || synonyms.some((s) => normText.includes(normalizeStr(s)));
+    if (keyMatchedByNiche && keyMatchedByText) {
+      return true;
+    }
+  }
+  const nicheWords = normNiche.split(/\s+/).filter((w) => w.length > 2);
+  if (nicheWords.length > 0 && nicheWords.some((word) => normText.includes(word))) {
+    return true;
+  }
+  const textWords = normText.split(/\s+/).filter((w) => w.length > 2);
+  if (textWords.length > 0 && textWords.some((word) => normNiche.includes(word))) {
+    return true;
+  }
+  return false;
+}
+
+export function filterLeadsList(
+  leads: Lead[],
+  params: {
+    freelancer_id?: string;
+    state?: string;
+    city?: string;
+    niche?: string;
+    onlyWithoutWebsite?: boolean;
+    onlyWithPhone?: boolean;
+    onlyFavorites?: boolean;
+    excludeHidden?: boolean;
+    onlyHidden?: boolean;
+    minRating?: number;
+    minReviews?: number;
+    minScore?: number;
+    status?: string;
+    search?: string;
+    sortBy?: 'score' | 'reviews' | 'rating' | 'recent';
+    page?: number;
+    limit?: number;
+  }
+): { leads: Lead[]; total: number; page: number; totalPages: number } {
+  let filtered = [...leads];
+
+  if (params.freelancer_id && params.freelancer_id !== 'ALL') {
+    filtered = filtered.filter((l) => isLeadInWorkspace(l, params.freelancer_id));
+  }
+
+  if (params.state && params.state !== 'ALL') {
+    const targetState = params.state.toUpperCase().trim();
+    filtered = filtered.filter((l) => {
+      const ls = (l.state || '').toUpperCase().trim();
+      if (ls === targetState) return true;
+      if (targetState === 'SP' && (ls.includes('SÃO PAULO') || ls.includes('SAO PAULO'))) return true;
+      if (targetState === 'RJ' && ls.includes('RIO DE JANEIRO')) return true;
+      if (targetState === 'MG' && ls.includes('MINAS GERAIS')) return true;
+      if (targetState === 'ES' && (ls.includes('ESPÍRITO SANTO') || ls.includes('ESPIRITO SANTO'))) return true;
+      if (targetState === 'PR' && (ls.includes('PARANÁ') || ls.includes('PARANA'))) return true;
+      if (targetState === 'SC' && ls.includes('SANTA CATARINA')) return true;
+      if (targetState === 'RS' && ls.includes('RIO GRANDE DO SUL')) return true;
+      return false;
+    });
+  }
+
+  if (params.city && params.city !== 'ALL') {
+    const targetCity = normalizeStr(params.city);
+    filtered = filtered.filter((l) => normalizeStr(l.city) === targetCity);
+  }
+
+  if (params.niche && params.niche !== 'ALL') {
+    const targetNiche = normalizeStr(params.niche);
+    filtered = filtered.filter((l) => {
+      const ln = normalizeStr(l.niche);
+      return ln.includes(targetNiche) || targetNiche.includes(ln) || clientMatchesNiche(ln, targetNiche);
+    });
+  }
+
+  if (params.status && params.status !== 'ALL') {
+    filtered = filtered.filter((l) => l.pipeline_status === params.status);
+  }
+
+  if (params.onlyWithoutWebsite) {
+    filtered = filtered.filter((l) => (!l.website || l.website.trim() === '') && (l.website_status === 'no_website' || !l.website_status));
+  }
+
+  if (params.onlyWithPhone) {
+    filtered = filtered.filter((l) => Boolean(l.phone && l.phone.trim().length >= 8));
+  }
+
+  if (params.onlyFavorites) {
+    filtered = filtered.filter((l) => l.is_favorite === true);
+  }
+
+  if (params.excludeHidden) {
+    filtered = filtered.filter((l) => !l.is_hidden);
+  }
+
+  if (params.onlyHidden) {
+    filtered = filtered.filter((l) => Boolean(l.is_hidden));
+  }
+
+  if (params.minRating) {
+    filtered = filtered.filter((l) => (l.rating || 0) >= params.minRating!);
+  }
+
+  if (params.minReviews) {
+    filtered = filtered.filter((l) => (l.reviews_count || 0) >= params.minReviews!);
+  }
+
+  if (params.minScore) {
+    filtered = filtered.filter((l) => (l.lead_score || 0) >= params.minScore!);
+  }
+
+  if (params.search && params.search.trim() !== '') {
+    const q = normalizeStr(params.search);
+    const qDigits = q.replace(/\D/g, '');
+    filtered = filtered.filter(
+      (l) =>
+        normalizeStr(l.name).includes(q) ||
+        normalizeStr(l.city).includes(q) ||
+        (qDigits.length >= 3 && Boolean(l.phone && l.phone.replace(/\D/g, '').includes(qDigits)))
+    );
+  }
+
+  const sortBy = params.sortBy || 'score';
+  filtered.sort((a, b) => {
+    if (sortBy === 'score') return (b.lead_score || 0) - (a.lead_score || 0);
+    if (sortBy === 'reviews') return (b.reviews_count || 0) - (a.reviews_count || 0);
+    if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
+    if (sortBy === 'recent') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return (b.lead_score || 0) - (a.lead_score || 0);
+  });
+
+  const total = filtered.length;
+  const page = Math.max(1, params.page || 1);
+  const isUnlimited = params.limit === 0 || params.limit === -1 || (typeof params.limit === 'string' && (params.limit === 'all' || params.limit === '0'));
+  const limit = isUnlimited ? Math.max(1, total) : Math.max(1, params.limit || 50);
+  const totalPages = isUnlimited ? 1 : (Math.ceil(total / limit) || 1);
+  const offset = isUnlimited ? 0 : (page - 1) * limit;
+  const paginated = isUnlimited ? filtered : filtered.slice(offset, offset + limit);
+
+  return { leads: paginated, total, page, totalPages };
+}
+
+export async function syncLeadUpdateToFirestoreDirect(
+  leadId: string,
+  updates: Partial<Lead>
+): Promise<void> {
+  const db = getClientFirestore();
+  if (!db || !leadId) return;
+
+  const cleanUpdates: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(updates)) {
+    if (v !== undefined) {
+      cleanUpdates[k] = v;
+    }
+  }
+
+  // Atualiza cache em memória local
+  if (cachedLeads) {
+    const idx = cachedLeads.findIndex((l) => l.id === leadId);
+    if (idx !== -1) {
+      cachedLeads[idx] = { ...cachedLeads[idx], ...cleanUpdates, updated_at: new Date().toISOString() };
+    }
+  }
+
+  try {
+    await setDoc(doc(db, 'leads', leadId), cleanUpdates, { merge: true });
+  } catch (err) {
+    console.warn(`[Firebase Client] Falha ao sincronizar lead ${leadId} no Firestore:`, err);
+  }
+}
+
+export async function deleteLeadDirectFromClient(leadId: string): Promise<void> {
+  const db = getClientFirestore();
+  if (cachedLeads) {
+    cachedLeads = cachedLeads.filter((l) => l.id !== leadId);
+  }
+  if (!db || !leadId) return;
+  try {
+    await Promise.all([
+      deleteDoc(doc(db, 'leads', leadId)).catch(() => {}),
+      setDoc(doc(db, 'deleted_leads', leadId), {
+        id: leadId,
+        deleted_at: new Date().toISOString(),
+      }).catch(() => {}),
+    ]);
+  } catch (err) {
+    console.warn(`[Firebase Client] Falha ao deletar lead ${leadId} no Firestore:`, err);
+  }
+}
+
+export async function deleteAllLeadsDirectFromClient(targetFreelancerId?: string): Promise<number> {
+  invalidateLeadsCache();
+  const db = getClientFirestore();
+  if (!db) return 0;
+  try {
+    const snap = await getDocs(collection(db, 'leads')).catch(() => null);
+    if (!snap) return 0;
+    const matchedDocs: Array<{ ref: any; id: string }> = [];
+
+    snap.forEach((d) => {
+      const data = d.data() as Lead;
+      const fid = data.freelancer_id;
+      const uid = data.user_id;
+      let shouldDelete = false;
+
+      if (targetFreelancerId && targetFreelancerId !== 'ALL') {
+        shouldDelete = matchesFreelancerId(fid, targetFreelancerId) || matchesFreelancerId(uid, targetFreelancerId);
+      } else if (!targetFreelancerId || targetFreelancerId === 'admin' || targetFreelancerId === 'administrador') {
+        const lf = (fid || '').toLowerCase().trim();
+        const lu = (uid || '').toLowerCase().trim();
+        const hasFreelancer =
+          (lf && lf !== 'admin' && lf !== 'administrador') ||
+          (lu && lu.startsWith('free_'));
+        shouldDelete = !hasFreelancer;
+      }
+
+      if (shouldDelete) {
+        matchedDocs.push({ ref: d.ref, id: d.id });
+      }
+    });
+
+    for (let i = 0; i < matchedDocs.length; i += 200) {
+      const chunk = matchedDocs.slice(i, i + 200);
+      const batch = writeBatch(db);
+      for (const item of chunk) {
+        batch.delete(item.ref);
+        batch.set(doc(db, 'deleted_leads', item.id), {
+          id: item.id,
+          deleted_at: new Date().toISOString(),
+        });
+      }
+      await batch.commit().catch((err) => {
+        console.warn('[Firebase Client] Erro no commit do batch deleteAllLeads:', err);
+      });
+    }
+
+    return matchedDocs.length;
+  } catch (err) {
+    console.warn('[Firebase Client] Falha ao deletar leads no Firestore diretamente no cliente:', err);
+    return 0;
+  } finally {
+    invalidateLeadsCache();
+  }
+}
+
+export async function deleteFreelancerDataDirectFromClient(
+  freelancerId: string,
+  accessCode?: string,
+  name?: string
+): Promise<void> {
+  invalidateLeadsCache();
+  const db = getClientFirestore();
+  if (!db) return;
+
+  const rawIdentifiers = [
+    freelancerId,
+    accessCode,
+    `free_${accessCode}`,
+    freelancerId?.replace(/^free_/, ''),
+    name,
+  ].filter(Boolean) as string[];
+
+  const normIdentifiers = Array.from(
+    new Set(rawIdentifiers.map((s) => s.toLowerCase().trim()))
+  );
+
+  try {
+    const snap = await getDocs(collection(db, 'leads')).catch(() => null);
+    if (snap) {
+      const matchedDocs: Array<{ ref: any; id: string }> = [];
+      snap.forEach((d) => {
+        const data = d.data();
+        const fid = (data.freelancer_id || '').toLowerCase().trim();
+        const uid = (data.user_id || '').toLowerCase().trim();
+        const fname = (data.freelancer_name || '').toLowerCase().trim();
+        const docId = d.id.toLowerCase();
+
+        const matches =
+          normIdentifiers.some((id) => fid === id || fid === `free_${id}` || (id.startsWith('free_') && fid === id.substring(5))) ||
+          normIdentifiers.some((id) => uid === id || uid === `free_${id}` || (id.startsWith('free_') && uid === id.substring(5))) ||
+          (name && fname === name.toLowerCase().trim()) ||
+          (accessCode && docId.includes(accessCode.toLowerCase().trim()) && docId.startsWith('lead_'));
+
+        if (matches) {
+          matchedDocs.push({ ref: d.ref, id: d.id });
+        }
+      });
+
+      for (let i = 0; i < matchedDocs.length; i += 200) {
+        const chunk = matchedDocs.slice(i, i + 200);
+        const batch = writeBatch(db);
+        for (const item of chunk) {
+          batch.delete(item.ref);
+          batch.set(doc(db, 'deleted_leads', item.id), {
+            id: item.id,
+            deleted_at: new Date().toISOString(),
+          });
+        }
+        await batch.commit().catch((err) => {
+          console.warn('[Firebase Client] Erro no commit do batch deleteFreelancerData:', err);
+        });
+      }
+    }
+
+    // Exclui o próprio documento do freelancer
+    if (freelancerId) {
+      await deleteDoc(doc(db, 'freelancers', freelancerId)).catch(() => {});
+      const cleanFid = freelancerId.replace(/^free_/, '');
+      if (cleanFid !== freelancerId) {
+        await deleteDoc(doc(db, 'freelancers', cleanFid)).catch(() => {});
+      }
+    }
+    if (accessCode) {
+      await deleteDoc(doc(db, 'freelancers', accessCode)).catch(() => {});
+      await deleteDoc(doc(db, 'freelancers', `free_${accessCode}`)).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('[Firebase Client] Erro ao deletar dados do freelancer diretamente no cliente:', err);
+  } finally {
+    invalidateLeadsCache();
+  }
+}
+
+export async function purgeAllLeadsDirectFromClient(knownIds: string[] = []): Promise<number> {
+  invalidateLeadsCache();
+  const db = getClientFirestore();
+  if (!db) return 0;
+
+  const idsSet = new Set<string>(knownIds.filter(Boolean));
+
+  try {
+    const snap = await getDocs(collection(db, 'leads')).catch(() => null);
+    if (snap) {
+      snap.forEach((d) => idsSet.add(d.id));
+    }
+    const delSnap = await getDocs(collection(db, 'deleted_leads')).catch(() => null);
+    if (delSnap) {
+      delSnap.forEach((d) => idsSet.add(d.id));
+    }
+  } catch {}
+
+  const allIds = Array.from(idsSet);
+  let deletedCount = 0;
+
+  for (let i = 0; i < allIds.length; i += 200) {
+    const chunk = allIds.slice(i, i + 200);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(db, 'leads', id));
+    }
+    await batch.commit().catch((err) => {
+      console.warn('[Firebase Client] Aviso na exclusão em lote de leads:', err);
+    });
+    deletedCount += chunk.length;
+  }
+
+  // Limpa registros em deleted_leads
+  for (let i = 0; i < allIds.length; i += 200) {
+    const chunk = allIds.slice(i, i + 200);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(db, 'deleted_leads', id));
+    }
+    await batch.commit().catch(() => {});
+  }
+
+  invalidateLeadsCache();
+  return deletedCount;
+}
+
