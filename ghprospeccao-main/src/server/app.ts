@@ -491,23 +491,32 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
 
-  const updated = (await db.updateFreelancer(freelancer.id, {
-    last_access_at: new Date().toISOString(),
-    last_activity_at: new Date().toISOString(),
-  }));
-
-  (await db.logActivity({
-    freelancer_id: freelancer.id,
-    freelancer_name: freelancer.name,
-    action_type: 'login',
-    description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
-    metadata: { access_code: freelancer.access_code },
-  }));
+  // Audit writes must never invalidate a successfully verified PIN.
+  const audit = await Promise.allSettled([
+    db.updateFreelancer(freelancer.id, {
+      last_access_at: new Date().toISOString(),
+      last_activity_at: new Date().toISOString(),
+    }),
+    db.logActivity({
+      freelancer_id: freelancer.id,
+      freelancer_name: freelancer.name,
+      action_type: 'login',
+      description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
+      metadata: { access_code: freelancer.access_code },
+    }),
+  ]);
+  for (const outcome of audit) {
+    if (outcome.status === 'rejected') {
+      console.error('Non-critical freelancer login audit failed', {
+        code: storageErrorCode(outcome.reason),
+      });
+    }
+  }
 
   return res.json({
     success: true,
     token,
-    freelancer: updated || freelancer,
+    freelancer: audit[0].status === 'fulfilled' ? (audit[0].value || freelancer) : freelancer,
   });
 });
 
