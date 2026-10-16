@@ -2,9 +2,10 @@ import 'express-async-errors';
 import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
-import { db, matchesFreelancerId, actorContext } from '../lib/store/db';
+import { db, matchesFreelancerId, isLeadInWorkspace, actorContext } from '../lib/store/db';
 import { storageErrorCode } from '../lib/firebase/admin';
 import { digest } from '../lib/store/repository';
+import { shouldUseSupabase } from '../lib/supabase/admin';
 import { dispatchSearchJobs } from '../lib/search/searchWorker';
 import { verifyPin } from './security';
 import { z } from 'zod';
@@ -291,6 +292,47 @@ app.use(['/api/admin/login','/api/freelancer/auth/verify'],async(req,res,next)=>
     tx.set(ref,{count:count+1,until:reset?Date.now()+15*60*1000:data!.until});return true;
   });
   if(!allowed)return res.status(429).json({error:'Muitas tentativas. Aguarde antes de tentar novamente.'});next();
+});
+
+// Deployment readiness: safe, read-only check against the actual configured database.
+app.get('/api/health', async (_req:Request,res:Response) => {
+  if(!shouldUseSupabase())return res.status(503).json({status:'not_ready'});
+  try {
+    await db.ensureInitialized();
+    return res.json({status:'ok',storage:'connected',googlePlacesConfigured:Boolean(process.env.GOOGLE_MAPS_API_KEY)});
+  } catch {
+    return res.status(503).json({status:'degraded',storage:'unavailable'});
+  }
+});
+
+// Single-use real Google Places connectivity probe; no credentials or Places data are returned.
+// The atomic marker prevents repeated paid requests. Remove this diagnostic after validation.
+app.get('/api/health/google-once', async (_req:Request,res:Response) => {
+  if(process.env.GH_LIVE_GOOGLE_SMOKE_TEST!=='enabled' && !(process.env.NODE_ENV==='production' && process.env.GH_SUPABASE_SECRET_KEY && process.env.GOOGLE_MAPS_API_KEY))return res.sendStatus(404);
+  if(!shouldUseSupabase())return res.sendStatus(503);
+  try {
+    await db.ensureInitialized();
+    const ref=db.firestore.collection('settings').doc('google_smoke_check_20261015');
+    try {
+      await ref.create({status:'running',started_at:new Date().toISOString()});
+    } catch (err) {
+      const previous=await ref.get();
+      if(!previous.exists)throw err;
+      const stored=previous.data() || {};
+      return res.status(stored.status==='passed'?200:stored.status==='running'?202:503)
+        .json({status:stored.status==='passed'?'ok':stored.status==='running'?'pending':'failed',
+          placesFound:stored.placesFound || 0,alreadyRun:true});
+    }
+    const key=process.env.GOOGLE_MAPS_API_KEY||'';
+    const response=await searchPlacesOfficial('Barbearia em São Paulo SP',key,{maxResultCount:1},1);
+    const success=!response.error && response.places.length>0;
+    const placesFound=response.places.length;
+    await ref.update({status:success?'passed':'failed',placesFound,finished_at:new Date().toISOString(),
+      error_code:success?'':response.error?'GOOGLE_API_ERROR':'NO_RESULTS'});
+    return res.status(success?200:503).json({status:success?'ok':'failed',placesFound});
+  } catch {
+    return res.status(503).json({status:'unavailable'});
+  }
 });
 
 // 0. HEALTH CHECK & SYNC
@@ -1598,11 +1640,15 @@ app.get('/api/supabase/migrations', requireAdmin, (_req: Request, res: Response)
 app.post('/api/search-jobs/:id/process', requireAuth, async(req,res)=>{
   const job=await db.getSearchJob(req.params.id);
   if(!job)return res.status(404).json({error:'Busca não encontrada.'});
+  if(req.user!.role==='freelancer' && !isLeadInWorkspace(job,req.user!.freelancerId)){
+    return res.status(403).json({error:'Acesso negado: esta busca pertence a outro workspace.'});
+  }
   await runSearchJob(job.id);
   res.json({success:true});
 });
 app.post('/api/leads/:id/preview-link',requireAuth,async(req,res)=>{
   const lead=await db.getLeadById(req.params.id);if(!lead)return res.sendStatus(404);
+  if(req.user!.role==='freelancer' && !isLeadInWorkspace(lead,req.user!.freelancerId))return res.sendStatus(403);
   const expires=String(Date.now()+7*24*3600*1000);
   const signature=crypto.createHmac('sha256',sessionSecret()).update(`preview:${lead.id}:${expires}`).digest('hex');
   res.json({path:`/preview?leadId=${encodeURIComponent(lead.id)}&expires=${expires}&signature=${signature}`});

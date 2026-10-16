@@ -17,15 +17,7 @@ import {
 } from '../types';
 import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
 import {
-  fetchAllLeadsFromFirestore,
-  computeStatsFromLeads,
-  filterLeadsList,
-  syncLeadUpdateToFirestoreDirect,
   invalidateLeadsCache,
-  deleteFreelancerDataDirectFromClient,
-  deleteLeadDirectFromClient,
-  deleteAllLeadsDirectFromClient,
-  matchesFreelancerId,
 } from './firebase/client';
 
 export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
@@ -301,20 +293,8 @@ export const api = {
   },
 
   async adminDeleteFreelancer(id: string): Promise<{ success: boolean; message?: string }> {
-    invalidateLeadsCache();
-    try {
-      const fData = await this.adminGetFreelancerById(id).catch(() => null);
-      if (fData?.freelancer) {
-        await deleteFreelancerDataDirectFromClient(
-          fData.freelancer.id,
-          fData.freelancer.access_code,
-          fData.freelancer.name
-        ).catch(() => {});
-      } else {
-        await deleteFreelancerDataDirectFromClient(id, id).catch(() => {});
-      }
-    } catch {}
-
+    // Somente a API autenticada pode apagar um freelancer e seus dados.
+    // Não executar operações destrutivas diretamente no navegador.
     const res = await fetch(`/api/admin/freelancers/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
@@ -407,20 +387,18 @@ export const api = {
   },
 
   async adminGetFreelancerLeads(id: string): Promise<{ leads: Lead[]; total: number }> {
-    try {
-      const res = await fetch(`/api/admin/freelancers/${id}/leads`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.leads) && typeof data.total === 'number') {
-          return data;
-        }
-      }
-    } catch (err) {
-      console.warn(`[API] Erro ao buscar leads do freelancer ${id}:`, err);
+    const res = await fetch(`/api/admin/freelancers/${id}/leads`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Falha ao carregar os leads deste freelancer.');
     }
-    return { leads: [], total: 0 };
+    const data = await res.json();
+    if (!data || !Array.isArray(data.leads) || typeof data.total !== 'number') {
+      throw new Error('Resposta inválida ao carregar os leads do freelancer.');
+    }
+    return data;
   },
 
   async adminGetFreelancerSearches(id: string): Promise<SearchJob[]> {
@@ -493,54 +471,21 @@ export const api = {
 
   // Dashboard
   async getDashboardStats(freelancer_id?: string): Promise<DashboardStats> {
-    try {
-      const session = getActiveFreelancerSession();
-      const targetFreelancerId = freelancer_id || session?.freelancer?.id;
-      const url = targetFreelancerId && targetFreelancerId !== 'ALL'
-        ? `/api/dashboard/stats?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
-        : '/api/dashboard/stats';
-      const res = await fetch(url, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (
-          data &&
-          typeof data.totalLeads === 'number'
-        ) {
-          return data;
-        }
-      }
-    } catch (err) {
-      console.warn('[API] /api/dashboard/stats erro:', err);
+    const session = getActiveFreelancerSession();
+    const targetFreelancerId = freelancer_id || session?.freelancer?.id;
+    const url = targetFreelancerId && targetFreelancerId !== 'ALL'
+      ? `/api/dashboard/stats?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+      : '/api/dashboard/stats';
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Não foi possível carregar as estatísticas do dashboard.');
     }
-
-    return {
-      totalLeads: 0,
-      newLeads: 0,
-      contactedLeads: 0,
-      interestedLeads: 0,
-      closedLeads: 0,
-      noWebsiteLeads: 0,
-      withPhoneLeads: 0,
-      responseRate: 0,
-      closingRate: 0,
-      leadsByDay: [],
-      leadsByNiche: [],
-      leadsByState: [],
-      pipelineDistribution: [
-        { status: 'NOVO', count: 0 },
-        { status: 'PRÉVIA CRIADA', count: 0 },
-        { status: 'CONTATADO', count: 0 },
-        { status: 'RESPONDEU', count: 0 },
-        { status: 'INTERESSADO', count: 0 },
-        { status: 'REUNIÃO', count: 0 },
-        { status: 'PROPOSTA', count: 0 },
-        { status: 'FECHADO', count: 0 },
-        { status: 'PERDIDO', count: 0 },
-      ],
-      topOpportunities: [],
-    };
+    const data = await res.json();
+    if (!data || typeof data.totalLeads !== 'number') {
+      throw new Error('O servidor retornou estatísticas inválidas.');
+    }
+    return data;
   },
 
   // IBGE
@@ -670,68 +615,39 @@ export const api = {
     page?: number;
     limit?: number;
   }): Promise<{ leads: Lead[]; total: number; page: number; totalPages: number }> {
-    try {
-      const session = getActiveFreelancerSession();
-      const targetFreelancerId = params.freelancer_id || session?.freelancer?.id;
-      const query = new URLSearchParams();
-      if (params.state) query.set('state', params.state);
-      if (params.city) query.set('city', params.city);
-      if (params.niche) query.set('niche', params.niche);
-      if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
-      if (params.onlyWithoutWebsite) query.set('onlyWithoutWebsite', 'true');
-      if (params.onlyWithPhone) query.set('onlyWithPhone', 'true');
-      if (params.onlyFavorites) query.set('onlyFavorites', 'true');
-      if (params.excludeHidden) query.set('excludeHidden', 'true');
-      if (params.onlyHidden) query.set('onlyHidden', 'true');
-      if (params.minRating) query.set('minRating', String(params.minRating));
-      if (params.minReviews) query.set('minReviews', String(params.minReviews));
-      if (params.minScore) query.set('minScore', String(params.minScore));
-      if (params.status) query.set('status', params.status);
-      if (params.search) query.set('search', params.search);
-      if (params.sortBy) query.set('sortBy', params.sortBy);
-      if (params.page) query.set('page', String(params.page));
-      if (params.limit !== undefined) query.set('limit', String(params.limit));
+    const session = getActiveFreelancerSession();
+    const targetFreelancerId = params.freelancer_id || session?.freelancer?.id;
+    const query = new URLSearchParams();
+    if (params.state) query.set('state', params.state);
+    if (params.city) query.set('city', params.city);
+    if (params.niche) query.set('niche', params.niche);
+    if (targetFreelancerId && targetFreelancerId !== 'ALL') query.set('freelancer_id', targetFreelancerId);
+    if (params.onlyWithoutWebsite) query.set('onlyWithoutWebsite', 'true');
+    if (params.onlyWithPhone) query.set('onlyWithPhone', 'true');
+    if (params.onlyFavorites) query.set('onlyFavorites', 'true');
+    if (params.excludeHidden) query.set('excludeHidden', 'true');
+    if (params.onlyHidden) query.set('onlyHidden', 'true');
+    if (params.minRating) query.set('minRating', String(params.minRating));
+    if (params.minReviews) query.set('minReviews', String(params.minReviews));
+    if (params.minScore) query.set('minScore', String(params.minScore));
+    if (params.status) query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.sortBy) query.set('sortBy', params.sortBy);
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit !== undefined) query.set('limit', String(params.limit));
 
-      const res = await fetch(`/api/leads?${query.toString()}`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (
-          data &&
-          Array.isArray(data.leads) &&
-          typeof data.total === 'number'
-        ) {
-          return data;
-        }
-      } else if (res.status === 401 || res.status === 403) {
-        const errJson = await res.json().catch(() => ({}));
-        const authErr = new Error(errJson.message || errJson.error || 'Acesso não autorizado ou sessão expirada.');
-        (authErr as any).status = res.status;
-        throw authErr;
-      } else {
-        console.warn(`[API] /api/leads respondeu com status ${res.status}. Tentando ler via Firestore...`);
-      }
-    } catch (err: any) {
-      if (err && (err.status === 401 || err.status === 403 || err.blocked)) {
-        throw err;
-      }
-      console.warn('[API] Falha de comunicação com /api/leads, recorrendo ao Firestore:', err);
+    const res = await fetch(`/api/leads?${query.toString()}`, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || body.error || `Não foi possível buscar leads (HTTP ${res.status}).`);
     }
-
-    try {
-      const allLeads = await fetchAllLeadsFromFirestore();
-      const session = getActiveFreelancerSession();
-      const effectiveParams = { ...params };
-      const targetFreelancerId = effectiveParams.freelancer_id || session?.freelancer?.id;
-      if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-        (effectiveParams as any).freelancer_id = targetFreelancerId;
-      }
-      return filterLeadsList(allLeads, effectiveParams);
-    } catch (fsErr) {
-      console.error('[API] Falha no fallback do Firestore ao buscar leads:', fsErr);
-      throw new Error('Não foi possível carregar os leads do servidor nem do banco de dados.');
+    const data = await res.json();
+    if (!data || !Array.isArray(data.leads) || typeof data.total !== 'number') {
+      throw new Error('O servidor retornou uma resposta inválida para a listagem de leads.');
     }
+    // Falha na API nunca é substituída por consulta direta ao Firestore.
+    // Isso evita resultados divergentes e bypass do isolamento do workspace.
+    return data;
   },
 
   async getLeadById(id: string): Promise<{ lead: Lead; notes: LeadNote[]; place?: Place }> {
@@ -829,76 +745,32 @@ export const api = {
 
   // Pipeline
   async getPipeline(freelancer_id?: string): Promise<Record<PipelineStatus, Lead[]>> {
-    try {
-      const session = getActiveFreelancerSession();
-      const targetFreelancerId = freelancer_id || session?.freelancer?.id;
-      const url = targetFreelancerId && targetFreelancerId !== 'ALL'
-        ? `/api/pipeline?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
-        : '/api/pipeline';
-      const res = await fetch(url, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const board = await res.json();
-        const total = Object.values(board).reduce((acc: number, list: unknown) => acc + ((list as unknown[])?.length || 0), 0);
-        if (total > 0) {
-          return board;
-        }
-      }
-    } catch (err) {
-      console.warn('[API] Falha em /api/pipeline, montando do Firestore...', err);
-    }
-
-    const allLeads = await fetchAllLeadsFromFirestore();
-    let leads = allLeads;
     const session = getActiveFreelancerSession();
     const targetFreelancerId = freelancer_id || session?.freelancer?.id;
-    if (targetFreelancerId && targetFreelancerId !== 'ALL') {
-      leads = leads.filter((l) => matchesFreelancerId(l.freelancer_id, targetFreelancerId));
+    const url = targetFreelancerId && targetFreelancerId !== 'ALL'
+      ? `/api/pipeline?freelancer_id=${encodeURIComponent(targetFreelancerId)}`
+      : '/api/pipeline';
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || body.error || `Falha ao carregar pipeline (HTTP ${res.status}).`);
     }
-    const board: Record<PipelineStatus, Lead[]> = {
-      'NOVO': [],
-      'PRÉVIA CRIADA': [],
-      'CONTATADO': [],
-      'RESPONDEU': [],
-      'INTERESSADO': [],
-      'FOLLOW_UP': [],
-      'NEGOCIACAO': [],
-      'REUNIÃO': [],
-      'PROPOSTA': [],
-      'FECHADO': [],
-      'PERDIDO': [],
-      'NAO_INTERESSADO': [],
-      'SEM_RESPOSTA': [],
-    };
-    for (const l of leads) {
-      const st = (l.pipeline_status || 'NOVO') as PipelineStatus;
-      if (board[st]) board[st].push(l);
-      else board['NOVO'].push(l);
-    }
-    return board;
+    // Pipeline vazio é um estado válido. Não substituir por dados do Firestore do navegador.
+    return res.json();
   },
 
   async movePipelineLead(leadId: string, toStatus: PipelineStatus): Promise<Lead> {
-    const updates: Partial<Lead> = { pipeline_status: toStatus };
-    if (toStatus === 'CONTATADO') {
-      updates.contacted_at = new Date().toISOString();
+    const res = await fetch('/api/pipeline/move', {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ leadId, toStatus }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || body.error || 'Não foi possível alterar o estágio do lead.');
     }
-    syncLeadUpdateToFirestoreDirect(leadId, updates).catch(() => {});
-
-    try {
-      const res = await fetch('/api/pipeline/move', {
-        method: 'POST',
-        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ leadId, toStatus }),
-      });
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (err) {
-      console.warn('[API] Falha ao mover via API, salvo no Firestore:', err);
-    }
-    return { id: leadId, ...updates } as Lead;
+    invalidateLeadsCache();
+    return res.json();
   },
 
   invalidateLeadsCache() {
@@ -935,18 +807,14 @@ export const api = {
   },
 
   async getSearchJobs(): Promise<SearchJob[]> {
-    try {
-      const res = await fetch('/api/search-jobs', {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) return data;
-      }
-    } catch (err) {
-      console.warn('[API] Falha ao buscar jobs via API:', err);
+    const res = await fetch('/api/search-jobs', { headers: getAuthHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Falha ao buscar o histórico de buscas.');
     }
-    return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error('O servidor retornou buscas em formato inválido.');
+    return data;
   },
 
   async getSearchJob(id: string): Promise<{ job: SearchJob; areas: SearchArea[]; queries: SearchQueryLog[] }> {

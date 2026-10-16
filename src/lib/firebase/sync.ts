@@ -194,7 +194,7 @@ export async function fetchWorkspaceLeadsFromFirestore(
       throw new Error('FIRESTORE_QUOTA_EXCEEDED: Limite de cota do Firestore atingido.');
     }
     console.warn(`[Firebase] Erro ao buscar leads indexados para ${workspaceId}:`, err);
-    return [];
+    throw err;
   }
 }
 
@@ -334,15 +334,16 @@ export async function fetchAllFromFirestore(): Promise<{
   if (!db) return null;
 
   try {
-    // Carrega configuração global e toda a base de dados sincronizada sem limites arbitrários
+    // A falha de uma coleção essencial não pode ser interpretada como coleção vazia.
+    // Sem todos os snapshots não há base consistente para mesclar leads e exclusões.
     const [settingsSnap, freelancersSnap, deletedSnap, jobsSnap, allLeadsSnap, placesSnap, activitiesSnap] = await Promise.all([
-      getDoc(doc(db, 'settings', 'config')).catch(() => null),
-      getDocs(collection(db, 'freelancers')).catch(() => null),
-      getDocs(collection(db, 'deleted_leads')).catch(() => null),
-      getDocs(collection(db, 'search_jobs')).catch(() => null),
-      getDocs(collection(db, 'leads')).catch(() => null),
-      getDocs(collection(db, 'places')).catch(() => null),
-      getDocs(query(collection(db, 'activities'), limit(200))).catch(() => null),
+      getDoc(doc(db, 'settings', 'config')),
+      getDocs(collection(db, 'freelancers')),
+      getDocs(collection(db, 'deleted_leads')),
+      getDocs(collection(db, 'search_jobs')),
+      getDocs(collection(db, 'leads')),
+      getDocs(collection(db, 'places')),
+      getDocs(query(collection(db, 'activities'), limit(200))),
     ]);
 
     const deletedLeadIds = new Set<string>();
@@ -404,8 +405,8 @@ export async function fetchAllFromFirestore(): Promise<{
 
     return { places, leads, jobs, settings, freelancers, activities, deletedLeadIds };
   } catch (err) {
-    console.warn('[Firebase] Erro ao carregar dados do Firestore:', err);
-    return null;
+    console.error('[Firebase] Sincronização abortada: falha ao ler Firestore:', err);
+    throw err;
   }
 }
 
@@ -447,6 +448,7 @@ export async function syncLeadToFirestore(lead: Lead): Promise<void> {
     } else {
       console.warn(`[Firebase] Erro ao sincronizar lead ${lead.id}:`, err);
     }
+    throw err;
   }
 }
 
@@ -662,7 +664,8 @@ export async function deleteLeadFromFirestore(id: string): Promise<void> {
 
 export async function deleteMultipleLeadsFromFirestore(ids: string[]): Promise<number> {
   const db = getFirestoreDb();
-  if (!db || !ids || ids.length === 0) return 0;
+  if (!ids || ids.length === 0) return 0;
+  if (!db) throw new Error('Firestore indisponível para exclusão em lote.');
   let confirmedCount = 0;
   for (let i = 0; i < ids.length; i += 200) {
     const chunk = ids.slice(i, i + 200);
@@ -696,6 +699,18 @@ export function isLeadInWorkspace(
   const cleanFid = fid.startsWith('free_') ? fid.substring(5) : fid;
   const cleanWid = wid.startsWith('free_') ? wid.substring(5) : wid;
   const cleanUid = uid.startsWith('free_') ? uid.substring(5) : uid;
+
+  // Dois proprietários explícitos divergentes indicam dado inconsistente.
+  // Nunca conceder acesso ao freelancer A usando um campo enquanto outro aponta para B.
+  const explicitOwner = (id: string): string => {
+    const clean = id.replace(/^free_/, '');
+    return ['admin', 'administrador', 'default'].includes(clean) || clean.startsWith('admin_')
+      ? 'admin'
+      : clean;
+  };
+  if (fid && wid && explicitOwner(fid) !== explicitOwner(wid)) {
+    return false;
+  }
 
   const isAdminFid = !cleanFid || cleanFid === 'admin' || cleanFid === 'administrador' || cleanFid.startsWith('admin_');
   const isAdminWid = !cleanWid || cleanWid === 'admin' || cleanWid === 'administrador' || cleanWid === 'default' || cleanWid.startsWith('admin_');

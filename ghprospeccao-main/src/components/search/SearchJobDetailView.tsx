@@ -143,7 +143,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
   return (
     <div className="space-y-6">
       <p className="text-sm text-neutral-600">{job.places_found} encontrados · {job.approved_count || 0} aprovados · {job.duplicates_count || 0} já existentes · {job.leads_created} novos salvos</p>
-      {job.completion_reason==='exhausted' && job.target_leads>job.leads_created && <p className="rounded-lg bg-amber-50 p-3 text-sm">Busca esgotada: {job.leads_created} novos leads salvos de uma meta de {job.target_leads}. Não há mais candidatos nas áreas consultadas.</p>}
+      {job.completion_reason==='exhausted' && (job.target_leads||0)>job.leads_created && <p className="rounded-lg bg-amber-50 p-3 text-sm">Busca esgotada: {job.leads_created} novos leads salvos de uma meta de {job.target_leads}. Não há mais candidatos nas áreas consultadas.</p>}
       {/* Top Bar de Navegação e Ações */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <button

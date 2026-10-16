@@ -290,8 +290,9 @@ class Database {
         await this.syncFromFirestore();
         this.firestoreHydrated = true;
       } catch (syncErr) {
+        // Não marcar dados desatualizados como hidratados.
         console.warn('[DB] Erro ao sincronizar banco com Firestore:', syncErr);
-        this.firestoreHydrated = true;
+        throw syncErr;
       }
     })().finally(() => {
       this.initPromise = null;
@@ -341,6 +342,9 @@ class Database {
   public async syncFromFirestore(): Promise<{ leadsCount: number; placesCount: number }> {
     try {
       const remote = await fetchAllFromFirestore();
+      if (!remote) {
+        throw new Error('Firestore indisponível: não foi possível validar os dados persistidos.');
+      }
       if (remote) {
         // 1. MERGE SETTINGS
         if (remote.settings) {
@@ -475,11 +479,8 @@ class Database {
         placesCount: (this.data.places || []).length,
       };
     } catch (err) {
-      console.warn('[DB] Erro ao sincronizar com Firestore:', err);
-      return {
-        leadsCount: (this.data.leads || []).length,
-        placesCount: (this.data.places || []).length,
-      };
+      console.error('[DB] Erro ao sincronizar com Firestore:', err);
+      throw err;
     }
   }
 
@@ -799,7 +800,7 @@ class Database {
     const idx = this.data.leads.findIndex((l) => l.id === id);
     if (idx === -1) return undefined;
 
-    if (freelancer_id && this.data.leads[idx].freelancer_id && this.data.leads[idx].freelancer_id !== freelancer_id) {
+    if (freelancer_id && !isLeadInWorkspace(this.data.leads[idx], freelancer_id)) {
       return undefined;
     }
 
@@ -1362,21 +1363,26 @@ class Database {
     scope?: { freelancerId?: string; role?: 'admin' | 'freelancer' }
   ): Promise<boolean> {
     const lead = (this.data.leads || []).find((l) => l.id === id);
-    if (lead && scope?.role === 'freelancer' && scope.freelancerId) {
-      if (!matchesFreelancerId(lead.freelancer_id, scope.freelancerId)) {
+    if (!lead) {
+      throw new Error('Lead não encontrado.');
+    }
+    if (scope?.role === 'freelancer') {
+      if (!scope.freelancerId || !isLeadInWorkspace(lead, scope.freelancerId)) {
         throw new Error('Acesso não autorizado: você só pode excluir leads do seu próprio workspace.');
       }
     }
 
+    // O Firestore é a fonte persistente: só alteramos a memória após confirmação.
+    // Se o commit remoto falhar, o usuário recebe erro e o lead não some falsamente.
+    await deleteLeadFromFirestore(id);
+
     this.deletedLeadIds.add(id);
     this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
     this.data.leads = (this.data.leads || []).filter((l) => l.id !== id);
-
     if (this.data.lead_notes) {
       this.data.lead_notes = this.data.lead_notes.filter((n) => n.lead_id !== id);
     }
     this.save();
-    await deleteLeadFromFirestore(id);
     return true;
   }
 
@@ -1385,32 +1391,34 @@ class Database {
     scope?: { freelancerId?: string; role?: 'admin' | 'freelancer' }
   ): Promise<number> {
     if (!ids || ids.length === 0) return 0;
-    const idsSet = new Set(ids);
-
-    if (scope?.role === 'freelancer' && scope.freelancerId) {
-      for (const id of ids) {
+    const uniqueIds = Array.from(new Set(ids));
+    if (scope?.role === 'freelancer') {
+      if (!scope.freelancerId) {
+        throw new Error('Workspace do freelancer não identificado.');
+      }
+      for (const id of uniqueIds) {
         const lead = (this.data.leads || []).find((l) => l.id === id);
-        if (lead && !matchesFreelancerId(lead.freelancer_id, scope.freelancerId) && lead.workspace_id !== scope.freelancerId) {
-          throw new Error('Acesso não autorizado: você só pode excluir leads do seu próprio workspace.');
+        if (!lead || !isLeadInWorkspace(lead, scope.freelancerId)) {
+          throw new Error('Acesso não autorizado: um ou mais leads não pertencem ao seu workspace.');
         }
       }
     }
 
-    for (const id of ids) {
-      this.deletedLeadIds.add(id);
+    // Não declarar sucesso com exclusão apenas em memória.
+    const confirmedCount = await deleteMultipleLeadsFromFirestore(uniqueIds);
+    if (confirmedCount !== uniqueIds.length) {
+      throw new Error('Não foi possível confirmar todas as exclusões no Firestore.');
     }
+
+    const idsSet = new Set(uniqueIds);
+    for (const id of uniqueIds) this.deletedLeadIds.add(id);
     this.data.deleted_lead_ids = Array.from(this.deletedLeadIds);
     this.data.leads = (this.data.leads || []).filter((l) => !idsSet.has(l.id));
     if (this.data.lead_notes) {
       this.data.lead_notes = this.data.lead_notes.filter((n) => !idsSet.has(n.lead_id));
     }
     this.save();
-    try {
-      await deleteMultipleLeadsFromFirestore(ids);
-    } catch (fsErr) {
-      console.warn('[DB] Erro ao excluir lote de leads no Firestore:', fsErr);
-    }
-    return ids.length;
+    return confirmedCount;
   }
 
   public async purgeAllLeadsGlobal(): Promise<{

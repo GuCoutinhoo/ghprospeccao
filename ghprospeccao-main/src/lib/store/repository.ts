@@ -1,7 +1,10 @@
 import crypto from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
-import { Filter } from 'firebase-admin/firestore';
+import { Filter as FirestoreFilter } from 'firebase-admin/firestore';
+import { SupabaseFilter } from '../supabase/firestoreAdapter';
+import { shouldUseSupabase } from '../supabase/admin';
+const Filter: typeof FirestoreFilter = shouldUseSupabase() ? SupabaseFilter as unknown as typeof FirestoreFilter : FirestoreFilter;
 import { getServerFirestore } from '../firebase/admin';
 import { Projections } from './projections';
 import { canonicalWorkspace, isLeadInWorkspace, ownerOf } from './ownership';
