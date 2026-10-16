@@ -125,7 +125,7 @@ test('Supabase: API authorization and admin login work across requests',async()=
   assert.equal((await request(app).get('/api/admin/me').set('Authorization','Bearer '+token)).status,200);
   const newFreelancer=await request(app).post('/api/admin/freelancers')
     .set('Authorization','Bearer '+token).send({name:'Test Agent',email:'agent@example.test'});
-  assert.equal(newFreelancer.status,200);
+  assert.equal(newFreelancer.status,201);
   assert.equal((await request(app).get('/api/admin/freelancers').set('Authorization','Bearer '+token)).status,200);
   assert.equal((await request(app).get('/api/admin/freelancers')).status,401);
 });
