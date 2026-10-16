@@ -463,6 +463,10 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     });
   }
 
+  // Human-readable URLs may be guessed; never allow passwordless access to a friendly slug.
+  if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(freelancer.access_code) && !freelancer.pin_hash && !freelancer.pin) {
+    return res.status(403).json({error:'PIN obrigatório',message:'O administrador precisa configurar o PIN de segurança deste acesso.'});
+  }
   if (freelancer.pin_hash || freelancer.pin) {
     if (typeof pin!=='string' || !verifyPin(pin.trim(),freelancer.pin_hash || freelancer.pin!,!freelancer.pin_hash)) {
       return res.status(401).json({
@@ -609,10 +613,11 @@ app.post('/api/admin/freelancers', requireAdmin, async (req: Request, res: Respo
       success: true,
       freelancer: { ...freelancer, performance: perf },
       accessLink: `/f/${freelancer.access_code}`,
+      temporaryPin: freelancer.temporaryPin,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status((err as any)?.status || 503).json({ error: [400,409].includes((err as any)?.status) ? message : (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
   }
 });
 
@@ -637,10 +642,10 @@ app.patch('/api/admin/freelancers/:id', requireAdmin, async (req: Request, res: 
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
     const perf = (await db.getFreelancerPerformance(updated.id));
-    res.json({ success: true, freelancer: { ...updated, performance: perf } });
+    res.json({ success: true, freelancer: { ...updated, performance: perf }, temporaryPin: updated.temporaryPin });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status((err as any)?.status || 503).json({ error: [400,409].includes((err as any)?.status) ? message : (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
   }
 });
 
@@ -666,21 +671,22 @@ app.post('/api/admin/freelancers/:id/unblock', requireAdmin, async (req: Request
     res.json({ success: true, freelancer: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status((err as any)?.status || 503).json({ error: [400,409].includes((err as any)?.status) ? message : (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
   }
 });
 
 app.post('/api/admin/freelancers/:id/regenerate-link', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const newCode = (await db.regenerateFreelancerAccessCode(req.params.id));
-    if (!newCode) {
+    const result = await db.regenerateFreelancerAccessCode(req.params.id);
+    if (!result) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
-    const updated = (await db.getFreelancerById(req.params.id));
-    res.json({ success: true, accessCode: newCode, accessLink: `/f/${newCode}`, freelancer: updated });
+    const updated = await db.getFreelancerById(req.params.id);
+    res.json({ success: true, accessCode: result.accessCode, accessLink: `/f/${result.accessCode}`,
+      freelancer: updated, temporaryPin: result.temporaryPin });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    res.status((err as any)?.status || 503).json({ error: (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
+    res.status((err as any)?.status || 503).json({ error: [400,409].includes((err as any)?.status) ? message : (err as any)?.status === 403 ? 'Acesso negado.' : 'Operação não confirmada. Tente novamente.', code: storageErrorCode(err) });
   }
 });
 
