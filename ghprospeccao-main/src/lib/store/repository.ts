@@ -170,7 +170,9 @@ export class Repository {
   async createFreelancer(data:{name:string;email:string;access_code?:string;notes?:string;pin?:string;status?:Freelancer['status']}) {
     const name=String(data.name || '').trim();
     const email=String(data.email || '').trim().toLowerCase();
-    const code=freelancerSlug(data.access_code || name.split(/\s+/)[0]);
+    const explicitCode=Boolean(data.access_code?.trim());
+    const baseCode=freelancerSlug(data.access_code || name.split(/\s+/)[0]);
+    let code=baseCode;
     if(!name || !email || !code) throw freelancerInputError('Nome, e-mail e código de acesso válidos são obrigatórios.');
     const suppliedPin=typeof data.pin==='string' ? data.pin.trim() : '';
     if(suppliedPin && !/^\d{4,6}$/.test(suppliedPin)) throw freelancerInputError('O PIN deve ter de 4 a 6 dígitos.');
@@ -180,8 +182,13 @@ export class Repository {
       notes:data.notes?.trim() || '',pin_hash:hashPin(suppliedPin || temporaryPin!),created_at:time,updated_at:time});
     await this.firestore.runTransaction(async tx=>{
       const existing=await tx.get(this.firestore.collection('freelancers'));
-      if(existing.docs.some(s=>!s.data()?.deleted_at && String(s.data()?.access_code||'').toLowerCase()===code))
+      const occupied=new Set(existing.docs.filter(s=>!s.data()?.deleted_at)
+        .map(s=>String(s.data()?.access_code||'').toLowerCase()));
+      if(explicitCode && occupied.has(code))
         throw freelancerInputError('Este link já está em uso. Escolha outro código de acesso.',409);
+      let suffix=2;
+      while(occupied.has(code))code=`${baseCode}-${suffix++}`;
+      f.access_code=code;
       tx.create(this.firestore.collection('freelancers').doc(id),f);
     });
     await this.logActivity({freelancer_id:id,action_type:'freelancer_created',description:'Freelancer cadastrado.'});
@@ -211,7 +218,7 @@ export class Repository {
       const pinToStore=suppliedPin || temporaryPin;
       const changes=Object.fromEntries(Object.entries(updates).filter(([k])=>allowed.includes(k)));
       if(inputCode)changes.access_code=inputCode;
-      if(pinToStore)changes.pin_hash=hashPin(pinToStore);
+      if(pinToStore){changes.pin_hash=hashPin(pinToStore);changes.pin='';}
       const f=clean({...previous,...changes,id,updated_at:now()}) as Freelancer;
       if(f.status==='active' && isFriendlyFreelancerCode(f.access_code) && !f.pin_hash && !f.pin)
         throw freelancerInputError('Configure um PIN de segurança antes de ativar este link.',409);
