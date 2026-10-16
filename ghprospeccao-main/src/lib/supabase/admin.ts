@@ -48,7 +48,16 @@ export async function getRecords<T>(collection:string,filters?:{field:string;val
   const search = new URLSearchParams({select:'collection,id,workspace_id,document,revision',collection:`eq.${collection}`});
   // Narrow SQL-indexed workspace when possible; filter remaining document fields on server.
   if(filters?.field==='workspace_id')search.set('workspace_id',`eq.${filters.value}`);
-  const records=await request<StoredRecord<T>[]>(`app_records?${search}`);
+  // Supabase/PostgREST may cap responses at 1,000 rows. Page until exhausted.
+  const records:StoredRecord<T>[]=[];
+  for(let offset=0;offset<1000000;offset+=500) {
+    const page=await request<StoredRecord<T>[]>(`app_records?${search}`,{
+      headers:{Range:`${offset}-${offset+499}`, 'Range-Unit':'items'}
+    });
+    records.push(...page);
+    if(page.length<500)break;
+    if(offset>=999500)throw new Error('Storage query exceeded safe pagination limit');
+  }
   if(!filters || filters.field==='workspace_id')return records;
   return records.filter(r=>(r.document as Record<string,unknown>)?.[filters.field]===filters.value);
 }
