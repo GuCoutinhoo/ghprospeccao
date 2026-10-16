@@ -1692,7 +1692,10 @@ app.get('/api/internal/search-dispatch', async(req,res)=>{
   const jobId=await dispatchSearchJobs();res.json({jobId});
 });
 app.use((err:any,_req:Request,res:Response,_next:NextFunction)=>{
-  res.status(err.status>=400 && err.status<500 ? err.status : 503).json({error:'Operação não confirmada. Tente novamente.',code:storageErrorCode(err)});
+  const code = storageErrorCode(err);
+  const status = err.status>=400 && err.status<500 ? err.status : 503;
+  console.error('[api-error]', {path:_req.path,method:_req.method,status,code,message:err instanceof Error ? err.message : String(err)});
+  res.status(status).json({error:code==='STORAGE_POOL_TIMEOUT'?'Banco de dados sobrecarregado. Tente novamente em instantes.':'Não foi possível concluir a operação.',code});
 });
 export { app };
 export default app;
