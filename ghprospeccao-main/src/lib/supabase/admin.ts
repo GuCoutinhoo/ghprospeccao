@@ -6,7 +6,7 @@
 type StoredRecord<T> = { collection: string; id: string; workspace_id: string; document: T; revision: number };
 type ReadVersion = { collection: string; id: string; revision: number };
 type WriteOperation = { collection: string; id: string; op: 'create'|'set'|'merge'|'update'|'delete'; document?: Record<string, unknown> };
-const allowedCollections = new Set(['leads','deleted_leads','places','freelancers','search_jobs','search_areas','search_queries','search_results','lead_notes','activities','settings','sessions','revoked_sessions','access_codes','freelancer_codes']);
+const allowedCollections = new Set(['leads','deleted_leads','places','freelancers','search_jobs','search_areas','search_queries','search_results','lead_notes','activities','settings','sessions','revoked_sessions','access_codes','freelancer_codes','auth_attempts']);
 
 export class SupabaseStorageError extends Error {
   constructor(public readonly status: number, message: string) { super(message); }
