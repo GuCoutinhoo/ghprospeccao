@@ -172,6 +172,7 @@ export interface SearchJobFilters {
   onlyWithoutWebsite: boolean;
   onlyWithPhone: boolean;
   minRating: number;
+  maxRating?: number;
   minReviews: number;
   maxReviews?: number;
   targetLeads?: number; // 0 ou undefined = sem limite
