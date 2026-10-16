@@ -65,3 +65,9 @@ export async function commitChanges(reads:ReadVersion[], operations:WriteOperati
 export async function checkSupabaseStorage():Promise<void> {
   await getRecord('settings','config');
 }
+
+export async function readEpoch():Promise<number> {
+  const result=await request<number>('rpc/gh_read_epoch',{method:'POST',body:'{}'});
+  if(typeof result!=='number')throw new Error('Invalid Supabase storage epoch.');
+  return result;
+}
