@@ -392,7 +392,10 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
       return true;
     }).then(allowed => res.status(allowed ? 401 : 429).json({
       error: allowed ? 'Credenciais de administrador inválidas.' : 'Muitas tentativas. Aguarde antes de tentar novamente.'
-    })).catch(next);
+    })).catch(() => res.status(503).json({
+      error: 'Não foi possível validar o acesso agora. Tente novamente em instantes.',
+      code: 'AUTH_RATE_LIMIT_UNAVAILABLE'
+    }));
   }
 
   const token = signSession({
