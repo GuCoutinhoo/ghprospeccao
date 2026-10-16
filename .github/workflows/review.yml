@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - fix/lead-integrity-and-auth-20261015
+      - main
 permissions:
   contents: read
 jobs:
@@ -48,3 +49,41 @@ jobs:
         run: npm run test:emulator
       - name: Run Supabase backend adapter integration suite
         run: npm run test:supabase
+
+  production-smoke:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - name: Wait until production Supabase is connected
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 48); do
+            if curl --fail --silent --show-error --max-time 10 'https://ghprospeccao.vercel.app/api/health' -o /tmp/gh-health.json && python3 -c "import json; d=json.load(open('/tmp/gh-health.json')); assert d.get('status')=='ok' and d.get('storage')=='connected' and d.get('googlePlacesConfigured') is True"; then
+              echo 'Verified live Supabase connection and Google Places configuration.'
+              ready=1
+              break
+            fi
+            echo "Production backend not ready yet, attempt ${attempt}/48"
+            sleep 10
+          done
+          if [ "$ready" != 1 ]; then
+            echo 'Production backend did not confirm its Supabase connection.'
+            exit 1
+          fi
+      - name: Verify live Google Places text search once
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 50 'https://ghprospeccao.vercel.app/api/health/google-once' -o /tmp/gh-google.json
+          python3 -c "import json; d=json.load(open('/tmp/gh-google.json')); assert d.get('status')=='ok' and d.get('placesFound',0)>0"
+          echo 'Google Places returned at least one real business.'
+      - name: Reject unauthenticated access to commercial leads
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=$(curl --silent --show-error --max-time 15 -o /dev/null -w '%{http_code}' 'https://ghprospeccao.vercel.app/api/leads')
+          test "$status" = 401
+          echo 'Unauthenticated lead access correctly denied.'
