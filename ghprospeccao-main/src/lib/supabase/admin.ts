@@ -66,10 +66,10 @@ export async function getRecord<T>(collection:string,id:string):Promise<StoredRe
   const search=new URLSearchParams({select:'collection,id,workspace_id,document,revision',collection:`eq.${collection}`,id:`eq.${id}`,limit:'1'});
   return (await request<StoredRecord<T>[]>(`app_records?${search}`))[0];
 }
-export async function commitChanges(reads:ReadVersion[], operations:WriteOperation[]):Promise<void> {
+export async function commitChanges(reads:ReadVersion[], operations:WriteOperation[], epoch?:number):Promise<void> {
   for(const read of reads) validateCollection(read.collection);
   for(const op of operations)validateCollection(op.collection);
-  await request<boolean>('rpc/gh_commit_changes',{method:'POST',body:JSON.stringify({p_reads:reads,p_operations:operations})});
+  await request<boolean>('rpc/gh_commit_changes',{method:'POST',body:JSON.stringify({p_reads:reads,p_operations:operations,p_epoch:epoch??null})});
 }
 export async function checkSupabaseStorage():Promise<void> {
   await getRecord('settings','config');
