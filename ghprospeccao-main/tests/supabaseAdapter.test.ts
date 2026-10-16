@@ -230,3 +230,45 @@ test('Production readiness checks actual storage; live Google probe is paid at m
 });
 
 process.on('exit',()=>{globalThis.fetch=originalFetch;});
+
+
+test('Search filters: maximum, minimum, exact and rating boundary values',async()=>{
+  const {checkLeadFilters}=await import('../src/lib/search/searchWorker');
+  const base={website_status:'no_website',website:'',phone:'11999999999',rating:4.5,reviews_count:10};
+  const filters={onlyWithoutWebsite:false,onlyWithPhone:false,minRating:4,minReviews:0,maxReviews:10};
+  assert.equal(checkLeadFilters({...base,reviews_count:0},filters),true);
+  assert.equal(checkLeadFilters({...base,reviews_count:10},filters),true);
+  assert.equal(checkLeadFilters({...base,reviews_count:11},filters),false);
+  assert.equal(checkLeadFilters({...base,reviews_count:200},filters),false);
+  assert.equal(checkLeadFilters({...base,reviews_count:9},{...filters,minReviews:10}),false);
+  assert.equal(checkLeadFilters({...base,reviews_count:10},{...filters,minReviews:10}),true);
+  assert.equal(checkLeadFilters({...base,reviews_count:4},{...filters,minReviews:4,maxReviews:4}),true);
+  assert.equal(checkLeadFilters({...base,reviews_count:5},{...filters,minReviews:4,maxReviews:4}),false);
+  assert.equal(checkLeadFilters({...base,rating:3.9},filters),false);
+  assert.equal(checkLeadFilters({...base,rating:4},filters),true);
+  assert.equal(checkLeadFilters({...base,website:'https://example.test'},{...filters,onlyWithoutWebsite:true}),false);
+  assert.equal(checkLeadFilters({...base,phone:''},{...filters,onlyWithPhone:true}),false);
+});
+
+test('Search results respect per-job snapshots without altering pre-existing leads',async()=>{
+  const w='free_'+crypto.randomUUID(), placeId='place_'+crypto.randomUUID();
+  const saved=(await repo.createLead({...lead(w,placeId,'dentistas'),rating:4.8,reviews_count:200})).lead;
+  const jobId='job_'+crypto.randomUUID();
+  await repo.createSearchJob({id:jobId,workspace_id:w,freelancer_id:w,user_id:w,
+    niche:'dentistas',state:'SP',city:'São Paulo',filters:{
+      onlyWithoutWebsite:true,onlyWithPhone:true,minRating:4,minReviews:0,maxReviews:10,targetLeads:0
+    },status:'completed',total_cities:1,processed_cities:1,total_search_areas:0,processed_search_areas:0,
+    places_found:1,places_without_website:1,leads_created:0,created_at:timestamp(),updated_at:timestamp()} as any);
+  const receipt=repo.firestore.collection('search_results').doc('receipt_'+crypto.randomUUID());
+  await receipt.set({job_id:jobId,workspace_id:w,place_id:placeId,lead_id:saved.id,
+    result:'duplicate',rating:4.8,reviews_count:8,website:'',website_status:'no_website',phone:'11999999999'});
+  let rows=await repo.getLeads({freelancer_id:w,search_job_id:jobId,limit:0});
+  assert.equal(rows.total,1);
+  assert.equal(rows.leads[0].reviews_count,8);
+  assert.equal((await repo.getLeadById(saved.id))?.reviews_count,200,'Historical lead must remain unchanged');
+  await receipt.set({job_id:jobId,workspace_id:w,place_id:placeId,lead_id:saved.id,
+    result:'duplicate',rating:4.8,reviews_count:200,website:'',website_status:'no_website',phone:'11999999999'});
+  rows=await repo.getLeads({freelancer_id:w,search_job_id:jobId,limit:0});
+  assert.equal(rows.total,0,'A 200-review company cannot pass a max-10 job');
+  assert.equal((await repo.getLeads({freelancer_id:w,limit:0})).total,1,'General lead base must not be modified');
+});
