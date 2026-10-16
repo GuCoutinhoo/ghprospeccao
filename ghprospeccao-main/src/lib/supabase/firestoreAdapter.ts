@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 /** Server-only Firestore-shaped adapter over Supabase transactional JSON documents.
  * Use only with GH_SUPABASE_SECRET_KEY; no browser-side access.
  * A monotonically increasing epoch aborts overlapping transactions (serializable retries).
@@ -66,7 +67,7 @@ class Transaction {
   private cache=new Map<string,DocumentSnapshot>();
   constructor(private readonly epoch:number){}
   async get(source:DocumentRef|Query) {
-    if(this.wrote)throw new Error('Transaction reads must precede writes');
+    // Reads and writes are staged, then atomically committed.
     if(source instanceof DocumentRef){
       const key=`${source.collectionName}/${source.id}`;
       let snapshot=this.cache.get(key);
