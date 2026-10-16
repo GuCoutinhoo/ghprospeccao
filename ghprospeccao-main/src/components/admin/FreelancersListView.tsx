@@ -55,7 +55,7 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Link recém criado com banner de destaque
-  const [newlyCreatedLink, setNewlyCreatedLink] = useState<{ name: string; url: string; code: string } | null>(null);
+  const [newlyCreatedLink, setNewlyCreatedLink] = useState<{ name: string; url: string; code: string; pin?: string } | null>(null);
   const [copiedMap, setCopiedMap] = useState<Record<string, boolean>>({});
 
   const loadFreelancers = async () => {
@@ -95,7 +95,7 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
       }
       await loadFreelancers();
     } catch (err) {
-      console.error('Erro ao alternar status do freelancer:', err);
+      setError(err instanceof Error ? err.message : 'Falha ao alterar o status do freelancer.');
     }
   };
 
@@ -111,9 +111,10 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
         name: f.name,
         code: res.accessCode,
         url: `${origin}/f/${res.accessCode}`,
+        pin: res.temporaryPin,
       });
     } catch (err) {
-      console.error('Erro ao regenerar link:', err);
+      setError(err instanceof Error ? err.message : 'Falha ao regenerar o link.');
     }
   };
 
@@ -169,7 +170,7 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
     setFormAccessCode(f.access_code);
     setIsCustomCodeEdited(true);
     setFormNotes(f.notes || '');
-    setFormPin(f.pin || '');
+    setFormPin(''); // Nunca carrega, exibe ou apaga o PIN existente por omissão.
     setFormStatus(f.status);
     setFormError(null);
     setIsCreateModalOpen(true);
@@ -186,14 +187,23 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
     setFormError(null);
     try {
       if (editingFreelancer) {
-        await api.adminUpdateFreelancer(editingFreelancer.id, {
+        const res = await api.adminUpdateFreelancer(editingFreelancer.id, {
           name: formName.trim(),
           email: formEmail.trim().toLowerCase(),
           access_code: formAccessCode.trim() || undefined,
           notes: formNotes.trim(),
-          pin: formPin.trim(),
+          ...(formPin.trim() ? { pin: formPin.trim() } : {}),
           status: formStatus,
         });
+        if (res.freelancer.access_code !== editingFreelancer.access_code || res.temporaryPin) {
+          const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ghprospeccao.vercel.app';
+          setNewlyCreatedLink({
+            name: res.freelancer.name,
+            code: res.freelancer.access_code,
+            url: `${origin}/f/${res.freelancer.access_code}`,
+            pin: res.temporaryPin,
+          });
+        }
       } else {
         const res = await api.adminCreateFreelancer({
           name: formName.trim(),
@@ -209,6 +219,7 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
           name: res.freelancer.name,
           code: res.freelancer.access_code,
           url: `${origin}/f/${res.freelancer.access_code}`,
+          pin: res.temporaryPin,
         });
       }
 
@@ -247,6 +258,17 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
             <div className="font-mono text-xs bg-black/30 px-3 py-1.5 rounded text-emerald-300 select-all flex items-center gap-2">
               <span>{newlyCreatedLink.url}</span>
             </div>
+            {newlyCreatedLink.pin && (
+              <div className="mt-2 text-xs text-amber-100 space-y-1">
+                <p className="font-semibold">PIN de segurança criado (exibido somente agora):</p>
+                <div className="flex items-center gap-2">
+                  <code className="font-mono font-bold text-base tracking-widest">{newlyCreatedLink.pin}</code>
+                  <button type="button" onClick={() => navigator.clipboard.writeText(newlyCreatedLink.pin!)}
+                    className="underline cursor-pointer">Copiar PIN</button>
+                </div>
+                <p>Envie o PIN ao freelancer por um canal separado do link. Ele será necessário para entrar.</p>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -628,18 +650,18 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
 
               <div>
                 <label className="block font-semibold text-neutral-700 mb-1">
-                  PIN de Segurança Opcional (4 a 6 dígitos)
+                  PIN de Segurança (4 a 6 dígitos)
                 </label>
                 <input
                   type="password"
                   maxLength={6}
                   value={formPin}
                   onChange={(e) => setFormPin(e.target.value)}
-                  placeholder="Deixe em branco para acesso direto sem PIN"
+                  placeholder={editingFreelancer ? 'Deixe vazio para manter o PIN existente' : 'Vazio: sistema gera PIN seguro automaticamente'}
                   className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-xs focus:border-neutral-900 focus:outline-hidden font-mono"
                 />
                 <span className="text-[10px] text-neutral-400 mt-1 block">
-                  Se informado, o freelancer precisará digitar este PIN ao abrir seu link.
+                  {editingFreelancer ? 'Deixe em branco para manter o PIN atual. Informe um novo PIN somente para trocá-lo.' : 'Links com nome são fáceis de adivinhar, por isso o PIN é obrigatório. Se não informar, será gerado automaticamente e exibido uma única vez.'}
                 </span>
               </div>
 

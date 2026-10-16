@@ -22,6 +22,13 @@ export function assertOwner(record: {workspace_id?: string; freelancer_id?: stri
   if (actor?.role === 'freelancer' && !isLeadInWorkspace(record, actor.freelancerId)) throw Object.assign(new Error('Acesso negado ao workspace.'), {status:403});
 }
 const clean = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+const freelancerInputError=(message:string,status=400)=>Object.assign(new Error(message),{status});
+const freelancerSlug=(raw:string):string=>String(raw || '').normalize('NFD')
+  .replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()
+  .replace(/^\/?f\//,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,64).replace(/-+$/,'');
+const isFriendlyFreelancerCode=(value:string)=>/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+const createTemporaryPin=()=>crypto.randomInt(0,1_000_000).toString().padStart(6,'0');
+
 const mutableLeadFields = new Set(['name','phone','address','city','state','website','website_status','maps_url','is_favorite','is_hidden','pipeline_status','contacted_at','contact_attempts_count','response_at','follow_up_at','negotiation_at','sale_value','sale_date','preview_url','notes']);
 export const pipelineStatuses = ['NOVO','PRÉVIA CRIADA','CONTATADO','RESPONDEU','INTERESSADO','FOLLOW_UP','NEGOCIACAO','REUNIÃO','PROPOSTA','FECHADO','PERDIDO','NAO_INTERESSADO','SEM_RESPOSTA'];
 const defaults: AppSettings = {googleMapsApiKey:'',hasCustomKey:false,maxResultsPerJob:0,maxCitiesPerJob:0,requestDelayMs:400,scoringWeights:DEFAULT_SCORING_WEIGHTS};
@@ -159,19 +166,85 @@ export class Repository {
   async getFreelancers() {return (await this.list<Freelancer>('freelancers')).filter(f=>!(f as any).deleted_at);}
   async getFreelancerById(id:string) {const f=await this.get<Freelancer>('freelancers',id);return (f as any)?.deleted_at?undefined:f;}
   async getFreelancerByAccessCode(code:string) {return (await this.getFreelancers()).find(f=>f.access_code?.toLowerCase()===code.trim().toLowerCase());}
+  // Friendly paths are public identifiers, NOT authentication secrets. A PIN protects every new slug.
   async createFreelancer(data:{name:string;email:string;access_code?:string;notes?:string;pin?:string;status?:Freelancer['status']}) {
-    const code=crypto.randomBytes(24).toString('base64url');
-    const f:Freelancer=clean({...data,id:`free_${crypto.randomUUID()}`,access_code:code,status:data.status || 'active',created_at:now(),updated_at:now()});
-    if(f.pin){f.pin_hash=hashPin(f.pin);delete f.pin;}
-    await this.firestore.collection('freelancers').doc(f.id).create(f);await this.logActivity({freelancer_id:f.id,action_type:'freelancer_created',description:'Freelancer cadastrado.'});return f;
+    const name=String(data.name || '').trim();
+    const email=String(data.email || '').trim().toLowerCase();
+    const explicitCode=Boolean(data.access_code?.trim());
+    const baseCode=freelancerSlug(data.access_code || name.split(/\s+/)[0]);
+    let code=baseCode;
+    if(!name || !email || !code) throw freelancerInputError('Nome, e-mail e código de acesso válidos são obrigatórios.');
+    const suppliedPin=typeof data.pin==='string' ? data.pin.trim() : '';
+    if(suppliedPin && !/^\d{4,6}$/.test(suppliedPin)) throw freelancerInputError('O PIN deve ter de 4 a 6 dígitos.');
+    const temporaryPin=suppliedPin ? undefined : createTemporaryPin();
+    const id=`free_${crypto.randomUUID()}`, time=now();
+    const f:Freelancer=clean({id,name,email,access_code:code,status:data.status || 'active',
+      notes:data.notes?.trim() || '',pin_hash:hashPin(suppliedPin || temporaryPin!),created_at:time,updated_at:time});
+    await this.firestore.runTransaction(async tx=>{
+      const existing=await tx.get(this.firestore.collection('freelancers'));
+      const occupied=new Set(existing.docs.filter(s=>!s.data()?.deleted_at)
+        .map(s=>String(s.data()?.access_code||'').toLowerCase()));
+      if(explicitCode && occupied.has(code))
+        throw freelancerInputError('Este link já está em uso. Escolha outro código de acesso.',409);
+      let suffix=2;
+      while(occupied.has(code))code=`${baseCode}-${suffix++}`;
+      f.access_code=code;
+      tx.create(this.firestore.collection('freelancers').doc(id),f);
+    });
+    await this.logActivity({freelancer_id:id,action_type:'freelancer_created',description:'Freelancer cadastrado.'});
+    return {...f,temporaryPin};
   }
   async updateFreelancer(id:string,updates:Partial<Freelancer>) {
-    if(updates.pin!==undefined)updates={...updates,pin_hash:updates.pin?hashPin(updates.pin):'',pin:''};
-    const allowed=['name','email','notes','pin','pin_hash','status','last_access_at','last_activity_at'];
-    return this.firestore.runTransaction(async tx=>{const ref=this.firestore.collection('freelancers').doc(id);const snap=await tx.get(ref);if(!snap.exists || snap.data()?.deleted_at)return undefined;const f=clean({...snap.data(),...Object.fromEntries(Object.entries(updates).filter(([k])=>allowed.includes(k))),id,updated_at:now()}) as Freelancer;tx.set(ref,f);return f;});
+    const inputCode=typeof updates.access_code==='string' && updates.access_code.trim()
+      ? freelancerSlug(updates.access_code) : undefined;
+    if(updates.access_code!==undefined && !inputCode)throw freelancerInputError('Código de acesso inválido.');
+    const suppliedPin=typeof updates.pin==='string' ? updates.pin.trim() : '';
+    if(suppliedPin && !/^\d{4,6}$/.test(suppliedPin))throw freelancerInputError('O PIN deve ter de 4 a 6 dígitos.');
+    const allowed=['name','email','notes','status','last_access_at','last_activity_at'];
+    return this.firestore.runTransaction(async tx=>{
+      const collection=this.firestore.collection('freelancers');
+      const ref=collection.doc(id), snap=await tx.get(ref);
+      if(!snap.exists || snap.data()?.deleted_at)return undefined;
+      const previous=snap.data() as Freelancer;
+      const changedCode=Boolean(inputCode && inputCode!==previous.access_code.toLowerCase());
+      if(changedCode){
+        const existing=await tx.get(collection);
+        if(existing.docs.some(s=>s.id!==id && !s.data()?.deleted_at &&
+          String(s.data()?.access_code||'').toLowerCase()===inputCode))
+          throw freelancerInputError('Este link já está em uso. Escolha outro código de acesso.',409);
+      }
+      const temporaryPin=changedCode && !suppliedPin && !previous.pin_hash && !previous.pin
+        ? createTemporaryPin() : undefined;
+      const pinToStore=suppliedPin || temporaryPin;
+      const changes=Object.fromEntries(Object.entries(updates).filter(([k])=>allowed.includes(k)));
+      if(inputCode)changes.access_code=inputCode;
+      if(pinToStore){changes.pin_hash=hashPin(pinToStore);changes.pin='';}
+      const f=clean({...previous,...changes,id,updated_at:now()}) as Freelancer;
+      if(f.status==='active' && isFriendlyFreelancerCode(f.access_code) && !f.pin_hash && !f.pin)
+        throw freelancerInputError('Configure um PIN de segurança antes de ativar este link.',409);
+      tx.set(ref,f);
+      return {...f,temporaryPin};
+    });
   }
   async setFreelancerStatus(id:string,status:Freelancer['status']) {return this.updateFreelancer(id,{status});}
-  async regenerateFreelancerAccessCode(id:string) {const f=await this.getFreelancerById(id);if(!f)return undefined;const code=crypto.randomBytes(24).toString('base64url');await this.firestore.collection('freelancers').doc(id).update({access_code:code});return code;}
+  async regenerateFreelancerAccessCode(id:string) {
+    return this.firestore.runTransaction(async tx=>{
+      const collection=this.firestore.collection('freelancers');
+      const ref=collection.doc(id),snap=await tx.get(ref);
+      if(!snap.exists || snap.data()?.deleted_at)return undefined;
+      const freelancer=snap.data() as Freelancer;
+      const all=await tx.get(collection);
+      const base=freelancerSlug(freelancer.name.split(/\s+/)[0]);
+      if(!base)throw freelancerInputError('Nome inválido para gerar o link.');
+      let code=base,number=2;
+      const codes=new Set(all.docs.filter(s=>s.id!==id && !s.data()?.deleted_at)
+        .map(s=>String(s.data()?.access_code||'').toLowerCase()));
+      while(codes.has(code) || code===freelancer.access_code.toLowerCase())code=`${base}-${number++}`;
+      const temporaryPin=!freelancer.pin_hash && !freelancer.pin ? createTemporaryPin() : undefined;
+      tx.update(ref,{access_code:code,updated_at:now(),...(temporaryPin?{pin_hash:hashPin(temporaryPin)}:{})});
+      return {accessCode:code,temporaryPin};
+    });
+  }
   async deleteFreelancer(id:string) {const f=await this.getFreelancerById(id);if(!f)return {success:false,leadsRemoved:0,jobsRemoved:0,activitiesRemoved:0};await this.updateFreelancer(id,{status:'blocked'});const jobsRemoved=await this.cancelWorkspaceJobs(id);const {leadsRemoved}=await this.cleanFreelancerWorkspace(id);await this.firestore.collection('freelancers').doc(id).update({deleted_at:now()});return {success:true,name:f.name,leadsRemoved,jobsRemoved,activitiesRemoved:0};}
   async logActivity(activity:Omit<Activity,'id'|'created_at'>) {const item=clean({...activity,id:crypto.randomUUID(),created_at:now()});await this.firestore.collection('activities').doc(item.id).create(item);return item;}
   async getSearchJob(id:string) {const job=await this.get<SearchJob>('search_jobs',id);if(job)assertOwner(job);return job;}

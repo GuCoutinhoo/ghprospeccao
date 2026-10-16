@@ -233,7 +233,7 @@ export const api = {
     notes?: string;
     pin?: string;
     status?: 'active' | 'blocked' | 'inactive';
-  }): Promise<{ success: boolean; freelancer: Freelancer; accessLink: string }> {
+  }): Promise<{ success: boolean; freelancer: Freelancer; accessLink: string; temporaryPin?: string }> {
     invalidateLeadsCache();
     const res = await fetch('/api/admin/freelancers', {
       method: 'POST',
@@ -256,13 +256,13 @@ export const api = {
     return res.json();
   },
 
-  async adminUpdateFreelancer(id: string, updates: Partial<Freelancer>): Promise<{ success: boolean; freelancer: Freelancer }> {
+  async adminUpdateFreelancer(id: string, updates: Partial<Freelancer>): Promise<{ success: boolean; freelancer: Freelancer; temporaryPin?: string }> {
     const res = await fetch(`/api/admin/freelancers/${id}`, {
       method: 'PATCH',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(updates),
     });
-    if (!res.ok) throw new Error('Falha ao atualizar dados do freelancer.');
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(error.error || 'Falha ao atualizar dados do freelancer.'); }
     return res.json();
   },
 
@@ -280,16 +280,16 @@ export const api = {
       method: 'POST',
       headers: getAuthHeaders(),
     });
-    if (!res.ok) throw new Error('Falha ao desbloquear freelancer.');
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(error.error || 'Falha ao desbloquear freelancer.'); }
     return res.json();
   },
 
-  async adminRegenerateLink(id: string): Promise<{ success: boolean; accessCode: string; accessLink: string; freelancer: Freelancer }> {
+  async adminRegenerateLink(id: string): Promise<{ success: boolean; accessCode: string; accessLink: string; freelancer: Freelancer; temporaryPin?: string }> {
     const res = await fetch(`/api/admin/freelancers/${id}/regenerate-link`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
-    if (!res.ok) throw new Error('Falha ao regenerar link do freelancer.');
+    if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(error.error || 'Falha ao regenerar link do freelancer.'); }
     return res.json();
   },
 
