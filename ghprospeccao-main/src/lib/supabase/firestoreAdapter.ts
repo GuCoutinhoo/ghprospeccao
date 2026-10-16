@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 /** Server-only Firestore-shaped adapter over Supabase transactional JSON documents.
  * Use only with GH_SUPABASE_SECRET_KEY; no browser-side access.
- * A monotonically increasing epoch aborts overlapping transactions (serializable retries).
+ * Optimistic document revision checks protect transactions without global contention.
  */
 import type { Firestore } from 'firebase-admin/firestore';
-import {commitChanges,getRecord,getRecords,readEpoch} from './admin';
+import {commitChanges,getRecord,getRecords} from './admin';
 
 type Data = Record<string,any>;
 type Read = {collection:string;id:string;revision:number};
@@ -65,7 +65,7 @@ class Transaction {
   readonly operations:Write[]=[];
   private wrote=false;
   private cache=new Map<string,DocumentSnapshot>();
-  constructor(private readonly epoch:number){}
+
   async get(source:DocumentRef|Query) {
     // Reads and writes are staged, then atomically committed.
     if(source instanceof DocumentRef){
@@ -83,7 +83,7 @@ class Transaction {
   create(ref:DocumentRef,data:Data){this.wrote=true;this.operations.push({collection:ref.collectionName,id:ref.id,op:'create',document:clone(data)});return this;}
   update(ref:DocumentRef,data:Data){this.wrote=true;this.operations.push({collection:ref.collectionName,id:ref.id,op:'update',document:clone(data)});return this;}
   delete(ref:DocumentRef){this.wrote=true;this.operations.push({collection:ref.collectionName,id:ref.id,op:'delete'});return this;}
-  async commit(){if(this.operations.length)await commitChanges(this.reads,this.operations,this.epoch);}
+  async commit(){if(this.operations.length)await commitChanges(this.reads,this.operations);}
 }
 class Database {
   collection(name:string){return new CollectionRef(name);}
@@ -91,7 +91,7 @@ class Database {
   async runTransaction<T>(fn:(tx:Transaction)=>Promise<T>,options?:{maxAttempts?:number;readOnly?:boolean}):Promise<T>{
     const attempts=options?.maxAttempts||5;
     for(let index=0;index<attempts;index++){
-      const tx=new Transaction(await readEpoch());
+      const tx=new Transaction();
       const result=await fn(tx);
       if(options?.readOnly)return result;
       try {await tx.commit();return result;}
