@@ -283,7 +283,7 @@ export function resolveWorkspaceScope(req: Request): {
 
 // --- ROTAS DA API ---
 app.use(['/api/admin/login','/api/freelancer/auth/verify'],async(req,res,next)=>{
-  if(req.method!=='POST')return next();
+  if(req.method!=='POST' || req.path==='/api/admin/login')return next();
   const key=digest(`${req.ip}:${String(req.body.email || req.body.accessCode || '').toLowerCase()}`);
   const allowed=await db.firestore.runTransaction(async tx=>{
     const ref=db.firestore.collection('auth_attempts').doc(key);const snap=await tx.get(ref);const data=snap.data();
@@ -378,7 +378,21 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
     crypto.timingSafeEqual(crypto.createHash('sha256').update(cleanPass).digest(),crypto.createHash('sha256').update(ADMIN_DEFAULT_PASSWORD).digest());
 
   if (!isValidAdmin) {
-    return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
+    // Rate-limit invalid credentials only. A valid admin login must not depend on
+    // storage availability; otherwise a transient DB outage locks out the owner.
+    const key = digest(`${req.ip}:${cleanEmail}`);
+    return db.firestore.runTransaction(async tx => {
+      const ref = db.firestore.collection('auth_attempts').doc(key);
+      const snap = await tx.get(ref);
+      const data = snap.data();
+      const reset = !data || data.until < Date.now();
+      const count = reset ? 0 : data.count;
+      if (count >= 20) return false;
+      tx.set(ref, {count:count+1,until:reset?Date.now()+15*60*1000:data!.until});
+      return true;
+    }).then(allowed => res.status(allowed ? 401 : 429).json({
+      error: allowed ? 'Credenciais de administrador inválidas.' : 'Muitas tentativas. Aguarde antes de tentar novamente.'
+    })).catch(next);
   }
 
   const token = signSession({
