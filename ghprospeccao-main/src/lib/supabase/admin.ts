@@ -8,6 +8,16 @@ type ReadVersion = { collection: string; id: string; revision: number };
 type WriteOperation = { collection: string; id: string; op: 'create'|'set'|'merge'|'update'|'delete'; document?: Record<string, unknown> };
 const allowedCollections = new Set(['leads','deleted_leads','places','freelancers','search_jobs','search_areas','search_queries','search_results','lead_notes','activities','settings','sessions','revoked_sessions','access_codes','freelancer_codes','auth_attempts']);
 
+/**
+ * Prefer the configured server-only Supabase backend on Vercel.
+ * An explicit firestore override is still available for local legacy workflows.
+ * Never trust a client-provided switch.
+ */
+export function shouldUseSupabase(env:NodeJS.ProcessEnv=process.env):boolean {
+  if (env.GH_STORAGE_BACKEND === 'firestore') return false;
+  if (env.GH_STORAGE_BACKEND === 'supabase') return true;
+  return Boolean(env.GH_SUPABASE_URL && env.GH_SUPABASE_SECRET_KEY);
+}
 export class SupabaseStorageError extends Error {
   constructor(public readonly status: number, message: string) { super(message); }
 }
