@@ -1,8 +1,10 @@
+import { getSupabaseFirestoreAdapter } from '../supabase/firestoreAdapter';
 import 'dotenv/config';
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 let instance: Firestore | undefined;
 export function getServerFirestore(): Firestore {
+  if (process.env.GH_STORAGE_BACKEND === 'supabase') return getSupabaseFirestoreAdapter();
   if (instance) return instance;
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const emulator = process.env.FIRESTORE_EMULATOR_HOST;
