@@ -268,7 +268,7 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
                 </div>
                 <p>Envie o PIN ao freelancer por um canal separado do link. Ele será necessário para entrar.</p>
               </div>
-            )
+            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
