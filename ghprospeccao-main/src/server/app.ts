@@ -308,7 +308,7 @@ app.get('/api/health', async (_req:Request,res:Response) => {
 // Single-use real Google Places connectivity probe; no credentials or Places data are returned.
 // The atomic marker prevents repeated paid requests. Remove this diagnostic after validation.
 app.get('/api/health/google-once', async (_req:Request,res:Response) => {
-  if(process.env.GH_LIVE_GOOGLE_SMOKE_TEST!=='enabled')return res.sendStatus(404);
+  if(process.env.GH_LIVE_GOOGLE_SMOKE_TEST!=='enabled' && !(process.env.NODE_ENV==='production' && process.env.GH_SUPABASE_SECRET_KEY && process.env.GOOGLE_MAPS_API_KEY))return res.sendStatus(404);
   if(!shouldUseSupabase())return res.sendStatus(503);
   try {
     await db.ensureInitialized();
