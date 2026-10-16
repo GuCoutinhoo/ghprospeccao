@@ -32,15 +32,20 @@ export class Projections {
     onlyHidden?: boolean;
     minRating?: number;
     minReviews?: number;
+    maxReviews?: number;
     minScore?: number;
     status?: string;
     search?: string;
     sortBy?: 'score' | 'reviews' | 'rating' | 'recent';
     page?: number;
     limit?: number;
-  }): { leads: Lead[]; total: number; page: number; totalPages: number } {
+  }, searchSnapshots?: Map<string, Partial<Lead>>): { leads: Lead[]; total: number; page: number; totalPages: number } {
     let filtered = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
-    if (params.search_job_id) filtered = filtered.filter(l => l.search_job_ids?.includes(params.search_job_id!));
+    if (params.search_job_id) {
+      filtered = filtered
+        .filter(l => l.search_job_ids?.includes(params.search_job_id!) || searchSnapshots?.has(l.id))
+        .map(l => searchSnapshots?.has(l.id) ? {...l, ...searchSnapshots.get(l.id)} : l);
+    }
 
     if (params.freelancer_id !== 'ALL') {
       filtered = filtered.filter((l) => isLeadInWorkspace(l, params.freelancer_id));
@@ -105,6 +110,10 @@ export class Projections {
 
     if (params.minReviews) {
       filtered = filtered.filter((l) => l.reviews_count >= params.minReviews!);
+    }
+
+    if (params.maxReviews !== undefined) {
+      filtered = filtered.filter((l) => Number.isFinite(l.reviews_count) && l.reviews_count <= params.maxReviews!);
     }
 
     if (params.minScore) {

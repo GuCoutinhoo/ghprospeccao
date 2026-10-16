@@ -76,8 +76,34 @@ export class Repository {
     }, {readOnly:true});
   }
   async getLeads(params: Parameters<Projections['getLeads']>[0] & {search_job_id?:string}) {
+    if (!params.search_job_id) return (await this.projection(false,params.freelancer_id)).getLeads(params);
+    const job = await this.getSearchJob(params.search_job_id);
+    if (!job || (params.freelancer_id !== 'ALL' && !isLeadInWorkspace(job,params.freelancer_id)))
+      return {leads:[] as Lead[],total:0,page:1,totalPages:1};
+    const f = job.filters;
+    // Each receipt represents one candidate of THIS search, including reused leads.
+    // Never overwrite existing lead documents to apply a later search's filters.
+    const receipts = await this.list<{lead_id?:string;rating?:number;reviews_count?:number;website?:string;website_status?:Lead['website_status'];phone?:string}>('search_results','job_id',job.id);
+    const snapshots = new Map<string,Partial<Lead>>();
+    for (const receipt of receipts) {
+      if (!receipt.lead_id) continue;
+      // Old receipts lack snapshots; keep legacy associations and filter stored metrics.
+      if (typeof receipt.rating !== 'number' || typeof receipt.reviews_count !== 'number') continue;
+      snapshots.set(receipt.lead_id,{
+        rating:receipt.rating,reviews_count:receipt.reviews_count,
+        website:receipt.website??'',website_status:receipt.website_status??'not_verified',
+        phone:receipt.phone??''
+      });
+    }
     const projection = await this.projection(false,params.freelancer_id);
-    return projection.getLeads(params);
+    return projection.getLeads({
+      ...params,
+      onlyWithoutWebsite:Boolean(params.onlyWithoutWebsite || f.onlyWithoutWebsite),
+      onlyWithPhone:Boolean(params.onlyWithPhone || f.onlyWithPhone),
+      minRating:Math.max(params.minRating??0,f.minRating??0),
+      minReviews:Math.max(params.minReviews??0,f.minReviews??0),
+      maxReviews:f.maxReviews,
+    },snapshots);
   }
   async getLeadsCount() { return (await this.getLeads({freelancer_id:'ALL',limit:0})).total; }
   async getNichesSummary(params?: Parameters<Projections['getNichesSummary']>[0]) { return (await this.projection(false,params?.freelancer_id)).getNichesSummary(params); }

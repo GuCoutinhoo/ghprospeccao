@@ -28,7 +28,7 @@ export function checkLeadFilters(place:Partial<Place>,filters:SearchJobFilters) 
   return (!filters.onlyWithoutWebsite || (!place.website?.trim() && place.website_status==='no_website')) &&
     (!filters.onlyWithPhone || (place.phone?.replace(/\D/g,'').length||0)>=8) &&
     (place.rating||0)>=filters.minRating && (place.reviews_count||0)>=filters.minReviews &&
-    (!filters.maxReviews || (place.reviews_count||0)<=filters.maxReviews) &&
+    (filters.maxReviews === undefined || (place.reviews_count||0)<=filters.maxReviews) &&
     (!place.business_status || place.business_status==='OPERATIONAL');
 }
 type FetchPage=(query:string,key:string,options:Parameters<typeof searchPage>[2])=>Promise<PlacesPage>;
@@ -101,7 +101,8 @@ export async function runSearchJob(jobId:string,repo:Repository=db,fetchPage:Fet
           const lead:Lead=clean({id:leadIdentity(ownerOf(j),place.place_id,j.niche),workspace_id:j.workspace_id,user_id:j.user_id,freelancer_id:j.freelancer_id,freelancer_name:j.freelancer_name,place_id:place.place_id,name:place.name,niche:j.niche,state:place.state,city:place.city,address:place.formatted_address,phone:place.phone,website:place.website,website_status:place.website_status,maps_url:place.maps_url,rating:place.rating||0,reviews_count:place.reviews_count||0,lead_score:calculateLeadScore(place,settings.scoringWeights).score,pipeline_status:'NOVO',search_job_ids:[j.id],created_at:now(),updated_at:now()});
           const saved=await repo.createLeadInTransaction(tx,lead);
           result=saved.isDeleted?'deleted':saved.created?'created':'duplicate';leadId=saved.isDeleted?undefined:saved.lead.id;
-          if(!saved.created && !saved.isDeleted)tx.update(repo.firestore.collection('leads').doc(saved.lead.id),{search_job_ids:[...new Set([...(saved.lead.search_job_ids||[]),j.id])]});
+          // Existing leads are immutable here. The receipt links reused leads to this job,
+          // and records the exact Google data used to approve this specific search.
           patch.approved_count=(j.approved_count||0)+1;
           patch.leads_created=j.leads_created+(saved.created?1:0);
           patch.duplicates_count=(j.duplicates_count||0)+(result==='duplicate'?1:0);
@@ -109,7 +110,10 @@ export async function runSearchJob(jobId:string,repo:Repository=db,fetchPage:Fet
           patch.results_count=(j.results_count||0)+(leadId?1:0);
         }else patch.rejected_count=(j.rejected_count||0)+1;
         tx.set(repo.firestore.collection('places').doc(place.id),clean(place),{merge:true});
-        tx.create(receiptRef,clean({job_id:jobId,workspace_id:j.workspace_id,place_id:place.place_id,lead_id:leadId,result,created_at:now()}));
+        tx.create(receiptRef,clean({job_id:jobId,workspace_id:j.workspace_id,place_id:place.place_id,lead_id:leadId,result,
+          rating:place.rating??0,reviews_count:place.reviews_count??0,
+          website:place.website||'',website_status:place.website_status,phone:place.phone||'',
+          created_at:now()}));
         tx.update(ref,patch);
       });
     }

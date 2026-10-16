@@ -1406,6 +1406,9 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
     const parsed=z.object({state:z.string().regex(/^[A-Z]{2}$/),city:z.string().trim().min(1).max(100),niche:z.string().trim().min(2).max(120),filters:z.object({onlyWithoutWebsite:z.boolean(),onlyWithPhone:z.boolean(),minRating:z.number().min(0).max(5),minReviews:z.number().int().min(0),maxReviews:z.number().int().min(0).optional(),targetLeads:z.number().int().min(0).max(10000).optional()})}).safeParse(req.body);
     if(!parsed.success)return res.status(400).json({error:'Parâmetros de busca inválidos.'});
     const { state, city, niche, filters } = parsed.data;
+    if (filters.maxReviews !== undefined && filters.maxReviews < filters.minReviews) {
+      return res.status(400).json({error:'O máximo de avaliações não pode ser menor que o mínimo.'});
+    }
     if (!state || !city || !niche) {
       return res.status(400).json({ error: 'Estado, cidade e nicho são obrigatórios.' });
     }

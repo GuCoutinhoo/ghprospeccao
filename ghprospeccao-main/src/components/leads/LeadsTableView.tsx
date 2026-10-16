@@ -573,7 +573,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {searchJobId && <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm"><span>Resultados associados à busca selecionada</span><button onClick={()=>{onClearSearchJob?.();handleClearAllFilters();}} className="underline">Ver todos os leads</button></div>}
+      {searchJobId && <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm"><span>Somente resultados da varredura selecionada (filtros originais aplicados no servidor)</span><button onClick={()=>{onClearSearchJob?.();handleClearAllFilters();}} className="underline">Ver base geral</button></div>}
       {/* Banner de Varredura em Andamento em Tempo Real */}
       {runningJob && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-blue-200 bg-blue-50/90 text-blue-900 shadow-2xs animate-pulse">
