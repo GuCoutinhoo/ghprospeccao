@@ -2,7 +2,8 @@ import {test, beforeEach} from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
-process.env.GH_STORAGE_BACKEND='supabase';
+// Exercise real Vercel behavior: credentials alone must enable the Supabase backend.
+delete process.env.GH_STORAGE_BACKEND;
 process.env.GH_SUPABASE_URL='https://demo-supabase-adapter.supabase.co';
 process.env.GH_SUPABASE_SECRET_KEY='sb_secret_local_test_only';
 process.env.ADMIN_EMAIL='admin@example.test';
@@ -63,6 +64,10 @@ globalThis.fetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
   throw new Error('Unexpected Supabase transport: '+u.pathname);
 };
 
+const {shouldUseSupabase}=await import('../src/lib/supabase/admin');
+assert.equal(shouldUseSupabase(),true,'Production credentials should select Supabase automatically');
+assert.equal(shouldUseSupabase({GH_STORAGE_BACKEND:'firestore',GH_SUPABASE_URL:process.env.GH_SUPABASE_URL,GH_SUPABASE_SECRET_KEY:process.env.GH_SUPABASE_SECRET_KEY} as NodeJS.ProcessEnv),false);
+assert.equal(shouldUseSupabase({} as NodeJS.ProcessEnv),false);
 const {Repository,actorContext}=await import('../src/lib/store/repository');
 const {leadIdentity}=await import('../src/lib/store/repository');
 const repo=new Repository();
