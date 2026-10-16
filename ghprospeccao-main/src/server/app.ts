@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { db, matchesFreelancerId, isLeadInWorkspace, actorContext } from '../lib/store/db';
 import { storageErrorCode } from '../lib/firebase/admin';
 import { digest } from '../lib/store/repository';
+import { shouldUseSupabase } from '../lib/supabase/admin';
 import { dispatchSearchJobs } from '../lib/search/searchWorker';
 import { verifyPin } from './security';
 import { z } from 'zod';
@@ -295,7 +296,7 @@ app.use(['/api/admin/login','/api/freelancer/auth/verify'],async(req,res,next)=>
 
 // Deployment readiness: safe, read-only check against the actual configured database.
 app.get('/api/health', async (_req:Request,res:Response) => {
-  if(process.env.GH_STORAGE_BACKEND!=='supabase')return res.status(503).json({status:'not_ready'});
+  if(!shouldUseSupabase())return res.status(503).json({status:'not_ready'});
   try {
     await db.ensureInitialized();
     return res.json({status:'ok',storage:'connected',googlePlacesConfigured:Boolean(process.env.GOOGLE_MAPS_API_KEY)});
@@ -308,7 +309,7 @@ app.get('/api/health', async (_req:Request,res:Response) => {
 // The atomic marker prevents repeated paid requests. Remove this diagnostic after validation.
 app.get('/api/health/google-once', async (_req:Request,res:Response) => {
   if(process.env.GH_LIVE_GOOGLE_SMOKE_TEST!=='enabled')return res.sendStatus(404);
-  if(process.env.GH_STORAGE_BACKEND!=='supabase')return res.sendStatus(503);
+  if(!shouldUseSupabase())return res.sendStatus(503);
   try {
     await db.ensureInitialized();
     const ref=db.firestore.collection('settings').doc('google_smoke_check_20261015');
