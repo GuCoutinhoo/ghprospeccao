@@ -9,7 +9,8 @@
     "build": "vite build && esbuild src/server/serverless.ts --bundle --platform=node --format=esm --outfile=api/index.js --packages=external",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:rating": "tsx --test scripts/test-rating-filter.ts"
   },
   "engines": {
     "node": ">=20.0.0"

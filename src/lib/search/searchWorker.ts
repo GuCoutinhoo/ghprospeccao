@@ -4,6 +4,7 @@ import { CITY_COORDINATES, METROPOLITAN_GRIDS, POPULAR_CITIES_BY_STATE, fetchCit
 import { calculateLeadScore } from '../scoring/leadScore';
 import { SearchArea, SearchJob, SearchQueryLog } from '../../types';
 import { syncLeadToFirestore } from '../firebase/sync';
+import { matchesRatingRange } from './ratingFilter';
 
 interface ActiveWorker {
   jobId: string;
@@ -24,6 +25,7 @@ export async function createAndPrepareSearchJob(params: {
     onlyWithoutWebsite: boolean;
     onlyWithPhone: boolean;
     minRating: number;
+    maxRating?: number;
     minReviews: number;
     maxReviews?: number;
     targetLeads?: number;
@@ -412,6 +414,7 @@ function checkLeadFilters(
     onlyWithoutWebsite: boolean;
     onlyWithPhone: boolean;
     minRating: number;
+    maxRating?: number;
     minReviews: number;
     maxReviews?: number;
   }
@@ -427,8 +430,7 @@ function checkLeadFilters(
     return false;
   }
 
-  const rating = Number(place.rating || 0);
-  if (filters.minRating > 0 && rating < filters.minRating) {
+  if (!matchesRatingRange(place.rating, filters)) {
     return false;
   }
 
