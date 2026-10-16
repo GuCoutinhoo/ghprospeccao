@@ -412,25 +412,28 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     const targetLead = leads.find((l) => l.id === leadId);
     const newHiddenState = !targetLead?.is_hidden;
 
-    // Atualização otimista imediata na interface
-    setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, is_hidden: newHiddenState } : l))
-    );
-
-    setToastMessage({
-      type: 'success',
-      text: newHiddenState
-        ? `"${targetLead?.name || 'Lead'}" ocultado (marcado como cinza).`
-        : `"${targetLead?.name || 'Lead'}" reexibido.`,
-    });
-
     try {
+      // Só confirma a mudança visual depois da gravação persistente no servidor.
       const updated = await api.toggleLeadHide(leadId, newHiddenState);
+      if (!updated || updated.is_hidden !== newHiddenState) {
+        throw new Error('O servidor não confirmou a ocultação do lead.');
+      }
       setLeads((prev) =>
-        prev.map((l) => (l.id === leadId ? { ...l, ...updated, is_hidden: newHiddenState } : l))
+        prev.map((l) => (l.id === leadId ? { ...l, ...updated } : l))
       );
+      setToastMessage({
+        type: 'success',
+        text: newHiddenState
+          ? `"${targetLead?.name || 'Lead'}" ocultado (marcado como cinza).`
+          : `"${targetLead?.name || 'Lead'}" reexibido.`,
+      });
     } catch (err) {
       console.error('Erro ao alternar ocultação do lead:', err);
+      setToastMessage({
+        type: 'error',
+        text: 'Não foi possível salvar a alteração. A marcação anterior foi mantida.',
+      });
+      void loadLeads(true);
     }
   };
 
