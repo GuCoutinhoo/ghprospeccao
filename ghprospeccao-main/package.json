@@ -14,7 +14,8 @@
     "worker": "tsx scripts/search-dispatcher.ts",
     "test": "node --import tsx --import ./tests/setup-env.ts --test --test-concurrency=1 tests/integration.test.ts",
     "test:emulator": "firebase emulators:exec --only firestore --project demo-ghprospeccao --config firebase.test.json \"npm test\"",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "test:supabase": "node --import tsx --test --test-concurrency=1 tests/supabaseAdapter.test.ts"
   },
   "engines": {
     "node": ">=20.0.0"
