@@ -8,14 +8,23 @@ process.env.GH_SUPABASE_SECRET_KEY='sb_secret_local_test_only';
 process.env.ADMIN_EMAIL='admin@example.test';
 process.env.ADMIN_PASSWORD='test-password-strong-enough';
 process.env.SESSION_SECRET='test-secret-not-for-production-xxxxxxxxxxxx';
+process.env.GOOGLE_MAPS_API_KEY='mock-places-only';
+process.env.GH_LIVE_GOOGLE_SMOKE_TEST='enabled';
 
 type Document = Record<string,unknown>;
 type Row={collection:string;id:string;workspace_id:string;document:Document;revision:number};
 let records=new Map<string,Row>(),epoch=0;
+let googleCalls=0;
 const key=(c:string,id:string)=>c+'|'+id;
 const originalFetch=globalThis.fetch;
 globalThis.fetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
-  const u=new URL(String(input)); assert.equal(u.origin,process.env.GH_SUPABASE_URL);
+  const u=new URL(String(input));
+  if(u.hostname==='places.googleapis.com') {
+    googleCalls++;
+    assert.equal(new Headers(init?.headers).get('X-Goog-Api-Key'),process.env.GOOGLE_MAPS_API_KEY);
+    return new Response(JSON.stringify({places:[{id:'places_test_1',displayName:{text:'Barbearia Teste'},formattedAddress:'São Paulo - SP'}]}),{status:200,headers:{'Content-Type':'application/json'}});
+  }
+  assert.equal(u.origin,process.env.GH_SUPABASE_URL);
   const headers=new Headers(init?.headers);
   assert.equal(headers.get('apikey'),process.env.GH_SUPABASE_SECRET_KEY);
   assert.equal(headers.get('authorization'),null,'New sb_secret must never be sent as Bearer JWT');
@@ -64,7 +73,7 @@ const lead=(workspace_id:string,place_id:string,niche='dentistas'):any=>({
   phone:'11999999999',website_status:'no_website',pipeline_status:'NOVO',
   created_at:timestamp(),updated_at:timestamp()
 });
-beforeEach(()=>{records=new Map();epoch=0;});
+beforeEach(()=>{records=new Map();epoch=0;googleCalls=0;});
 
 test('Supabase: create, read, update and tombstone survive successive requests',async()=>{
   const original=lead('admin','dentist_1');
@@ -149,6 +158,23 @@ test('Supabase: search worker saves approved candidates exactly once',async()=>{
   assert.equal((await repo.getLeads({freelancer_id:'ALL',limit:0})).total,1);
   await runSearchJob(jid,repo,fetcher as any,8000);
   assert.equal((await repo.getLeads({freelancer_id:'ALL',limit:0})).total,1);
+});
+
+
+test('Production readiness checks actual storage; live Google probe is paid at most once',async()=>{
+  const request=(await import('supertest')).default;
+  const app=(await import('../src/server/app')).default;
+  const check=await request(app).get('/api/health');
+  assert.equal(check.status,200);
+  assert.equal(check.body.storage,'connected');
+  assert.equal(check.body.googlePlacesConfigured,true);
+  const first=await request(app).get('/api/health/google-once');
+  assert.equal(first.status,200);
+  assert.equal(first.body.placesFound,1);
+  const second=await request(app).get('/api/health/google-once');
+  assert.equal(second.status,200);
+  assert.equal(second.body.alreadyRun,true);
+  assert.equal(googleCalls,1);
 });
 
 process.on('exit',()=>{globalThis.fetch=originalFetch;});
