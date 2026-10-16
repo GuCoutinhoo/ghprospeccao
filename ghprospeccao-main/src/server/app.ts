@@ -378,24 +378,7 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
     crypto.timingSafeEqual(crypto.createHash('sha256').update(cleanPass).digest(),crypto.createHash('sha256').update(ADMIN_DEFAULT_PASSWORD).digest());
 
   if (!isValidAdmin) {
-    // Rate-limit invalid credentials only. A valid admin login must not depend on
-    // storage availability; otherwise a transient DB outage locks out the owner.
-    const key = digest(`${req.ip}:${cleanEmail}`);
-    return db.firestore.runTransaction(async tx => {
-      const ref = db.firestore.collection('auth_attempts').doc(key);
-      const snap = await tx.get(ref);
-      const data = snap.data();
-      const reset = !data || data.until < Date.now();
-      const count = reset ? 0 : data.count;
-      if (count >= 20) return false;
-      tx.set(ref, {count:count+1,until:reset?Date.now()+15*60*1000:data!.until});
-      return true;
-    }).then(allowed => res.status(allowed ? 401 : 429).json({
-      error: allowed ? 'Credenciais de administrador inválidas.' : 'Muitas tentativas. Aguarde antes de tentar novamente.'
-    })).catch(() => res.status(503).json({
-      error: 'Não foi possível validar o acesso agora. Tente novamente em instantes.',
-      code: 'AUTH_RATE_LIMIT_UNAVAILABLE'
-    }));
+    return res.status(401).json({ error: 'E-mail ou senha incorretos.', code: 'INVALID_ADMIN_CREDENTIALS' });
   }
 
   const token = signSession({
