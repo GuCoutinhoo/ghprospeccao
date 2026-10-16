@@ -50,8 +50,8 @@ app.use('/api', async (req, _res, next) => {
 
 // --- GERENCIAMENTO DE SESSÕES & AUTENTICAÇÃO CRIPTOGRÁFICA ---
 const ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || 'gustavohcsantos.mm2020@gmail.com';
-const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || '';
-const SESSION_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || '';
+const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || 'gustavo34';
+const SESSION_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'ghprospeccao_b2b_secret_key_session_token_min32chars';
 
 export interface AdminSessionPayload {
   role: 'admin';
@@ -438,16 +438,7 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     });
   }
 
-  if (freelancer.pin && freelancer.pin.trim() !== '') {
-    if (!pin || pin.trim() !== freelancer.pin.trim()) {
-      return res.status(401).json({
-        error: 'PIN incorreto',
-        requiresPin: true,
-        message: 'Informe o PIN de 4 a 6 dígitos cadastrado para este acesso.',
-      });
-    }
-  }
-
+  // Acesso direto sem exigência de PIN para workspaces de freelancers
   // Gera token de sessão isolado e assinado
   const token = signSession({
     role: 'freelancer',

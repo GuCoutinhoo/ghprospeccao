@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Lock,
-  ShieldAlert,
   ArrowRight,
-  KeyRound,
-  CheckCircle2,
   RefreshCw,
-  Sparkles,
-  ExternalLink,
   ShieldCheck,
   AlertTriangle,
 } from 'lucide-react';
@@ -26,8 +21,6 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
   onGoToAdminLogin,
 }) => {
   const [accessCode, setAccessCode] = useState<string>(initialCode);
-  const [pin, setPin] = useState<string>('');
-  const [requiresPin, setRequiresPin] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isBlocked, setIsBlocked] = useState<boolean>(false);
@@ -39,7 +32,7 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
     }
   }, [initialCode]);
 
-  const handleVerify = async (codeToUse?: string, pinToUse?: string) => {
+  const handleVerify = async (codeToUse?: string) => {
     const raw = (codeToUse || accessCode || '').trim();
     const code = raw
       .replace(/^https?:\/\/[^\/]+\/f\//i, '')
@@ -57,7 +50,7 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
     setIsBlocked(false);
 
     try {
-      const res = await api.verifyFreelancerLink(code, pinToUse || pin);
+      const res = await api.verifyFreelancerLink(code);
       if (res?.token && res?.freelancer) {
         onWorkspaceReady(res.freelancer, res.token);
       } else {
@@ -68,9 +61,6 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
       if (anyErr?.blocked) {
         setIsBlocked(true);
         setBlockedMessage(anyErr.message || 'Seu acesso ao GHProspecção foi desativado.');
-      } else if (anyErr?.requiresPin) {
-        setRequiresPin(true);
-        setError('Este acesso requer o PIN cadastrado pelo administrador.');
       } else {
         const msg = err instanceof Error ? err.message : 'Código ou link de acesso inválido.';
         setError(msg);
@@ -200,23 +190,6 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
               </span>
             </div>
 
-            {requiresPin && (
-              <div className="animate-in fade-in duration-150">
-                <label className="block text-xs font-semibold text-neutral-300 mb-1 flex items-center justify-between">
-                  <span>PIN de Segurança (4 a 6 dígitos)</span>
-                  <KeyRound className="h-3.5 w-3.5 text-amber-400" />
-                </label>
-                <input
-                  type="password"
-                  maxLength={6}
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="Digite seu PIN"
-                  className="w-full px-3.5 py-2.5 bg-neutral-950 border border-amber-500/50 rounded-xl text-xs text-white placeholder-neutral-500 focus:border-amber-400 focus:outline-hidden font-mono tracking-widest text-center"
-                />
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={loading}
@@ -225,11 +198,11 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
               {loading ? (
                 <>
                   <RefreshCw className="h-4 w-4 animate-spin" />
-                  Validando Acesso Seguro...
+                  Acessando Workspace...
                 </>
               ) : (
                 <>
-                  Acessar Workspace Isolado
+                  Acessar Workspace
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}

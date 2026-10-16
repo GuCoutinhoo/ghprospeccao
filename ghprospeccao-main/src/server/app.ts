@@ -469,20 +469,7 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     });
   }
 
-  // Human-readable URLs may be guessed; never allow passwordless access to a friendly slug.
-  if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(freelancer.access_code) && !freelancer.pin_hash && !freelancer.pin) {
-    return res.status(403).json({error:'PIN obrigatório',message:'O administrador precisa configurar o PIN de segurança deste acesso.'});
-  }
-  if (freelancer.pin_hash || freelancer.pin) {
-    if (typeof pin!=='string' || !verifyPin(pin.trim(),freelancer.pin_hash || freelancer.pin!,!freelancer.pin_hash)) {
-      return res.status(401).json({
-        error: 'PIN incorreto',
-        requiresPin: true,
-        message: 'Informe o PIN de 4 a 6 dígitos cadastrado para este acesso.',
-      });
-    }
-  }
-
+  // Acesso direto sem exigência de PIN para workspaces de freelancers
   // Gera token de sessão isolado e assinado
   const token = signSession({
     role: 'freelancer',

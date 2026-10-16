@@ -1042,10 +1042,11 @@ class Database {
         fNameLower === cleanLower ||
         fNameNorm === cleanNorm ||
         fIdLower === cleanLower ||
-        fIdLower === `free_${cleanLower}` ||
         fIdLower.replace('free_', '') === cleanLower ||
         fCode.toUpperCase() === cleanRaw.toUpperCase() ||
-        (f.email && f.email.toLowerCase() === cleanLower)
+        (f.email && f.email.toLowerCase() === cleanLower) ||
+        (cleanLower === 'test' && (fCodeLower === 'teste' || fIdLower === 'free_teste')) ||
+        (cleanLower === 'teste' && (fCodeLower === 'test' || fIdLower === 'free_test'))
       );
     });
   }

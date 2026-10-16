@@ -513,7 +513,9 @@ export default function App() {
       return (
         <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-6">
           <div className="h-8 w-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mb-3" />
-          <span className="text-xs font-medium text-neutral-400">Verificando sessão segura...</span>
+          <span className="text-xs font-medium text-neutral-400">
+            {bootstrap.initialFreelancerCode ? 'Carregando workspace do freelancer...' : 'Verificando sessão segura...'}
+          </span>
         </div>
       );
     }
