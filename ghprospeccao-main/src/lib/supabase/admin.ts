@@ -24,7 +24,10 @@ async function request<T>(path:string,init:RequestInit = {}):Promise<T> {
   const result=await fetch(`${url}/rest/v1/${path}`, {
     ...init,
     headers:{
-      apikey:secret,Authorization:`Bearer ${secret}`,
+      apikey:secret,
+      // New Supabase sb_secret keys are opaque API keys, not JWT bearer tokens.
+      // Legacy service_role JWTs remain compatible until they are rotated.
+      ...(!secret.startsWith('sb_secret_') ? {Authorization:`Bearer ${secret}`} : {}),
       Accept:'application/json',
       ...(init.body ? {'Content-Type':'application/json'} : {}),
       ...init.headers
@@ -42,10 +45,9 @@ async function request<T>(path:string,init:RequestInit = {}):Promise<T> {
 function validateCollection(name:string) {
   if(!allowedCollections.has(name))throw new Error('Unsupported collection');
 }
-const escaped=(value:string)=>encodeURIComponent(value);
 export async function getRecords<T>(collection:string,filters?:{field:string;value:string}):Promise<StoredRecord<T>[]> {
   validateCollection(collection);
-  const search = new URLSearchParams({select:'collection,id,workspace_id,document,revision',collection:`eq.${collection}`});
+  const search = new URLSearchParams({select:'collection,id,workspace_id,document,revision',collection:`eq.${collection}`,order:'id.asc'});
   // Narrow SQL-indexed workspace when possible; filter remaining document fields on server.
   if(filters?.field==='workspace_id')search.set('workspace_id',`eq.${filters.value}`);
   // Supabase/PostgREST may cap responses at 1,000 rows. Page until exhausted.
