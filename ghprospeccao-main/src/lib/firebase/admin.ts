@@ -19,6 +19,8 @@ export function getServerFirestore(): Firestore {
   return instance;
 }
 export function storageErrorCode(error: unknown): string {
+  const message=error instanceof Error ? error.message : String(error||'');
+  if (/PGRST003|Timed out acquiring connection from connection pool/i.test(message)) return 'STORAGE_POOL_TIMEOUT';
   const code = (error as {code?: string | number})?.code;
   return ({7:'PERMISSION_DENIED',8:'QUOTA_EXCEEDED',4:'DEADLINE_EXCEEDED',14:'UNAVAILABLE'} as Record<string,string>)[String(code)] || 'STORAGE_FAILURE';
 }

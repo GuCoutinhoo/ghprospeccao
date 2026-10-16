@@ -31,26 +31,42 @@ function configuration() {
 }
 async function request<T>(path:string,init:RequestInit = {}):Promise<T> {
   const {url,secret}=configuration();
-  const result=await fetch(`${url}/rest/v1/${path}`, {
-    ...init,
-    headers:{
-      apikey:secret,
-      // New Supabase sb_secret keys are opaque API keys, not JWT bearer tokens.
-      // Legacy service_role JWTs remain compatible until they are rotated.
-      ...(!secret.startsWith('sb_secret_') ? {Authorization:`Bearer ${secret}`} : {}),
-      Accept:'application/json',
-      ...(init.body ? {'Content-Type':'application/json'} : {}),
-      ...init.headers
-    },
-    signal:init.signal || AbortSignal.timeout(15000),
-    cache:'no-store',
-  });
-  if (!result.ok) {
-    const message = (await result.text().catch(()=>'')).slice(0,240);
-    throw new SupabaseStorageError(result.status,`Supabase storage failure (HTTP ${result.status}): ${message}`);
+  const method=(init.method||'GET').toUpperCase();
+  // Only safely repeat reads: a timed-out write might have already committed.
+  const retryable=method==='GET' || (method==='POST' && path==='rpc/gh_read_epoch');
+  const maxAttempts=retryable?3:1;
+  for(let attempt=0;attempt<maxAttempts;attempt++){
+    let result:Response;
+    try {
+      result=await fetch(`${url}/rest/v1/${path}`, {
+        ...init,
+        headers:{
+          apikey:secret,
+          ...(!secret.startsWith('sb_secret_') ? {Authorization:`Bearer ${secret}`} : {}),
+          Accept:'application/json',
+          ...(init.body ? {'Content-Type':'application/json'} : {}),
+          ...init.headers
+        },
+        signal:init.signal || AbortSignal.timeout(10000),
+        cache:'no-store',
+      });
+    } catch(err) {
+      if(!retryable || attempt===maxAttempts-1)throw err;
+      await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
+      continue;
+    }
+    if(!result.ok) {
+      const message=(await result.text().catch(()=>'')).slice(0,240);
+      if(retryable && [429,502,503,504].includes(result.status) && attempt<maxAttempts-1) {
+        await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
+        continue;
+      }
+      throw new SupabaseStorageError(result.status,`Supabase storage failure (HTTP ${result.status}): ${message}`);
+    }
+    const raw=await result.text();
+    return raw ? JSON.parse(raw) as T : ([] as T);
   }
-  const raw=await result.text();
-  return raw ? JSON.parse(raw) as T : ([] as T);
+  throw new Error('Supabase read retry exhausted.');
 }
 function validateCollection(name:string) {
   if(!allowedCollections.has(name))throw new Error('Unsupported collection');

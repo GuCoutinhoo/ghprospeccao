@@ -57,6 +57,12 @@ interface SessionBootstrap {
   authMode: 'admin' | 'freelancer';
 }
 
+function sanitizeWorkspaceCode(value: string): string {
+  let decoded = value;
+  try { decoded = decodeURIComponent(value); } catch { /* Keep original. */ }
+  return decoded.replace(/[\u200B-\u200F\u2060\uFEFF]/g, '').trim().toLowerCase();
+}
+
 function getInitialSessionContext(): SessionBootstrap {
   if (typeof window === 'undefined') {
     return {
@@ -86,7 +92,7 @@ function getInitialSessionContext(): SessionBootstrap {
     rawCode = firstSegment;
   }
 
-  const cleanCode = rawCode.toLowerCase();
+  const cleanCode = sanitizeWorkspaceCode(rawCode);
 
   // Se o código for 'admin' ou 'administrador'
   if (cleanCode === 'admin' || cleanCode === 'administrador') {

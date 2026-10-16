@@ -14,6 +14,14 @@ import {
 import { Freelancer } from '../../types';
 import { api } from '../../lib/api';
 
+function normalizeFreelancerCode(raw: string): string {
+  let code = (raw || '').trim().replace(/^https?:\/\/[^/]+\/f\//i, '').replace(/^\/f\//i, '').replace(/\/+$/, '');
+  try { code = decodeURIComponent(code); } catch { /* Preserve invalid percent-escapes. */ }
+  return code.replace(/[\u200B-\u200F\u2060\uFEFF]/g, '').trim();
+}
+
+const needsFriendlyCodePin = (code: string) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(code);
+
 interface FreelancerAccessViewProps {
   initialCode?: string;
   onWorkspaceReady: (freelancer: Freelancer, token: string) => void;
@@ -27,7 +35,7 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
 }) => {
   const [accessCode, setAccessCode] = useState<string>(initialCode);
   const [pin, setPin] = useState<string>('');
-  const [requiresPin, setRequiresPin] = useState<boolean>(false);
+  const [requiresPin, setRequiresPin] = useState<boolean>(needsFriendlyCodePin(normalizeFreelancerCode(initialCode)));
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isBlocked, setIsBlocked] = useState<boolean>(false);
@@ -35,20 +43,27 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
 
   useEffect(() => {
     if (initialCode && initialCode.trim()) {
-      handleVerify(initialCode.trim());
+      const normalized = normalizeFreelancerCode(initialCode);
+      setAccessCode(normalized);
+      if (needsFriendlyCodePin(normalized)) {
+        setRequiresPin(true);
+      } else {
+        handleVerify(normalized);
+      }
     }
   }, [initialCode]);
 
   const handleVerify = async (codeToUse?: string, pinToUse?: string) => {
-    const raw = (codeToUse || accessCode || '').trim();
-    const code = raw
-      .replace(/^https?:\/\/[^\/]+\/f\//i, '')
-      .replace(/^\/f\//i, '')
-      .replace(/\/+$/, '')
-      .trim();
+    const code = normalizeFreelancerCode(codeToUse || accessCode || '');
 
     if (!code) {
       setError('Por favor, informe seu nome ou código de acesso.');
+      return;
+    }
+
+    if (needsFriendlyCodePin(code) && !(pinToUse || pin).trim()) {
+      setRequiresPin(true);
+      setError('Informe o PIN de segurança para acessar este workspace.');
       return;
     }
 
