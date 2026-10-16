@@ -1403,20 +1403,32 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
 
     const userId = jobFreelancerId || 'admin_1';
 
+    const minRatingValue = Number(filters?.minRating ?? 0);
+    const hasMaxRating = filters?.maxRating !== undefined && filters?.maxRating !== null && filters?.maxRating !== '';
+    const maxRatingValue = hasMaxRating ? Number(filters.maxRating) : undefined;
+    if (!Number.isFinite(minRatingValue) || minRatingValue < 0 || minRatingValue > 5 ||
+        (maxRatingValue !== undefined && (!Number.isFinite(maxRatingValue) || maxRatingValue <= 0 || maxRatingValue > 5 || maxRatingValue < minRatingValue))) {
+      return res.status(400).json({ error: 'Faixa de notas inválida: a nota máxima deve ser maior ou igual à mínima, com valores entre 0 e 5.' });
+    }
+
     const cleanFilters: {
       onlyWithoutWebsite: boolean;
       onlyWithPhone: boolean;
       minRating: number;
+      maxRating?: number;
       minReviews: number;
       maxReviews?: number;
       targetLeads?: number;
     } = {
       onlyWithoutWebsite: Boolean(filters?.onlyWithoutWebsite),
       onlyWithPhone: Boolean(filters?.onlyWithPhone),
-      minRating: Number(filters?.minRating ?? 0),
+      minRating: minRatingValue,
       minReviews: Number(filters?.minReviews ?? 0),
       targetLeads: filters?.targetLeads !== undefined && filters?.targetLeads !== null && filters?.targetLeads !== '' ? Number(filters.targetLeads) : 0,
     };
+    if (maxRatingValue !== undefined) {
+      cleanFilters.maxRating = maxRatingValue;
+    }
     if (filters?.maxReviews !== undefined && filters?.maxReviews !== null && filters?.maxReviews !== '') {
       cleanFilters.maxReviews = Number(filters.maxReviews);
     }
