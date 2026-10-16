@@ -43,7 +43,7 @@ globalThis.fetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
     let result=[...records.values()];
     for(const f of ['collection','id','workspace_id']){
       const expression=u.searchParams.get(f);
-      if(expression?.startsWith('eq.'))result=result.filter(r=>String(r[f])===expression.slice(3));
+      if(expression?.startsWith('eq.'))result=result.filter(r=>String(r[f as 'collection'|'id'|'workspace_id'])===expression.slice(3));
     }
     result.sort((a,b)=>a.id.localeCompare(b.id));
     const range=headers.get('range');
