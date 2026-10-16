@@ -8,6 +8,7 @@ on:
       - main
 permissions:
   contents: read
+  statuses: write
 jobs:
   static-checks:
     runs-on: ubuntu-latest
@@ -87,3 +88,29 @@ jobs:
           status=$(curl --silent --show-error --max-time 15 -o /dev/null -w '%{http_code}' 'https://ghprospeccao.vercel.app/api/leads')
           test "$status" = 401
           echo 'Unauthenticated lead access correctly denied.'
+
+      - name: Publish externally visible production verification status
+        if: always()
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          RESULT: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RESULT" = "success" ]; then
+            STATE=success
+            MESSAGE="Supabase, Google Places and authentication passed on live production."
+          else
+            STATE=failure
+            MESSAGE="Live production checks failed or were inconclusive."
+          fi
+          export STATE MESSAGE
+          BODY=$(python3 -c 'import json,os; print(json.dumps({"state":os.environ["STATE"],"context":"production-live-validation","description":os.environ["MESSAGE"][:140]}))')
+          curl --fail --silent --show-error --max-time 15 \
+            -X POST -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            "https://api.github.com/repos/$REPOSITORY/statuses/$COMMIT" >/dev/null
