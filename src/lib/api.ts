@@ -788,6 +788,7 @@ export const api = {
       onlyWithoutWebsite: boolean;
       onlyWithPhone: boolean;
       minRating: number;
+      maxRating?: number;
       minReviews: number;
       maxReviews?: number;
       targetLeads?: number;
