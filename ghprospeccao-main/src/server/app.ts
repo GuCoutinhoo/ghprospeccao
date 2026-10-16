@@ -381,12 +381,18 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
     return res.status(401).json({ error: 'E-mail ou senha incorretos.', code: 'INVALID_ADMIN_CREDENTIALS' });
   }
 
-  const token = signSession({
+  let token: string;
+  try {
+    token = signSession({
     role: 'admin',
     id: 'admin_1',
     email: cleanEmail,
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
-  });
+    });
+  } catch (error) {
+    console.error('[admin-login] session creation failed:', error instanceof Error ? error.message : 'unknown error');
+    return res.status(503).json({error:'Configuração de sessão indisponível. Contate o administrador.',code:'ADMIN_SESSION_CONFIG_ERROR'});
+  }
 
   return res.json({
     success: true,
