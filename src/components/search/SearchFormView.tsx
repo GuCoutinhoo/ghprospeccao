@@ -73,6 +73,7 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
   const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(false);
   const [onlyWithPhone, setOnlyWithPhone] = useState<boolean>(false);
   const [minRating, setMinRating] = useState<number>(0);
+  const [maxRating, setMaxRating] = useState<string>('');
   const [minReviews, setMinReviews] = useState<number>(0);
   const [maxReviews, setMaxReviews] = useState<string>('');
 
@@ -141,6 +142,10 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    if (maxRating !== '' && Number(maxRating) < minRating) {
+      setErrorMessage('A nota máxima precisa ser maior ou igual à nota mínima.');
+      return;
+    }
     if (!activeNiche) {
       setErrorMessage('Por favor informe ou selecione o nicho de mercado.');
       return;
@@ -161,6 +166,7 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
           onlyWithoutWebsite,
           onlyWithPhone,
           minRating,
+          maxRating: maxRating !== '' ? Number(maxRating) : undefined,
           minReviews,
           maxReviews: maxReviews ? Number(maxReviews) : undefined,
           targetLeads: activeTargetLeads,
@@ -607,10 +613,31 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                     className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
                   >
                     <option value={0}>Qualquer nota</option>
-                    <option value={3.5}>3.5 ou mais</option>
-                    <option value={4.0}>4.0 ou mais (Recomendado)</option>
-                    <option value={4.5}>4.5 ou mais (Alto padrão)</option>
+                    <option value={3.0}>3,0 ou mais</option>
+                    <option value={3.5}>3,5 ou mais</option>
+                    <option value={4.0}>4,0 ou mais (Recomendado)</option>
+                    <option value={4.5}>4,5 ou mais (Alto padrão)</option>
                   </select>
+                </div>
+
+                {/* Nota máxima: permite intervalos como 3,0–3,9 ou nota 3,5 exata. */}
+                <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs">
+                  <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                    Nota máxima no Google
+                  </label>
+                  <select
+                    value={maxRating}
+                    onChange={(e) => setMaxRating(e.target.value)}
+                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
+                  >
+                    <option value="">Sem limite máximo</option>
+                    <option value="3.0">Até 3,0 estrelas</option>
+                    <option value="3.5">Até 3,5 estrelas</option>
+                    <option value="3.9">Até 3,9 estrelas</option>
+                    <option value="4.0">Até 4,0 estrelas</option>
+                    <option value="4.5">Até 4,5 estrelas</option>
+                  </select>
+                  <p className="text-[10px] text-neutral-500 mt-1">Para encontrar notas próximas de 3,5, use mínima 3,0 e máxima 3,9. Para exatamente 3,5, use 3,5 nos dois campos.</p>
                 </div>
 
                 {/* Avaliações mínimas */}
@@ -666,6 +693,7 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                   {activeTargetLeads === 0 ? 'Sem limite' : `${activeTargetLeads} leads`}
                   {onlyWithPhone ? ' · C/ Tel' : ''}
                   {onlyWithoutWebsite ? ' · S/ Site' : ''}
+                  {minRating > 0 || maxRating !== '' ? ` · Nota ${minRating > 0 ? minRating.toLocaleString('pt-BR') : '0'}–${maxRating !== '' ? Number(maxRating).toLocaleString('pt-BR') : '5'}` : ''}
                 </p>
               </div>
             </div>
