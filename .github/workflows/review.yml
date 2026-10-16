@@ -46,3 +46,5 @@ jobs:
         run: npm run build
       - name: Run Firestore emulator integration suite
         run: npm run test:emulator
+      - name: Run Supabase backend adapter integration suite
+        run: npm run test:supabase
