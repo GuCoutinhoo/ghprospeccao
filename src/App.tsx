@@ -141,6 +141,7 @@ export default function App() {
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<'admin' | 'freelancer'>(bootstrap.authMode);
   const [freelancerCodeToVerify, setFreelancerCodeToVerify] = useState<string>(bootstrap.initialFreelancerCode);
+  const [freelancerLinkError, setFreelancerLinkError] = useState<string | null>(null);
 
   const [adminUser, setAdminUser] = useState<{ email: string; name: string } | null>(null);
   const [activeFreelancer, setActiveFreelancer] = useState<Freelancer | null>(null);
@@ -200,6 +201,7 @@ export default function App() {
         } catch (err: unknown) {
           if (isCancelled) return;
           console.warn('[App] Falha ao autenticar link de freelancer:', err);
+          setFreelancerLinkError(err instanceof Error ? err.message : 'Não foi possível validar este workspace.');
           setIsAuthenticated(false);
           setAuthMode('freelancer');
           setIsAuthChecking(false);
@@ -541,6 +543,7 @@ export default function App() {
       return (
         <FreelancerAccessView
           initialCode={freelancerCodeToVerify}
+          initialError={freelancerLinkError}
           onWorkspaceReady={(freelancer) => {
             setActiveFreelancer(freelancer);
             setUserRole('freelancer');
