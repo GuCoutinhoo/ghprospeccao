@@ -4,7 +4,7 @@ import request from 'supertest';
 import { DocumentStore } from '../src/lib/supabase/documentStore';
 import { Repository, actorContext } from '../src/lib/store/repository';
 import { checkLeadFilters } from '../src/lib/search/searchWorker';
-import type { Lead, SearchJob } from '../src/types';
+import type { Lead, SearchJob, Place, SearchArea } from '../src/types';
 
 type Row = { collection:string; id:string; workspace_id:string; document:Record<string,any>; revision:number };
 
@@ -26,10 +26,13 @@ function createSupabaseHarness() {
     const url = new URL(String(input));
     if (url.pathname.endsWith('/app_records')) {
       const collection = String(url.searchParams.get('collection') || '').replace(/^eq\./,'');
-      const id = String(url.searchParams.get('id') || '').replace(/^eq\./,'');
+      const idFilter = String(url.searchParams.get('id') || '');
+      const id = idFilter.startsWith('eq.') ? idFilter.slice(3) : '';
+      const ids = idFilter.startsWith('in.(') ? idFilter.slice(4,-1).split(',').map(value=>value.replace(/^"|"$/g,'')) : [];
       const workspace = String(url.searchParams.get('workspace_id') || '').replace(/^eq\./,'');
       let result = [...rows.values()].filter(row => !collection || row.collection===collection);
       if(id)result=result.filter(row=>row.id===id);
+      if(ids.length)result=result.filter(row=>ids.includes(row.id));
       if(workspace)result=result.filter(row=>row.workspace_id===workspace);
       return response(result.map(clone));
     }
@@ -65,6 +68,57 @@ function searchJob(id:string,workspace:string):SearchJob {
   const stamp='2026-10-17T12:00:00.000Z';
   return {id,workspace_id:workspace,user_id:workspace,freelancer_id:workspace,state:'SP',city:'São Paulo',niche:'barbearia',status:'pending',filters:{onlyWithoutWebsite:true,onlyWithPhone:true,minRating:3.5,maxRating:4.5,minReviews:10,maxReviews:30},total_cities:1,processed_cities:0,total_search_areas:0,processed_search_areas:0,places_found:0,places_without_website:0,leads_created:0,created_at:stamp,updated_at:stamp};
 }
+
+test('varredura em lote mantém leads intactos e escreve locais e resultados em uma transação cada',async()=>{
+  const harness=createSupabaseHarness();
+  globalThis.fetch=harness.fetchMock;
+  const repository=new Repository(new DocumentStore());
+  const protectedLead=(await repository.createLead(lead({is_hidden:true,notes:'Não alterar'}))).lead;
+  const original=await repository.getLeadById(protectedLead.id);
+  const place=(id:string):Place=>({
+    id,place_id:id,name:'Clínica Odontológica',formatted_address:'São Paulo, SP',city:'São Paulo',
+    state:'SP',lat:-23.5,lng:-46.6,website_status:'no_website',rating:3.5,reviews_count:20,
+    created_at:'2026-10-17T00:00:00.000Z',updated_at:'2026-10-17T00:00:00.000Z',last_fetched_at:'2026-10-17T00:00:00.000Z'
+  });
+  await repository.upsertPlace(place('place-existing'));
+  const calls:string[]=[];
+  const normalFetch=harness.fetchMock;
+  globalThis.fetch=async(input,init)=>{calls.push(String(input));return normalFetch(input,init);};
+  const added=await repository.upsertPlacesBatch([place('place-existing'),place('place-new'),place('place-new')]);
+  assert.deepEqual([...added],['place-new']);
+  assert.equal(calls.filter(url=>url.includes('/app_records?')).length,1,'leitura de 20 locais deve usar uma consulta');
+  assert.equal(calls.filter(url=>url.includes('/rpc/gh_commit_changes')).length,1,'upsert atômico em lote');
+  calls.length=0;
+  await repository.logSearchResultsBatch([
+    {job_id:'job-1',workspace_id:'free_alpha',place_id:'place-existing',result:'duplicate'},
+    {job_id:'job-1',workspace_id:'free_alpha',place_id:'place-new',result:'created'}
+  ]);
+  assert.equal(calls.filter(url=>url.includes('/rpc/gh_commit_changes')).length,1);
+  assert.equal([...harness.rows.values()].filter(row=>row.collection==='search_results').length,2);
+  assert.deepEqual(await repository.getLeadById(protectedLead.id),original,'não modificar leads ocultos/notas/status');
+});
+
+test('conclusão atômica de área evita contagem duplicada e preserva workspaces',async()=>{
+  const harness=createSupabaseHarness();globalThis.fetch=harness.fetchMock;
+  const repository=new Repository(new DocumentStore());
+  const job=searchJob('job-metrics','free_alpha');
+  const area:SearchArea={id:'area-one',search_job_id:job.id,city:'São Paulo',state:'SP',lat:-23.5,lng:-46.6,radius:4000,status:'pending',attempts:0,places_found:0};
+  await repository.createSearchJob({...job,total_search_areas:1},[area]);
+  assert.equal(await repository.claimSearchJob(job.id,'worker-one'),true);
+  const metrics={newPlaces:2,withoutSite:1,newLeads:1,matchingFilters:1,placesInArea:5};
+  assert.equal(await repository.completeSearchArea(job.id,area.id,'wrong-worker',metrics),false);
+  assert.equal(await repository.completeSearchArea(job.id,area.id,'worker-one',metrics),true);
+  assert.equal(await repository.completeSearchArea(job.id,area.id,'worker-one',metrics),false);
+  const result=await repository.getSearchJob(job.id);
+  assert.equal(result?.processed_search_areas,1);
+  assert.equal(result?.places_found,2);
+  assert.equal(result?.matching_filters,1);
+  assert.equal(result?.leads_created,1);
+  assert.equal(result?.area_plan?.[0].status,'completed');
+  await actorContext.run({role:'freelancer',freelancerId:'free_beta'},async()=>{
+    await assert.rejects(repository.completeSearchArea(job.id,area.id,'worker-one',metrics),/Acesso negado/);
+  });
+});
 
 test('persiste alterações comerciais e uma nova instância lê o mesmo estado', async () => {
   const harness=createSupabaseHarness(); globalThis.fetch=harness.fetchMock;

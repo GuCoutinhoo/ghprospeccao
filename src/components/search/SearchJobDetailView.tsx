@@ -291,7 +291,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
         </div>
 
         {/* Grid de Métricas da Busca */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
           <div className="rounded-lg border border-neutral-200/80 bg-neutral-50/50 p-3">
             <span className="text-[11px] font-medium text-neutral-500 block mb-1">
               Cidades
@@ -321,11 +321,23 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
 
           <div className="rounded-lg border border-neutral-200/80 bg-amber-50/40 border-amber-200/60 p-3">
             <span className="text-[11px] font-medium text-amber-800 block mb-1">
-              Sem Site Cadastrado
+              Sem site (antes dos filtros)
             </span>
             <div className="text-lg font-bold text-amber-900 font-mono tabular-nums">
               {job.places_without_website.toLocaleString('pt-BR')}
             </div>
+            <p className="text-[10px] text-amber-800/80 mt-1">Inclui notas fora da faixa e repetições entre áreas.</p>
+          </div>
+          <div className="rounded-lg border border-sky-200/60 bg-sky-50/40 p-3">
+            <span className="text-[11px] font-medium text-sky-800 block mb-1">
+              Atendem todos os filtros
+            </span>
+            <div className="text-lg font-bold text-sky-900 font-mono tabular-nums">
+              {job.metrics_version === 1 ? (job.matching_filters || 0).toLocaleString('pt-BR') : '—'}
+            </div>
+            <p className="text-[10px] text-sky-800/80 mt-1">
+              {job.metrics_version === 1 ? 'Inclui locais já cadastrados.' : 'Contagem completa disponível para novas buscas.'}
+            </p>
           </div>
 
           <div className="rounded-lg border border-neutral-200/80 bg-emerald-50/40 border-emerald-200/60 p-3">
