@@ -154,3 +154,32 @@ jobs:
                   except Exception: pass
               print(name,"HTTP",status,"seconds",round(time.monotonic()-start,2),"type",content_type,"fields",keys,flush=True)
           PY
+      - name: Diagnose static vs Supabase vs backend full timeout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,time,urllib.request,urllib.error
+          checks=[
+              ('site static','https://ghprospeccao.vercel.app/','GET',8),
+              ('supabase public','https://omvcjpewxiuavjblrlnx.supabase.co/rest/v1/','GET',8),
+              ('backend health full timeout','https://ghprospeccao.vercel.app/api/health','GET',65),
+          ]
+          for name,url,method,timeout in checks:
+              started=time.monotonic()
+              try:
+                  req=urllib.request.Request(url,method=method,headers={'User-Agent':'GHProspecao-HealthProbe/1.0'})
+                  try:
+                      with urllib.request.urlopen(req,timeout=timeout) as response:
+                          status=response.status; content_type=response.headers.get('content-type',''); content=response.read(2048).decode('utf-8','replace')
+                  except urllib.error.HTTPError as e:
+                      status=e.code; content_type=e.headers.get('content-type',''); content=e.read(2048).decode('utf-8','replace')
+                  summary={}
+                  if 'json' in content_type:
+                      try:
+                          data=json.loads(content)
+                          summary={key:str(data.get(key))[:120] for key in ('status','storage','code','error') if key in data}
+                      except Exception: pass
+                  print(name,'status',status,'seconds',round(time.monotonic()-started,2),'summary',summary,flush=True)
+              except Exception as e:
+                  print(name,'EXCEPTION',type(e).__name__,'seconds',round(time.monotonic()-started,2),flush=True)
+          PY
