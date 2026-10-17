@@ -1,7 +1,0 @@
-.data
-tests
-test-results
-playwright-report
-.tools
-.env*
-scripts/test-*

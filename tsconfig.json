@@ -27,7 +27,6 @@
     "noEmit": true
   },
   "exclude": [
-    "ghprospeccao-main",
     "node_modules",
     "dist",
     "api"
