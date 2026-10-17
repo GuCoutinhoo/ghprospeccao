@@ -11,26 +11,28 @@ import { api } from '../../lib/api';
 
 interface FreelancerAccessViewProps {
   initialCode?: string;
+  initialError?: string | null;
   onWorkspaceReady: (freelancer: Freelancer, token: string) => void;
   onGoToAdminLogin: () => void;
 }
 
 export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
   initialCode = '',
+  initialError = null,
   onWorkspaceReady,
   onGoToAdminLogin,
 }) => {
   const [accessCode, setAccessCode] = useState<string>(initialCode);
   const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [isBlocked, setIsBlocked] = useState<boolean>(false);
   const [blockedMessage, setBlockedMessage] = useState<string>('');
 
   useEffect(() => {
-    if (initialCode && initialCode.trim()) {
+    if (initialCode && initialCode.trim() && !initialError) {
       handleVerify(initialCode.trim());
     }
-  }, [initialCode]);
+  }, [initialCode, initialError]);
 
   const handleVerify = async (codeToUse?: string) => {
     const raw = (codeToUse || accessCode || '').trim();
