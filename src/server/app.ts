@@ -491,7 +491,8 @@ app.post('/api/auth/logout', async (req: Request, res: Response) => {
 
 // 2. FREELANCER AUTHENTICATION & ACCESS VERIFICATION
 app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
-  const { accessCode, pin } = req.body;
+  try {
+  const { accessCode, pin } = req.body || {};
   if (!accessCode) {
     return res.status(400).json({ error: 'Código de acesso do freelancer é obrigatório.' });
   }
@@ -556,6 +557,13 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     token,
     freelancer: updated || freelancer,
   });
+  } catch (err: unknown) {
+    console.error('[Server] Falha ao autenticar workspace de freelancer:', err);
+    return res.status(503).json({
+      error: 'Não foi possível abrir este workspace. Tente novamente em instantes.',
+      code: 'WORKSPACE_LOGIN_FAILED',
+    });
+  }
 });
 
 app.post('/api/freelancer/logout', requireAuth, async (req: Request, res: Response) => {
