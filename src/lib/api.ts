@@ -647,7 +647,12 @@ export const api = {
     if (params.page) query.set('page', String(params.page));
     if (params.limit !== undefined) query.set('limit', String(params.limit));
 
-    const res = await fetch(`/api/leads?${query.toString()}`, { headers: getAuthHeaders() });
+    // Evita respostas antigas após F5 e limita tempo de espera sem fingir lista vazia.
+    const res = await fetch(`/api/leads?${query.toString()}`, {
+      headers: getAuthHeaders(),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(30_000),
+    });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.message || body.error || `Não foi possível buscar leads (HTTP ${res.status}).`);
