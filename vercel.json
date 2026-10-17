@@ -4,7 +4,10 @@
   "outputDirectory": "dist",
   "functions": {
     "api/index.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "regions": [
+        "gru1"
+      ]
     }
   },
   "rewrites": [
@@ -20,5 +23,8 @@
       "source": "/((?!api).*)",
       "destination": "/index.html"
     }
+  ],
+  "regions": [
+    "gru1"
   ]
 }
