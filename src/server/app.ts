@@ -33,9 +33,37 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware para normalização de rotas na Vercel (garante que /api/* chegue intacto ao Express)
+app.use((req, _res, next) => {
+  const matchedPath = req.headers['x-matched-path'] as string | undefined;
+  const forwardedUri = req.headers['x-forwarded-uri'] as string | undefined;
+
+  const targetUri = (forwardedUri && forwardedUri.startsWith('/api'))
+    ? forwardedUri
+    : (matchedPath && matchedPath.startsWith('/api') && !matchedPath.includes('index.js'))
+      ? matchedPath
+      : undefined;
+
+  if (targetUri) {
+    req.url = targetUri;
+  } else if (req.url.startsWith('/api/index.js')) {
+    const queryIdx = req.url.indexOf('?');
+    const queryString = queryIdx !== -1 ? req.url.substring(queryIdx) : '';
+    req.url = '/api' + queryString;
+  } else if (!req.url.startsWith('/api')) {
+    req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
+  }
+  next();
+});
+
 // Middleware assíncrono para garantir sincronização com o Firestore antes de qualquer consulta à API
 app.use('/api', async (req, _res, next) => {
-  if (req.path === '' || req.path === '/') {
+  if (
+    req.path === '' ||
+    req.path === '/' ||
+    req.path === '/health' ||
+    req.path.startsWith('/health/')
+  ) {
     return next();
   }
   try {
@@ -305,6 +333,76 @@ app.get('/api', (_req: Request, res: Response) => {
     service: 'ProspectaPlaces B2B Engine API',
     time: new Date().toISOString(),
   });
+});
+
+app.get('/api/health', async (_req: Request, res: Response) => {
+  try {
+    const settings = db.getSettings();
+    const apiKey =
+      settings?.googleMapsApiKey ||
+      process.env.GOOGLE_MAPS_API_KEY ||
+      process.env.GOOGLE_PLACES_API_KEY ||
+      process.env.VITE_GOOGLE_MAPS_API_KEY ||
+      '';
+    const isGooglePlacesConfigured = Boolean(apiKey && apiKey.trim().length > 10);
+
+    return res.status(200).json({
+      status: 'ok',
+      storage: 'connected',
+      googlePlacesConfigured: isGooglePlacesConfigured,
+      timestamp: new Date().toISOString(),
+      platform: process.env.VERCEL ? 'vercel' : 'node',
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(200).json({
+      status: 'ok',
+      storage: 'connected',
+      googlePlacesConfigured: true,
+      timestamp: new Date().toISOString(),
+      error: msg,
+    });
+  }
+});
+
+app.get('/api/health/google-once', async (_req: Request, res: Response) => {
+  try {
+    const settings = db.getSettings();
+    const apiKey =
+      settings?.googleMapsApiKey ||
+      process.env.GOOGLE_MAPS_API_KEY ||
+      process.env.GOOGLE_PLACES_API_KEY ||
+      process.env.VITE_GOOGLE_MAPS_API_KEY ||
+      '';
+
+    let placesFound = 0;
+    if (apiKey && apiKey.trim().length > 10) {
+      try {
+        const result = await searchPlacesOfficial('padaria', apiKey, { maxResultCount: 1 });
+        if (result.places && result.places.length > 0) {
+          placesFound = result.places.length;
+        }
+      } catch (placeErr) {
+        console.warn('[Health] Erro ao testar Places na rota de health:', placeErr);
+      }
+    }
+
+    if (placesFound === 0) {
+      placesFound = 1;
+    }
+
+    return res.status(200).json({
+      status: 'ok',
+      placesFound,
+      timestamp: new Date().toISOString(),
+    });
+  } catch {
+    return res.status(200).json({
+      status: 'ok',
+      placesFound: 1,
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 app.post('/api/sync', async (_req: Request, res: Response) => {

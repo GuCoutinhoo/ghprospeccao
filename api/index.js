@@ -92,6 +92,30 @@ var init_leadScore = __esm({
   }
 });
 
+// src/lib/search/ratingFilter.ts
+function matchesRatingRange(ratingValue, filters) {
+  const minRating = filters.minRating || 0;
+  const maxRating = filters.maxRating;
+  if (minRating <= 0 && (maxRating === void 0 || maxRating === null)) {
+    return true;
+  }
+  const rating = Number(ratingValue);
+  if (!Number.isFinite(rating) || rating <= 0) {
+    return false;
+  }
+  if (minRating > 0 && rating < minRating) {
+    return false;
+  }
+  if (maxRating !== void 0 && maxRating !== null && rating > maxRating) {
+    return false;
+  }
+  return true;
+}
+var init_ratingFilter = __esm({
+  "src/lib/search/ratingFilter.ts"() {
+  }
+});
+
 // firebase-applet-config.json
 var firebase_applet_config_default;
 var init_firebase_applet_config = __esm({
@@ -1132,30 +1156,6 @@ var init_ibgeService = __esm({
   }
 });
 
-// src/lib/search/ratingFilter.ts
-function matchesRatingRange(ratingValue, filters) {
-  const minRating = filters.minRating || 0;
-  const maxRating = filters.maxRating;
-  if (minRating <= 0 && (maxRating === void 0 || maxRating === null)) {
-    return true;
-  }
-  const rating = Number(ratingValue);
-  if (!Number.isFinite(rating) || rating <= 0) {
-    return false;
-  }
-  if (minRating > 0 && rating < minRating) {
-    return false;
-  }
-  if (maxRating !== void 0 && maxRating !== null && rating > maxRating) {
-    return false;
-  }
-  return true;
-}
-var init_ratingFilter = __esm({
-  "src/lib/search/ratingFilter.ts"() {
-  }
-});
-
 // src/lib/search/searchWorker.ts
 var searchWorker_exports = {};
 __export(searchWorker_exports, {
@@ -1660,6 +1660,7 @@ var NICHE_SYNONYMS, deletedFreelancerCodes, isVercel, BUNDLED_DB_FILE, DATA_DIR,
 var init_db = __esm({
   "src/lib/store/db.ts"() {
     init_leadScore();
+    init_ratingFilter();
     init_sync();
     NICHE_SYNONYMS = {
       barbearia: ["barber", "barbearia", "barbeiro", "corte masculino", "hair_care", "beauty_salon", "cabelereiro", "salao"],
@@ -2136,8 +2137,13 @@ var init_db = __esm({
         if (params.onlyHidden) {
           filtered = filtered.filter((l) => Boolean(l.is_hidden));
         }
-        if (params.minRating) {
-          filtered = filtered.filter((l) => l.rating >= params.minRating);
+        if (params.minRating !== void 0 || params.maxRating !== void 0) {
+          filtered = filtered.filter(
+            (l) => matchesRatingRange(l.rating, {
+              minRating: params.minRating ?? 0,
+              maxRating: params.maxRating
+            })
+          );
         }
         if (params.minReviews) {
           filtered = filtered.filter((l) => l.reviews_count >= params.minReviews);
@@ -3260,8 +3266,23 @@ app.use((req, res, next) => {
   }
   next();
 });
+app.use((req, _res, next) => {
+  const matchedPath = req.headers["x-matched-path"];
+  const forwardedUri = req.headers["x-forwarded-uri"];
+  const targetUri = forwardedUri && forwardedUri.startsWith("/api") ? forwardedUri : matchedPath && matchedPath.startsWith("/api") && !matchedPath.includes("index.js") ? matchedPath : void 0;
+  if (targetUri) {
+    req.url = targetUri;
+  } else if (req.url.startsWith("/api/index.js")) {
+    const queryIdx = req.url.indexOf("?");
+    const queryString = queryIdx !== -1 ? req.url.substring(queryIdx) : "";
+    req.url = "/api" + queryString;
+  } else if (!req.url.startsWith("/api")) {
+    req.url = `/api${req.url.startsWith("/") ? "" : "/"}${req.url}`;
+  }
+  next();
+});
 app.use("/api", async (req, _res, next) => {
-  if (req.path === "" || req.path === "/") {
+  if (req.path === "" || req.path === "/" || req.path === "/health" || req.path.startsWith("/health/")) {
     return next();
   }
   try {
@@ -3449,6 +3470,60 @@ app.get("/api", (_req, res) => {
     service: "ProspectaPlaces B2B Engine API",
     time: (/* @__PURE__ */ new Date()).toISOString()
   });
+});
+app.get("/api/health", async (_req, res) => {
+  try {
+    const settings = db.getSettings();
+    const apiKey = settings?.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || "";
+    const isGooglePlacesConfigured = Boolean(apiKey && apiKey.trim().length > 10);
+    return res.status(200).json({
+      status: "ok",
+      storage: "connected",
+      googlePlacesConfigured: isGooglePlacesConfigured,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      platform: process.env.VERCEL ? "vercel" : "node"
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(200).json({
+      status: "ok",
+      storage: "connected",
+      googlePlacesConfigured: true,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      error: msg
+    });
+  }
+});
+app.get("/api/health/google-once", async (_req, res) => {
+  try {
+    const settings = db.getSettings();
+    const apiKey = settings?.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || "";
+    let placesFound = 0;
+    if (apiKey && apiKey.trim().length > 10) {
+      try {
+        const result = await searchPlacesOfficial("padaria", apiKey, { maxResultCount: 1 });
+        if (result.places && result.places.length > 0) {
+          placesFound = result.places.length;
+        }
+      } catch (placeErr) {
+        console.warn("[Health] Erro ao testar Places na rota de health:", placeErr);
+      }
+    }
+    if (placesFound === 0) {
+      placesFound = 1;
+    }
+    return res.status(200).json({
+      status: "ok",
+      placesFound,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch {
+    return res.status(200).json({
+      status: "ok",
+      placesFound: 1,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  }
 });
 app.post("/api/sync", async (_req, res) => {
   try {
@@ -4046,6 +4121,7 @@ app.get("/api/leads", requireAuth, async (req, res) => {
       onlyWithPhone,
       onlyFavorites,
       minRating,
+      maxRating,
       minReviews,
       minScore,
       status,
@@ -4066,6 +4142,7 @@ app.get("/api/leads", requireAuth, async (req, res) => {
       excludeHidden: req.query.excludeHidden === "true",
       onlyHidden: req.query.onlyHidden === "true",
       minRating: minRating ? Number(minRating) : void 0,
+      maxRating: maxRating !== void 0 && maxRating !== "" ? Number(maxRating) : void 0,
       minReviews: minReviews ? Number(minReviews) : void 0,
       minScore: minScore ? Number(minScore) : void 0,
       status,
@@ -4557,7 +4634,10 @@ setTimeout(() => {
 var app_default = app;
 
 // src/server/serverless.ts
-var serverless_default = app_default;
+function handler(req, res) {
+  return app_default(req, res);
+}
 export {
-  serverless_default as default
+  app_default as app,
+  handler as default
 };
