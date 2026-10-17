@@ -36,6 +36,12 @@ function createSupabaseHarness() {
       if(id)result=result.filter(row=>row.id===id);
       if(ids.length)result=result.filter(row=>ids.includes(row.id));
       if(workspace)result=result.filter(row=>row.workspace_id===workspace);
+      const jsonFilter = [...url.searchParams.entries()].find(([name])=>name.startsWith('document->>'));
+      if(jsonFilter) {
+        const field=jsonFilter[0].slice('document->>'.length);
+        const value=jsonFilter[1].replace(/^eq\./,'');
+        result=result.filter(row=>String(row.document[field] ?? '')===value);
+      }
       return response(result.map(clone));
     }
     if (url.pathname.endsWith('/rpc/gh_commit_changes')) {
@@ -70,6 +76,28 @@ function searchJob(id:string,workspace:string):SearchJob {
   const stamp='2026-10-17T12:00:00.000Z';
   return {id,workspace_id:workspace,user_id:workspace,freelancer_id:workspace,state:'SP',city:'São Paulo',niche:'barbearia',status:'pending',filters:{onlyWithoutWebsite:true,onlyWithPhone:true,minRating:3.5,maxRating:4.5,minReviews:10,maxReviews:30},total_cities:1,processed_cities:0,total_search_areas:0,processed_search_areas:0,places_found:0,places_without_website:0,leads_created:0,created_at:stamp,updated_at:stamp};
 }
+
+test('consultas de logs e leads por ID filtram na origem, sem baixar a coleção inteira',async()=>{
+  const harness=createSupabaseHarness();globalThis.fetch=harness.fetchMock;
+  const repo=new Repository(new DocumentStore());
+  await repo.logSearchResultsBatch([
+    {job_id:'job-one',workspace_id:'free_alpha',place_id:'p1',result:'created'},
+    {job_id:'job-two',workspace_id:'free_alpha',place_id:'p2',result:'created'},
+  ]);
+  const seen:string[]=[];
+  const original=harness.fetchMock;
+  globalThis.fetch=async(input,init)=>{seen.push(String(input));return original(input,init);};
+  const hits=await repo.list<{job_id:string}>('search_results','job_id','job-one');
+  assert.equal(hits.length,1);
+  assert.equal(hits[0].job_id,'job-one');
+  assert.ok(seen.some(url=>url.includes('document-%3E%3Ejob_id') || url.includes('document->>job_id')),
+    'PostgREST deve aplicar filtro JSON no servidor');
+  const own=await repo.createLead(lead({place_id:'p1'}));
+  const duplicated=await repo.createLead(lead({place_id:'p1',id:'changed'}));
+  assert.equal(own.created,true);
+  assert.equal(duplicated.created,false);
+  assert.ok(seen.some(url=>url.includes('document-%3E%3Eplace_id') || url.includes('document->>place_id')));
+});
 
 test('Nearby geográfico consulta categoria compatível uma única vez, por DISTANCE',async()=>{
   const originalFetch=globalThis.fetch;
