@@ -547,35 +547,14 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
 
-  // Autorização concluída: responder ao navegador ANTES da telemetria.
-  // Atualização de atividade e auditoria são best-effort; nunca podem
-  // prender a autenticação até o timeout de 20 segundos do frontend.
-  res.json({
+  // Sessões são autenticação, não mutação. Evita tempestade de transações
+  // concorrentes em 'freelancers' e 'activities' durante os logins.
+  // Dados de login, leads, ocultações e workspaces permanecem inalterados.
+  return res.json({
     success: true,
     token,
     freelancer,
   });
-
-  void Promise.allSettled([
-    db.updateFreelancer(freelancer.id, {
-      last_access_at: new Date().toISOString(),
-      last_activity_at: new Date().toISOString(),
-    }),
-    db.logActivity({
-      freelancer_id: freelancer.id,
-      freelancer_name: freelancer.name,
-      action_type: 'login',
-      description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
-      metadata: { access_code: freelancer.access_code },
-    }),
-  ]).then((results) => {
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        console.warn('[Auth] Falha não bloqueante ao registrar telemetria:', result.reason);
-      }
-    }
-  });
-  return;
   } catch (err: unknown) {
     console.error('[Server] Falha ao autenticar workspace de freelancer:', err);
     return res.status(503).json({

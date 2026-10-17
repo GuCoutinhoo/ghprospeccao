@@ -145,6 +145,10 @@ export class DocumentStore {
         return result;
       } catch (error) {
         if (index === attempts - 1 || !/GH_TX_CONFLICT|40001|serialization|23505|duplicate key/i.test(String(error))) throw error;
+        // Backoff before a fresh read/commit. Immediate retries cause another
+        // revision race and overload PostgREST under simultaneous requests.
+        const delayMs = Math.min(400, 25 * 2 ** index) + Math.floor(Math.random() * 25);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
     throw new Error('Transaction retry exhausted.');

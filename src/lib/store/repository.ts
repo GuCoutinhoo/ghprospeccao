@@ -215,7 +215,23 @@ export class Repository {
     if(updates.pin!==undefined)updates={...updates,pin_hash:updates.pin?hashPin(updates.pin):'',pin:''};
     if(updates.access_code!==undefined)updates={...updates,access_code:accessCodeBase(updates.access_code)};
     const allowed=['name','email','access_code','notes','pin','pin_hash','status','last_access_at','last_activity_at'];
-    return this.store.runTransaction(async tx=>{const ref=this.store.collection('freelancers').doc(id);const [snap,all]=await Promise.all([tx.get(ref),tx.get(this.store.collection('freelancers'))]);if(!snap.exists || snap.data()?.deleted_at)return undefined;const accepted=Object.fromEntries(Object.entries(updates).filter(([k])=>allowed.includes(k)));if(accepted.access_code && all.docs.some(doc=>doc.id!==id && String(doc.data()?.access_code || '').toLowerCase()===String(accepted.access_code).toLowerCase()))throw Object.assign(new Error('Link de acesso já está em uso.'),{status:409});const f=clean({...snap.data(),...accepted,id,updated_at:now()}) as Freelancer;tx.set(ref,f);return f;});
+    return this.store.runTransaction(async tx=>{
+      const ref=this.store.collection('freelancers').doc(id);
+      const snap=await tx.get(ref);
+      if(!snap.exists || snap.data()?.deleted_at)return undefined;
+      const accepted=Object.fromEntries(Object.entries(updates).filter(([k])=>allowed.includes(k)));
+      // Only read/lock all freelancers when changing the unique access code.
+      // Ordinary profile/status/activity updates must not serialize every workspace.
+      if(accepted.access_code) {
+        const all=await tx.get(this.store.collection('freelancers'));
+        if(all.docs.some(doc=>doc.id!==id && String(doc.data()?.access_code || '').toLowerCase()===String(accepted.access_code).toLowerCase())) {
+          throw Object.assign(new Error('Link de acesso já está em uso.'),{status:409});
+        }
+      }
+      const f=clean({...snap.data(),...accepted,id,updated_at:now()}) as Freelancer;
+      tx.set(ref,f);
+      return f;
+    });
   }
   async setFreelancerStatus(id:string,status:Freelancer['status']) {return this.updateFreelancer(id,{status});}
   async regenerateFreelancerAccessCode(id:string) {const f=await this.getFreelancerById(id);if(!f)return undefined;const code=`${accessCodeBase(f.name)}-${crypto.randomBytes(3).toString('hex')}`;await this.updateFreelancer(id,{access_code:code});return code;}
