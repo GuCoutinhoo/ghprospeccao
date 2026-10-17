@@ -187,7 +187,8 @@ export async function searchPlacesNearby(
   apiKey: string,
   center: { latitude: number; longitude: number },
   radius: number,
-  includedTypes?: string[]
+  includedTypes?: string[],
+  rankPreference: 'POPULARITY' | 'DISTANCE' = 'POPULARITY',
 ): Promise<{ places: GooglePlaceRaw[]; error?: string }> {
   const endpoint = 'https://places.googleapis.com/v1/places:searchNearby';
   const body: Record<string, unknown> = {
@@ -198,6 +199,7 @@ export async function searchPlacesNearby(
       },
     },
     maxResultCount: 20,
+    rankPreference,
   };
 
   if (includedTypes && includedTypes.length > 0) {
@@ -230,6 +232,36 @@ export async function searchPlacesNearby(
     const msg = err instanceof Error ? err.message : String(err);
     return { places: [], error: msg };
   }
+}
+
+/**
+ * Smart geo search: for typed niches and actual grid coordinates, Nearby is
+ * more precise and avoids repeating a Text Search biased to adjacent grids.
+ * The Google response is still validated by the exact business filters.
+ * Text search remains the fallback when the niche has no reliable place types,
+ * coordinates are missing, or Nearby reports a transport/API error.
+ */
+export async function searchPlacesAdaptive(
+  query: string,
+  apiKey: string,
+  options?: Parameters<typeof searchPlacesOfficial>[2],
+): Promise<{ places: GooglePlaceRaw[]; error?: string; isQuotaExceeded?: boolean; source: 'nearby' | 'text' }> {
+  const circle = options?.locationBias?.circle;
+  const center = circle?.center;
+  const types = getIncludedTypesForQuery(query);
+  const validCoordinates = center && Number.isFinite(center.latitude) &&
+    Number.isFinite(center.longitude) && center.latitude !== 0 && center.longitude !== 0;
+  if (apiKey?.trim() && validCoordinates && types?.length) {
+    const nearby = await searchPlacesNearby(apiKey, center, circle?.radius || 12000, types, 'DISTANCE');
+    // A valid, empty geographic response is not an API error. Do not double
+    // bill/consume quota by automatically repeating it as a text search.
+    if (!nearby.error) return { places: nearby.places, source: 'nearby' };
+    // Errors are not empty results. Try the text endpoint at most once, so
+    // either quota can be used when the other endpoint is unavailable.
+    const textResult = await searchPlacesOfficial(query, apiKey, options, 1);
+    return { ...textResult, source: 'text' };
+  }
+  return { ...await searchPlacesOfficial(query, apiKey, options), source: 'text' };
 }
 
 /**
