@@ -109,3 +109,48 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$BODY" \
             "https://api.github.com/repos/$REPOSITORY/statuses/$COMMIT" >/dev/null
+
+  production-api-diagnostic:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Diagnose live API timings safely without exposing credentials
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, time, urllib.error, urllib.request
+          base="https://ghprospeccao.vercel.app"
+          checks=[
+            ("health","GET","/api/health",None),
+            ("leads anonymous","GET","/api/leads",None),
+            ("invalid freelancer","POST","/api/freelancer/auth/verify",{"accessCode":"__invalid_ci_read_probe__"}),
+            ("danilo freelancer","POST","/api/freelancer/auth/verify",{"accessCode":"danilo"}),
+          ]
+          for name,method,path,payload in checks:
+              body=None if payload is None else json.dumps(payload).encode()
+              req=urllib.request.Request(base+path,data=body,method=method,headers={"Content-Type":"application/json","User-Agent":"GHProspecao-Diagnostic/1.0"})
+              start=time.monotonic()
+              try:
+                  with urllib.request.urlopen(req,timeout=11) as resp:
+                      status=resp.status
+                      result=resp.read(16384).decode("utf-8","replace")
+                      content_type=resp.headers.get("content-type","")
+              except urllib.error.HTTPError as e:
+                  status=e.code
+                  content_type=e.headers.get("content-type","")
+                  result=e.read(16384).decode("utf-8","replace")
+              except Exception as e:
+                  print(name,"network error",type(e).__name__,str(e)[:130],"seconds",round(time.monotonic()-start,2),flush=True)
+                  continue
+              keys={}
+              if "json" in content_type:
+                  try:
+                      data=json.loads(result)
+                      if isinstance(data,dict):
+                          keys={k:data.get(k) for k in ("status","storage","code","success","error") if k in data}
+                          keys["freelancer_present"]=isinstance(data.get("freelancer"),dict)
+                          keys["token_present"]=isinstance(data.get("token"),str)
+                  except Exception: pass
+              print(name,"HTTP",status,"seconds",round(time.monotonic()-start,2),"type",content_type,"fields",keys,flush=True)
+          PY
