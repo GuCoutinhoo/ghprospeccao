@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { commitChanges, getRecord, getRecords, type ReadVersion, type WriteOperation } from './admin';
+import { commitChanges, getRecord, getRecords, getRecordsByIds, type ReadVersion, type WriteOperation } from './admin';
 
 type Data = Record<string, any>;
 type Criterion = { field: string; operator: string; value: unknown };
@@ -110,6 +110,23 @@ export class Transaction {
       }
     }
     return snapshot;
+  }
+  /** Bulk read, including missing documents, with optimistic revision tracking. */
+  async getMany(collectionName: string, ids: string[]): Promise<DocumentSnapshot[]> {
+    const unique = [...new Set(ids)];
+    const records = await getRecordsByIds<Data>(collectionName, unique);
+    const byId = new Map(records.map(record => [record.id, record]));
+    return unique.map(id => {
+      const record = byId.get(id);
+      const ref = new DocumentReference(collectionName, id);
+      const snapshot = new DocumentSnapshot(id, record?.document, record?.revision || 0, ref);
+      const key = `${collectionName}/${id}`;
+      this.cache.set(key, snapshot);
+      if (!this.reads.some(read => read.collection === collectionName && read.id === id)) {
+        this.reads.push({ collection: collectionName, id, revision: snapshot.revision });
+      }
+      return snapshot;
+    });
   }
   async getAll(...references: DocumentReference[]) { return Promise.all(references.map(reference => this.get(reference))); }
   set(reference: DocumentReference, data: Data, options?: { merge?: boolean }) {
