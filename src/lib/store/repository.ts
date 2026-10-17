@@ -120,6 +120,29 @@ export class Repository {
     });
   }
 
+  /** One selective read and one atomic commit for all Places in the Google response. */
+  async upsertPlacesBatch(places: Place[]): Promise<Set<string>> {
+    const unique = [...new Map(places.map(place => [place.id, place])).values()];
+    if (!unique.length) return new Set<string>();
+    return this.store.runTransaction(async tx => {
+      const snapshots = await tx.getMany('places', unique.map(place => place.id));
+      const newIds = new Set(snapshots.filter(snapshot => !snapshot.exists).map(snapshot => snapshot.id));
+      for (const place of unique) tx.set(this.store.collection('places').doc(place.id), clean(place), { merge:true });
+      return newIds;
+    });
+  }
+
+  async logSearchResultsBatch(results: Array<Record<string,unknown> & {id?:string}>): Promise<void> {
+    if (!results.length) return;
+    // Entries are immutable audit receipts; never overwrite lead records.
+    await this.store.runTransaction(async tx => {
+      for (const result of results) {
+        const id = result.id || crypto.randomUUID();
+        tx.create(this.store.collection('search_results').doc(id), clean({...result,id}));
+      }
+    });
+  }
+
   async createLead(lead: Lead) {
     assertOwner(lead);
     return this.store.runTransaction(async tx => this.createLeadInTransaction(tx,lead));
@@ -239,7 +262,7 @@ export class Repository {
   async logActivity(activity:Omit<Activity,'id'|'created_at'>) {const item=clean({...activity,id:crypto.randomUUID(),created_at:now()});await this.store.collection('activities').doc(item.id).create(item);return item;}
   async getSearchJob(id:string) {const job=await this.get<SearchJob>('search_jobs',id);if(job)assertOwner(job);return job;}
   async getAllSearchJobs(id?:string) {const actor=actorContext.getStore();return (await this.list<SearchJob>('search_jobs')).filter(j=>(id===undefined || isLeadInWorkspace(j,id)) && (actor?.role!=='freelancer'||isLeadInWorkspace(j,actor.freelancerId))).sort((a,b)=>b.created_at.localeCompare(a.created_at));}
-  async claimSearchJob(id:string,token:string,leaseMs=80_000) {return this.store.runTransaction(async tx=>{const ref=this.store.collection('search_jobs').doc(id);const snap=await tx.get(ref);if(!snap.exists)return false;const job={...snap.data(),id} as SearchJob;assertOwner(job);if(!['pending','running'].includes(job.status))return false;if(job.lease_token && job.lease_token!==token && (job.lease_until || 0)>Date.now())return false;tx.set(ref,clean({...job,status:'running',lease_token:token,lease_until:Date.now()+leaseMs,started_at:job.started_at||now(),updated_at:now()}));return true;});}
+  async claimSearchJob(id:string,token:string,leaseMs=80_000) {return this.store.runTransaction(async tx=>{const ref=this.store.collection('search_jobs').doc(id);const snap=await tx.get(ref);if(!snap.exists)return false;const job={...snap.data(),id} as SearchJob;assertOwner(job);if(!['pending','running'].includes(job.status))return false;if(job.lease_token && job.lease_token!==token && (job.lease_until || 0)>Date.now())return false;tx.update(ref,{status:'running',lease_token:token,lease_until:Date.now()+leaseMs,started_at:job.started_at||now(),updated_at:now()});return true;});}
   async renewSearchJobLease(id:string,token:string,leaseMs=80_000) {return this.store.runTransaction(async tx=>{const ref=this.store.collection('search_jobs').doc(id);const snap=await tx.get(ref);if(!snap.exists || snap.data()?.lease_token!==token || snap.data()?.status!=='running')return false;tx.update(ref,{lease_until:Date.now()+leaseMs,updated_at:now()});return true;});}
   async releaseSearchJobLease(id:string,token:string) {return this.store.runTransaction(async tx=>{const ref=this.store.collection('search_jobs').doc(id);const snap=await tx.get(ref);if(!snap.exists || snap.data()?.lease_token!==token)return false;tx.update(ref,{lease_token:'',lease_until:0,updated_at:now()});return true;});}
   async createSearchJob(job:SearchJob,areas:SearchArea[]=[]) {
@@ -280,6 +303,40 @@ export class Repository {
       return updated;
     });
   }
+  /** Complete one search cell and its counters atomically after all receipts are saved. */
+  async completeSearchArea(
+    jobId:string,
+    areaId:string,
+    leaseToken:string,
+    metrics:{newPlaces:number;withoutSite:number;newLeads:number;matchingFilters:number;placesInArea:number},
+  ) {
+    return this.store.runTransaction(async tx=>{
+      const ref=this.store.collection('search_jobs').doc(jobId);
+      const snap=await tx.get(ref);
+      if(!snap.exists)return false;
+      const job=snap.data() as SearchJob;
+      assertOwner(job);
+      if(job.status!=='running' || job.lease_token!==leaseToken)return false;
+      const areas=job.area_plan||[];
+      const index=areas.findIndex(a=>a.id===areaId);
+      if(index<0 || areas[index].status==='completed')return false;
+      const updatedAreas=areas.slice();
+      updatedAreas[index]=clean({...areas[index],status:'completed',places_found:metrics.placesInArea,processed_at:now(),error:undefined});
+      const processedCities=new Set(updatedAreas.filter(a=>a.status==='completed').map(a=>a.city)).size;
+      tx.update(ref,{
+        area_plan:updatedAreas,
+        processed_search_areas:updatedAreas.filter(a=>a.status==='completed'||a.status==='failed').length,
+        processed_cities:processedCities,
+        places_found:(job.places_found||0)+metrics.newPlaces,
+        places_without_website:(job.places_without_website||0)+metrics.withoutSite,
+        leads_created:(job.leads_created||0)+metrics.newLeads,
+        matching_filters:(job.matching_filters||0)+metrics.matchingFilters,
+        updated_at:now(),
+      });
+      return true;
+    });
+  }
+
   async logSearchQuery(query:SearchQueryLog) {await this.store.collection('search_queries').doc(query.id).create(clean(query));return query;}
   async logSearchResult(result:Record<string,unknown>&{id?:string}) {const id=result.id||crypto.randomUUID();const item=clean({...result,id});await this.store.collection('search_results').doc(id).set(item);return item;}
   async getSettings():Promise<AppSettings> {const config=await this.get<Partial<AppSettings>>('settings','config');const key=process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || config?.googleMapsApiKey || '';return {...defaults,...config,googleMapsApiKey:key,hasCustomKey:Boolean(key)};}
