@@ -297,18 +297,22 @@ export async function searchPlacesOfficial(
         const errorJson = await response.json().catch(() => null);
         const errorMessage = errorJson?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
         lastError = errorMessage;
+        const quotaExceeded = response.status === 429 ||
+          /quota|resource_exhausted/i.test(errorMessage);
 
-        // Se for limite de cota do SearchTextRequest (429 / RESOURCE_EXHAUSTED) e houver coordenadas reais
-        if (hasValidCenter && (response.status === 429 || errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('resource_exhausted'))) {
-          console.warn('[Places] Cota de SearchTextRequest atingida, alternando para searchNearby...');
-          const center = options?.locationBias?.circle?.center;
-          if (center) {
-            const types = getIncludedTypesForQuery(query);
-            const nearbyRes = await searchPlacesNearby(apiKey, center, options?.locationBias?.circle?.radius || 12000, types);
-            if (nearbyRes.places && nearbyRes.places.length > 0) {
-              return { places: nearbyRes.places };
-            }
+        // If Search Text daily quota is exhausted, try Nearby at most once.
+        // Never make 2 or 3 more Search Text calls that cannot succeed today.
+        if (quotaExceeded) {
+          if (hasValidCenter && options?.locationBias?.circle?.center) {
+            const nearbyRes = await searchPlacesNearby(
+              apiKey,
+              options.locationBias.circle.center,
+              options.locationBias.circle.radius || 12000,
+              getIncludedTypesForQuery(query),
+            );
+            if (nearbyRes.places.length > 0) return {places:nearbyRes.places};
           }
+          return {places:[],error:errorMessage,isQuotaExceeded:true};
         }
 
         const isTemporary = response.status === 503 || response.status === 500;

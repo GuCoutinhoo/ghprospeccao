@@ -337,6 +337,34 @@ export class Repository {
     });
   }
 
+  /** Retry only incomplete cells, resetting them in ONE transaction (not 170 RPC calls). */
+  async prepareSearchJobResume(jobId:string) {
+    return this.store.runTransaction(async tx=>{
+      const ref=this.store.collection('search_jobs').doc(jobId);
+      const snap=await tx.get(ref);
+      if(!snap.exists)return false;
+      const job=snap.data() as SearchJob;
+      assertOwner(job);
+      if(!['paused','failed'].includes(job.status))return false;
+      const plan=job.area_plan||[];
+      const recovered=plan.map(area=>['failed','processing'].includes(area.status)
+        ? clean({...area,status:'pending',error:undefined}) as SearchArea
+        : area);
+      const completed=recovered.filter(area=>area.status==='completed');
+      tx.update(ref,{
+        area_plan:recovered,
+        status:'pending',
+        lease_token:'',
+        lease_until:0,
+        processed_search_areas:completed.length,
+        processed_cities:new Set(completed.map(area=>area.city)).size,
+        error_message:'',
+        updated_at:now(),
+      });
+      return true;
+    });
+  }
+
   async logSearchQuery(query:SearchQueryLog) {await this.store.collection('search_queries').doc(query.id).create(clean(query));return query;}
   async logSearchResult(result:Record<string,unknown>&{id?:string}) {const id=result.id||crypto.randomUUID();const item=clean({...result,id});await this.store.collection('search_results').doc(id).set(item);return item;}
   async getSettings():Promise<AppSettings> {const config=await this.get<Partial<AppSettings>>('settings','config');const key=process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || config?.googleMapsApiKey || '';return {...defaults,...config,googleMapsApiKey:key,hasCustomKey:Boolean(key)};}

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { DocumentStore } from '../src/lib/supabase/documentStore';
 import { Repository, actorContext } from '../src/lib/store/repository';
 import { checkLeadFilters } from '../src/lib/search/searchWorker';
+import { searchPlacesOfficial } from '../src/lib/google/places';
 import type { Lead, SearchJob, Place, SearchArea } from '../src/types';
 
 type Row = { collection:string; id:string; workspace_id:string; document:Record<string,any>; revision:number };
@@ -68,6 +69,54 @@ function searchJob(id:string,workspace:string):SearchJob {
   const stamp='2026-10-17T12:00:00.000Z';
   return {id,workspace_id:workspace,user_id:workspace,freelancer_id:workspace,state:'SP',city:'São Paulo',niche:'barbearia',status:'pending',filters:{onlyWithoutWebsite:true,onlyWithPhone:true,minRating:3.5,maxRating:4.5,minReviews:10,maxReviews:30},total_cities:1,processed_cities:0,total_search_areas:0,processed_search_areas:0,places_found:0,places_without_website:0,leads_created:0,created_at:stamp,updated_at:stamp};
 }
+
+test('cota diária do Search Text é reconhecida sem refazer chamadas inúteis',async()=>{
+  let attempts=0;
+  const initialFetch=globalThis.fetch;
+  try {
+    globalThis.fetch=async()=>{
+      attempts++;
+      return new Response(JSON.stringify({error:{message:"Quota exceeded for quota metric 'SearchTextRequest' and limit 'SearchTextRequest per day'."}}),{
+        status:429,headers:{'content-type':'application/json'}
+      });
+    };
+    const result=await searchPlacesOfficial('Clínica odontológica em Campinas SP','fake-valid-key',undefined,3);
+    assert.equal(attempts,1);
+    assert.equal(result.isQuotaExceeded,true);
+    assert.match(result.error||'',/per day/);
+    assert.equal(result.places.length,0);
+  } finally {
+    globalThis.fetch=initialFetch;
+  }
+});
+
+test('retomada em lote reinicia somente áreas falhas e mantém os leads intactos',async()=>{
+  const harness=createSupabaseHarness();globalThis.fetch=harness.fetchMock;
+  const repository=new Repository(new DocumentStore());
+  const originalLead=(await repository.createLead(lead({is_hidden:true,notes:'preservar'}))).lead;
+  const job=searchJob('job-quota','free_alpha');
+  const area=(id:string,status:SearchArea['status']):SearchArea=>({
+    id,search_job_id:job.id,city:'São Paulo',state:'SP',lat:-23.5,lng:-46.6,
+    radius:4000,status,attempts:1,places_found:status==='completed'?20:0
+  });
+  await repository.createSearchJob({...job,status:'paused',processed_search_areas:3,total_search_areas:4},[
+    area('done','completed'),area('quota1','failed'),area('quota2','failed'),area('next','pending')
+  ]);
+  const before=await repository.getLeadById(originalLead.id);
+  let writes=0;
+  const originalFetch=harness.fetchMock;
+  globalThis.fetch=async(input,init)=>{
+    if(String(input).includes('/rpc/gh_commit_changes'))writes++;
+    return originalFetch(input,init);
+  };
+  assert.equal(await repository.prepareSearchJobResume(job.id),true);
+  assert.equal(writes,1,'todas as áreas devem ser recuperadas em um único commit');
+  const resumed=await repository.getSearchJob(job.id);
+  assert.equal(resumed?.status,'pending');
+  assert.equal(resumed?.processed_search_areas,1);
+  assert.deepEqual(resumed?.area_plan?.map(a=>a.status),['completed','pending','pending','pending']);
+  assert.deepEqual(await repository.getLeadById(originalLead.id),before);
+});
 
 test('varredura em lote mantém leads intactos e escreve locais e resultados em uma transação cada',async()=>{
   const harness=createSupabaseHarness();

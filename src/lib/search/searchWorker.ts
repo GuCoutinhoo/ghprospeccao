@@ -230,16 +230,14 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
         );
 
         if (res.isQuotaExceeded) {
+          // Failed quota requests are not completed areas. Keep the cursor intact.
           await db.updateJobArea(jobId, area.id, {
-            status: 'failed',
-            error: res.error || 'Limite de cota da Google Places API excedido.',
+            status: 'pending',
+            error: res.error || 'Cota do Google Places esgotada.',
           });
-          const curJob = await db.getSearchJob(jobId);
           await db.updateSearchJob(jobId, {
-            status: 'failed',
-            error_message: 'Limite de cota da Google Places API excedido. A busca foi interrompida.',
-            processed_search_areas: (curJob?.processed_search_areas || 0) + 1,
-            finished_at: new Date().toISOString(),
+            status: 'paused',
+            error_message: 'A Google Places atingiu a cota de consultas. Busca pausada sem perder leads. Retome quando houver cota disponível.',
           });
           return;
         } else if (res.error) {
@@ -269,11 +267,11 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
 
         if (queryError) {
           await db.updateJobArea(jobId, area.id, { status: 'failed', error: queryError });
-          const currentJob = await db.getSearchJob(jobId);
-          if (currentJob) {
-            await db.updateSearchJob(jobId, { processed_search_areas: currentJob.processed_search_areas + 1 });
-          }
-          continue;
+          await db.updateSearchJob(jobId, {
+            status: 'failed',
+            error_message: `Falha na consulta Google Places: ${queryError}`.slice(0,350),
+          });
+          return;
         }
 
         // Deduplicate the Google page and persist all Places in a single transaction.
@@ -509,30 +507,9 @@ export async function pauseSearchJob(jobId: string): Promise<boolean> {
 }
 
 export async function resumeSearchJob(jobId: string): Promise<boolean> {
-  const job = await db.getSearchJob(jobId);
-  if (!job) return false;
-
-  const worker = activeWorkers.get(jobId);
-  if (worker) {
-    worker.paused = false;
-  }
-
-  // Reprocessar áreas falhas não deve contar duas vezes para o progresso.
-  const areas = await db.getSearchAreas(jobId);
-  const retriedCount = areas.filter((a) => a.status === 'failed').length;
-  await db.updateSearchJob(jobId, {
-    status: 'running',
-    error_message: undefined,
-    processed_search_areas: Math.max(0, job.processed_search_areas - retriedCount),
-  });
-  for (const a of areas) {
-    if (a.status === 'failed' || a.status === 'processing') {
-      await db.updateJobArea(jobId, a.id, { status: 'pending', error: undefined });
-    }
-  }
-
-  // Processing resumes through authenticated, awaited HTTP slices.
-  return true;
+  // Reset failed/processing cells in one transaction, preserving all completed
+  // cells, qualified leads and the existing workspace's search history.
+  return db.prepareSearchJobResume(jobId);
 }
 
 export async function cancelSearchJob(jobId: string): Promise<boolean> {
