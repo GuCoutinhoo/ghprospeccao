@@ -154,7 +154,7 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
     return () => clearInterval(timer);
   }, [sessionStartTime]);
 
-  // Carrega todos os leads do banco/Firestore
+  // Carrega todos os leads do Supabase pela API autenticada
   const loadLeads = useCallback(async () => {
     setLoading(true);
     try {

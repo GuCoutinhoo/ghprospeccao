@@ -1924,7 +1924,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
             </div>
 
             <p className="text-[11px] text-neutral-400">
-              O lead será removido permanentemente do banco de dados e do Firestore.
+              O lead será removido permanentemente do Supabase.
             </p>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">

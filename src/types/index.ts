@@ -12,6 +12,8 @@ export interface Freelancer {
   status: FreelancerStatus;
   notes?: string;
   pin?: string;
+  pin_hash?: string;
+  temporaryPin?: string;
   created_at: string;
   updated_at: string;
   last_access_at?: string;
@@ -158,6 +160,7 @@ export interface Lead {
   negotiation_at?: string;
   created_at: string;
   updated_at: string;
+  search_job_ids?: string[];
 }
 
 export interface LeadNote {
@@ -202,6 +205,9 @@ export interface SearchJob {
   finished_at?: string;
   created_at: string;
   updated_at: string;
+  area_plan?: SearchArea[];
+  lease_token?: string;
+  lease_until?: number;
 }
 
 export interface SearchArea {

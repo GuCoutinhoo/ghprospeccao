@@ -133,7 +133,7 @@ export const FreelancerDetailView: React.FC<FreelancerDetailViewProps> = ({
 
   const handleResetWorkspace = async () => {
     if (!freelancer) return;
-    if (!confirm(`Deseja realmente zerar todos os leads e buscas do workspace de ${freelancer.name}? Esta ação limpará completamente os dados no banco de dados e no Google Firestore.`)) {
+    if (!confirm(`Deseja realmente zerar todos os leads e buscas do workspace de ${freelancer.name}? Esta ação limpará completamente esses dados no Supabase.`)) {
       return;
     }
     setResettingWorkspace(true);
@@ -772,7 +772,7 @@ export const FreelancerDetailView: React.FC<FreelancerDetailViewProps> = ({
                   <span>Atenção: Exclusão Completa e Irreversível</span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
-                  ⚠️ <strong>{leads.length} leads</strong> mapeados, histórico de buscas e logs vinculados permanentemente a <strong>{freelancer.access_code}</strong> serão apagados por completo do banco de dados e do Google Firestore.
+                  ⚠️ <strong>{leads.length} leads</strong> mapeados, histórico de buscas e logs vinculados permanentemente a <strong>{freelancer.access_code}</strong> serão apagados do Supabase.
                 </p>
                 <p className="text-[11px] font-semibold text-rose-950 pt-1 border-t border-rose-200">
                   Mesmo se você criar outro workspace com o mesmo nome ("{freelancer.name}") no futuro, ele começará 100% zerado e sem dados antigos.

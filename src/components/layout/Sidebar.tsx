@@ -301,7 +301,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-neutral-600 font-medium flex items-center gap-1.5">
                     <Database className="h-3.5 w-3.5 text-neutral-500" />
-                    Google Firestore
+                    Supabase
                   </span>
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-100 text-emerald-800">
                     Sincronizado

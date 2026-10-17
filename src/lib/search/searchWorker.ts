@@ -1,10 +1,11 @@
-import { db, matchesNicheSemantics } from '../store/db';
+import crypto from 'node:crypto';
+import { db } from '../store/db';
 import { searchPlacesOfficial, normalizePlace, GooglePlaceRaw } from '../google/places';
 import { CITY_COORDINATES, METROPOLITAN_GRIDS, POPULAR_CITIES_BY_STATE, fetchCitiesByState } from '../ibge/ibgeService';
 import { calculateLeadScore } from '../scoring/leadScore';
 import { SearchArea, SearchJob, SearchQueryLog } from '../../types';
-import { syncLeadToFirestore } from '../firebase/sync';
 import { matchesRatingRange } from './ratingFilter';
+import { isPlaceRelevantToNiche } from './relevance';
 
 interface ActiveWorker {
   jobId: string;
@@ -31,7 +32,7 @@ export async function createAndPrepareSearchJob(params: {
     targetLeads?: number;
   };
 }): Promise<{ job: SearchJob; estimatedQueries: number; totalCities: number; totalAreas: number }> {
-  const settings = db.getSettings();
+  const settings = await db.getSettings();
   let targetCities: string[] = [];
 
   if (params.city === 'all') {
@@ -121,8 +122,7 @@ export async function createAndPrepareSearchJob(params: {
     updated_at: new Date().toISOString(),
   };
 
-  db.createSearchJob(newJob);
-  db.addSearchAreas(areas);
+  await db.createSearchJob(newJob, areas);
 
   return {
     job: newJob,
@@ -133,8 +133,11 @@ export async function createAndPrepareSearchJob(params: {
 }
 
 export async function runSearchJob(jobId: string) {
-  const job = db.getSearchJob(jobId);
+  const job = await db.getSearchJob(jobId);
   if (!job) return;
+
+  const leaseToken = crypto.randomUUID();
+  if (!(await db.claimSearchJob(jobId, leaseToken))) return;
 
   const worker: ActiveWorker = {
     jobId,
@@ -144,23 +147,25 @@ export async function runSearchJob(jobId: string) {
   activeWorkers.set(jobId, worker);
 
   try {
-    db.updateSearchJob(jobId, {
+    await db.updateSearchJob(jobId, {
       status: 'running',
       started_at: job.started_at || new Date().toISOString(),
     });
 
-    const areas = db.getSearchAreas(jobId);
+    const areas = await db.getSearchAreas(jobId);
     const pendingAreas = areas.filter((a) => a.status === 'pending' || a.status === 'failed');
-    const settings = db.getSettings();
+    const settings = await db.getSettings();
     const targetGoal = job.target_leads || 0;
+    let persistedLeadCount = job.leads_created || 0;
 
     const citiesSeen = new Set<string>();
 
     for (const area of pendingAreas) {
       try {
+        if (!(await db.renewSearchJobLease(jobId, leaseToken))) return;
         // Checa se já atingiu a meta de leads desejada pelo usuário
         if (targetGoal > 0) {
-          const currentJobCheck = db.getSearchJob(jobId);
+          const currentJobCheck = await db.getSearchJob(jobId);
           if (currentJobCheck && currentJobCheck.leads_created >= targetGoal) {
             break;
           }
@@ -168,17 +173,17 @@ export async function runSearchJob(jobId: string) {
         // Checagem de pausa ou cancelamento
         const currentWorker = activeWorkers.get(jobId);
         if (!currentWorker || currentWorker.cancelled) {
-          db.updateSearchJob(jobId, { status: 'cancelled' });
+          await db.updateSearchJob(jobId, { status: 'cancelled' });
           return;
         }
 
         if (currentWorker.paused) {
-          db.updateSearchJob(jobId, { status: 'paused' });
+          await db.updateSearchJob(jobId, { status: 'paused' });
           return;
         }
 
         // Marca área como em processamento
-        db.updateSearchArea(area.id, {
+        await db.updateSearchArea(area.id, {
           status: 'processing',
           attempts: area.attempts + 1,
         });
@@ -211,12 +216,12 @@ export async function runSearchJob(jobId: string) {
         );
 
         if (res.isQuotaExceeded) {
-          db.updateSearchArea(area.id, {
+          await db.updateSearchArea(area.id, {
             status: 'failed',
             error: res.error || 'Limite de cota da Google Places API excedido.',
           });
-          const curJob = db.getSearchJob(jobId);
-          db.updateSearchJob(jobId, {
+          const curJob = await db.getSearchJob(jobId);
+          await db.updateSearchJob(jobId, {
             status: 'failed',
             error_message: 'Limite de cota da Google Places API excedido. A busca foi interrompida.',
             processed_search_areas: (curJob?.processed_search_areas || 0) + 1,
@@ -233,7 +238,7 @@ export async function runSearchJob(jobId: string) {
         const durationMs = Date.now() - startTime;
 
         // Log da consulta realizada
-        db.logSearchQuery({
+        await db.logSearchQuery({
           id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
           search_job_id: jobId,
           search_area_id: area.id,
@@ -246,10 +251,10 @@ export async function runSearchJob(jobId: string) {
         });
 
         if (queryError) {
-          db.updateSearchArea(area.id, { status: 'failed', error: queryError });
-          const currentJob = db.getSearchJob(jobId);
+          await db.updateSearchArea(area.id, { status: 'failed', error: queryError });
+          const currentJob = await db.getSearchJob(jobId);
           if (currentJob) {
-            db.updateSearchJob(jobId, { processed_search_areas: currentJob.processed_search_areas + 1 });
+            await db.updateSearchJob(jobId, { processed_search_areas: currentJob.processed_search_areas + 1 });
           }
           continue;
         }
@@ -260,7 +265,7 @@ export async function runSearchJob(jobId: string) {
 
         for (const raw of rawPlaces) {
           const normalizedPlace = normalizePlace(raw, area.city, area.state);
-          const { isNew } = db.upsertPlace(normalizedPlace);
+          const { isNew } = await db.upsertPlace(normalizedPlace);
           if (isNew) {
             newPlacesFound++;
           }
@@ -279,11 +284,18 @@ export async function runSearchJob(jobId: string) {
             const leadId = `${leadPrefix}${normalizedPlace.place_id}`;
 
             // Se o lead foi excluído e está tombstoned, não recria
-            if (db.isLeadDeleted(leadId)) {
+            if (await db.isLeadDeleted(leadId)) {
+              await db.logSearchResult({
+                job_id: jobId, workspace_id: workspaceId, place_id: normalizedPlace.place_id,
+                result: 'deleted', rating: normalizedPlace.rating || 0,
+                reviews_count: normalizedPlace.reviews_count || 0,
+                website: normalizedPlace.website || '', website_status: normalizedPlace.website_status,
+                phone: normalizedPlace.phone || '', created_at: new Date().toISOString(),
+              });
               continue;
             }
 
-            const { lead: persistedLead, created, isDeleted } = db.createLead({
+            const { lead: persistedLead, created, isDeleted } = await db.createLead({
               id: leadId,
               workspace_id: workspaceId,
               user_id: job.user_id,
@@ -311,42 +323,56 @@ export async function runSearchJob(jobId: string) {
               continue;
             }
 
-            await syncLeadToFirestore(persistedLead);
+            await db.logSearchResult({
+              job_id: jobId, workspace_id: workspaceId, place_id: normalizedPlace.place_id,
+              lead_id: persistedLead.id, result: created ? 'created' : 'duplicate',
+              rating: normalizedPlace.rating || 0, reviews_count: normalizedPlace.reviews_count || 0,
+              website: normalizedPlace.website || '', website_status: normalizedPlace.website_status,
+              phone: normalizedPlace.phone || '', created_at: new Date().toISOString(),
+            });
 
-            if (created) newLeadsCreated++;
-
-            if (targetGoal > 0) {
-              const currentTotal = (job.leads_created || 0) + newLeadsCreated;
-              if (currentTotal >= targetGoal) {
-                break;
-              }
+            if (created) {
+              newLeadsCreated++;
+              persistedLeadCount++;
             }
+
+            if (targetGoal > 0 && persistedLeadCount >= targetGoal) {
+              break;
+            }
+          } else {
+            await db.logSearchResult({
+              job_id: jobId, workspace_id: job.workspace_id || job.freelancer_id || 'admin',
+              place_id: normalizedPlace.place_id, result: isRelevant ? 'filtered' : 'irrelevant',
+              rating: normalizedPlace.rating || 0, reviews_count: normalizedPlace.reviews_count || 0,
+              website: normalizedPlace.website || '', website_status: normalizedPlace.website_status,
+              phone: normalizedPlace.phone || '', created_at: new Date().toISOString(),
+            });
           }
         }
 
         citiesSeen.add(area.city);
 
         // Atualiza status da área
-        db.updateSearchArea(area.id, {
+        await db.updateSearchArea(area.id, {
           status: 'completed',
           places_found: rawPlaces.length,
           processed_at: new Date().toISOString(),
         });
 
         // Atualiza progresso do Job
-        const updatedJob = db.getSearchJob(jobId);
+        const updatedJob = await db.getSearchJob(jobId);
         if (updatedJob) {
-          db.updateSearchJob(jobId, {
+          await db.updateSearchJob(jobId, {
             processed_search_areas: updatedJob.processed_search_areas + 1,
             processed_cities: citiesSeen.size,
-            places_found: updatedJob.places_found + (newPlacesFound || rawPlaces.length),
+            places_found: updatedJob.places_found + newPlacesFound,
             places_without_website: updatedJob.places_without_website + newWithoutWebsite,
             leads_created: updatedJob.leads_created + newLeadsCreated,
           });
         }
 
         // Se atingiu a meta de leads, conclui a busca imediatamente
-        if (targetGoal > 0 && updatedJob && (updatedJob.leads_created + newLeadsCreated >= targetGoal)) {
+        if (targetGoal > 0 && persistedLeadCount >= targetGoal) {
           break;
         }
 
@@ -355,14 +381,14 @@ export async function runSearchJob(jobId: string) {
         await new Promise((r) => setTimeout(r, delay));
       } catch (areaErr) {
         console.warn(`[SearchWorker] Erro ao processar área ${area.id}:`, areaErr);
-        db.updateSearchArea(area.id, {
+        await db.updateSearchArea(area.id, {
           status: 'failed',
           error: areaErr instanceof Error ? areaErr.message : String(areaErr),
         });
         // Avança contagem de áreas para o percentual não travar
-        const currentJob = db.getSearchJob(jobId);
+        const currentJob = await db.getSearchJob(jobId);
         if (currentJob) {
-          db.updateSearchJob(jobId, {
+          await db.updateSearchJob(jobId, {
             processed_search_areas: currentJob.processed_search_areas + 1,
             processed_cities: citiesSeen.size,
           });
@@ -371,18 +397,18 @@ export async function runSearchJob(jobId: string) {
     }
 
     // Só concluir se as áreas processadas não falharam. Falhas devem ser visíveis e recuperáveis.
-    const finalJob = db.getSearchJob(jobId);
+    const finalJob = await db.getSearchJob(jobId);
     if (finalJob && finalJob.status === 'running') {
-      const failedAreas = db.getSearchAreas(jobId).filter((a) => a.status === 'failed');
+      const failedAreas = (await db.getSearchAreas(jobId)).filter((a) => a.status === 'failed');
       const goalReached = (finalJob.target_leads || 0) > 0 && finalJob.leads_created >= (finalJob.target_leads || 0);
-      db.updateSearchJob(jobId, failedAreas.length > 0 && !goalReached
+      await db.updateSearchJob(jobId, failedAreas.length > 0 && !goalReached
         ? { status: 'failed', error_message: `${failedAreas.length} área(s) falharam. Tente novamente para retomar.`, finished_at: new Date().toISOString() }
         : { status: 'completed', processed_search_areas: finalJob.total_search_areas, finished_at: new Date().toISOString() });
     }
 
     if (job.freelancer_id) {
-      const completedJob = db.getSearchJob(jobId);
-      db.logActivity({
+      const completedJob = await db.getSearchJob(jobId);
+      await db.logActivity({
         freelancer_id: job.freelancer_id,
         freelancer_name: job.freelancer_name,
         action_type: 'search_completed',
@@ -392,17 +418,18 @@ export async function runSearchJob(jobId: string) {
     }
   } catch (fatalErr) {
     console.error(`[SearchWorker] Erro fatal no job ${jobId}:`, fatalErr);
-    db.updateSearchJob(jobId, {
+    await db.updateSearchJob(jobId, {
       status: 'failed',
       error_message: fatalErr instanceof Error ? fatalErr.message : String(fatalErr),
       finished_at: new Date().toISOString(),
     });
   } finally {
+    await db.releaseSearchJobLease(jobId, leaseToken).catch(() => undefined);
     activeWorkers.delete(jobId);
   }
 }
 
-function checkLeadFilters(
+export function checkLeadFilters(
   place: {
     website_status: string;
     website?: string;
@@ -446,40 +473,20 @@ function checkLeadFilters(
   return true;
 }
 
-function isPlaceRelevantToNiche(place: { name?: string; raw_types?: string[] }, niche: string): boolean {
-  if (!niche || niche.trim() === '') return true;
-  const name = (place.name || '').toLowerCase();
-  const types = (place.raw_types || []).map((t) => t.toLowerCase());
-
-  // 1. Se o nome ou tipos combinarem semanticamente com o nicho
-  if (matchesNicheSemantics(name, niche)) return true;
-  if (matchesNicheSemantics(types.join(' '), niche)) return true;
-
-  // 2. Se a busca oficial retornou o estabelecimento pelo textQuery direto (Google Places já ranqueou)
-  // e não possui tipos incompatíveis óbvios (ex: cemitério, posto de gasolina para nichos de estética)
-  const incompatible = ['gas_station', 'cemetery', 'funeral_home', 'police', 'fire_station'];
-  const hasIncompatible = incompatible.some((inc) => types.includes(inc));
-  if (hasIncompatible && !matchesNicheSemantics(incompatible.join(' '), niche)) {
-    return false;
-  }
-
-  return true;
-}
-
-export function pauseSearchJob(jobId: string): boolean {
+export async function pauseSearchJob(jobId: string): Promise<boolean> {
   const worker = activeWorkers.get(jobId);
   if (worker) {
     worker.paused = true;
-    db.updateSearchJob(jobId, { status: 'paused' });
+    await db.updateSearchJob(jobId, { status: 'paused' });
     return true;
   }
   // Se não estiver em memória mas constar no banco
-  db.updateSearchJob(jobId, { status: 'paused' });
+  await db.updateSearchJob(jobId, { status: 'paused' });
   return true;
 }
 
-export function resumeSearchJob(jobId: string): boolean {
-  const job = db.getSearchJob(jobId);
+export async function resumeSearchJob(jobId: string): Promise<boolean> {
+  const job = await db.getSearchJob(jobId);
   if (!job) return false;
 
   const worker = activeWorkers.get(jobId);
@@ -488,16 +495,16 @@ export function resumeSearchJob(jobId: string): boolean {
   }
 
   // Reprocessar áreas falhas não deve contar duas vezes para o progresso.
-  const areas = db.getSearchAreas(jobId);
+  const areas = await db.getSearchAreas(jobId);
   const retriedCount = areas.filter((a) => a.status === 'failed').length;
-  db.updateSearchJob(jobId, {
+  await db.updateSearchJob(jobId, {
     status: 'running',
     error_message: undefined,
     processed_search_areas: Math.max(0, job.processed_search_areas - retriedCount),
   });
   for (const a of areas) {
     if (a.status === 'failed' || a.status === 'processing') {
-      db.updateSearchArea(a.id, { status: 'pending', error: undefined });
+      await db.updateSearchArea(a.id, { status: 'pending', error: undefined });
     }
   }
 
@@ -506,12 +513,12 @@ export function resumeSearchJob(jobId: string): boolean {
   return true;
 }
 
-export function cancelSearchJob(jobId: string): boolean {
+export async function cancelSearchJob(jobId: string): Promise<boolean> {
   const worker = activeWorkers.get(jobId);
   if (worker) {
     worker.cancelled = true;
   }
-  db.updateSearchJob(jobId, {
+  await db.updateSearchJob(jobId, {
     status: 'cancelled',
     finished_at: new Date().toISOString(),
   });
@@ -519,11 +526,11 @@ export function cancelSearchJob(jobId: string): boolean {
   return true;
 }
 
-export function cancelAllSearchWorkers(): number {
+export async function cancelAllSearchWorkers(): Promise<number> {
   let count = 0;
   for (const [jobId, worker] of activeWorkers.entries()) {
     worker.cancelled = true;
-    db.updateSearchJob(jobId, {
+    await db.updateSearchJob(jobId, {
       status: 'cancelled',
       finished_at: new Date().toISOString(),
     });
@@ -537,10 +544,10 @@ export function isJobWorkerActive(jobId: string): boolean {
   return activeWorkers.has(jobId);
 }
 
-export function cleanupStaleJobs(): number {
+export async function cleanupStaleJobs(): Promise<number> {
   let cleaned = 0;
   try {
-    const allJobs = db.getAllSearchJobs();
+    const allJobs = await db.getAllSearchJobs();
     const now = Date.now();
     for (const job of allJobs) {
       if (job.status === 'running') {
@@ -548,7 +555,7 @@ export function cleanupStaleJobs(): number {
         const lastUpdated = job.updated_at ? new Date(job.updated_at).getTime() : 0;
         const isStale = (now - lastUpdated) > 120000;
         if (!activeWorkers.has(job.id) && isStale) {
-          db.updateSearchJob(job.id, {
+          await db.updateSearchJob(job.id, {
             status: 'failed',
             error_message: 'A execução foi interrompida. Retome a busca para processar as áreas restantes.',
             finished_at: new Date().toISOString(),

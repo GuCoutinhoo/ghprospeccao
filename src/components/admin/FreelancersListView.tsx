@@ -691,7 +691,7 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-neutral-900">
-                    Excluir Workspace de {workspaceToDelete.name}?
+                    Desativar Workspace de {workspaceToDelete.name}?
                   </h2>
                   <p className="text-xs text-neutral-500 font-mono">
                     Código: {workspaceToDelete.access_code}
@@ -715,19 +715,19 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
 
             <div className="space-y-3 mt-4 text-xs text-neutral-600">
               <p>
-                Tem certeza que deseja excluir permanentemente o workspace de <strong>{workspaceToDelete.name}</strong>?
+                Tem certeza que deseja desativar o acesso ao workspace de <strong>{workspaceToDelete.name}</strong>?
               </p>
 
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 space-y-1.5">
                 <div className="flex items-center gap-1.5 font-bold text-rose-900">
                   <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                  <span>Atenção: Exclusão Completa e Irreversível</span>
+                  <span>Acesso desativado com preservação de dados</span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
-                  ⚠️ <strong>{workspaceToDelete.performance?.leadsFound || 0} leads</strong> mapeados e todos os históricos e buscas vinculados permanentemente a <strong>{workspaceToDelete.access_code}</strong> serão apagados por completo do banco de dados e do Google Firestore.
+                  O link <strong>{workspaceToDelete.access_code}</strong> deixará de funcionar e buscas em andamento serão canceladas. Os <strong>{workspaceToDelete.performance?.leadsFound || 0} leads</strong>, históricos e vínculos permanecerão preservados no Supabase.
                 </p>
                 <p className="text-[11px] font-semibold text-rose-950 pt-1 border-t border-rose-200">
-                  Mesmo se você criar outro workspace com o mesmo nome ("{workspaceToDelete.name}") no futuro, ele começará 100% zerado, sem nenhum dado antigo.
+                  Esta ação não limpa nem transfere dados para outro workspace.
                 </p>
               </div>
             </div>
@@ -750,12 +750,12 @@ export const FreelancersListView: React.FC<FreelancersListViewProps> = ({
                 {deletingWorkspace ? (
                   <>
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    <span>Excluindo tudo...</span>
+                    <span>Desativando...</span>
                   </>
                 ) : (
                   <>
                     <Trash2 className="h-3.5 w-3.5" />
-                    <span>Sim, Excluir Workspace</span>
+                    <span>Sim, Desativar Workspace</span>
                   </>
                 )}
               </button>

@@ -16,9 +16,9 @@ import {
   FreelancerPerformance,
 } from '../types';
 import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
-import {
-  invalidateLeadsCache,
-} from './firebase/client';
+
+// API responses are intentionally not persisted in the browser; Supabase remains authoritative.
+export function invalidateLeadsCache(): void {}
 
 export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extraHeaders };
@@ -334,7 +334,7 @@ export const api = {
     success: boolean;
     deletedCount: number;
     jobsCancelled: number;
-    firestoreDeletedCount: number;
+    supabaseDeletedCount: number;
     message: string;
   }> {
     invalidateLeadsCache();
@@ -647,7 +647,7 @@ export const api = {
     if (!data || !Array.isArray(data.leads) || typeof data.total !== 'number') {
       throw new Error('O servidor retornou uma resposta inválida para a listagem de leads.');
     }
-    // Falha na API nunca é substituída por consulta direta ao Firestore.
+    // Falha na API nunca é substituída por persistência local.
     // Isso evita resultados divergentes e bypass do isolamento do workspace.
     return data;
   },
@@ -757,7 +757,7 @@ export const api = {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.message || body.error || `Falha ao carregar pipeline (HTTP ${res.status}).`);
     }
-    // Pipeline vazio é um estado válido. Não substituir por dados do Firestore do navegador.
+    // Pipeline vazio é um estado válido. Não substituir por dados do navegador.
     return res.json();
   },
 
@@ -899,12 +899,7 @@ export const api = {
     return res.json();
   },
 
-  async getMigrationsSql(): Promise<string> {
-    const res = await fetch('/api/supabase/migrations');
-    return res.text();
-  },
-
-  async syncFirestore(): Promise<{ success: boolean; leadsCount: number; message: string }> {
+  async syncSupabase(): Promise<{ success: boolean; leadsCount: number; message: string }> {
     const res = await fetch('/api/sync', {
       method: 'POST',
       headers: getAuthHeaders(),

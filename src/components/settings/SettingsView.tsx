@@ -3,16 +3,12 @@ import {
   Key,
   Shield,
   Sliders,
-  Database,
   Check,
-  Copy,
   RotateCw,
   AlertCircle,
   CheckCircle2,
   ExternalLink,
   Save,
-  Server,
-  Code,
 } from 'lucide-react';
 import { AppSettings } from '../../types';
 import { api } from '../../lib/api';
@@ -46,10 +42,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
   const [testingKey, setTestingKey] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<{ valid: boolean; error?: string; samplePlace?: string } | null>(null);
 
-  // SQL Migrations
-  const [sqlContent, setSqlContent] = useState<string>('');
-  const [copiedSql, setCopiedSql] = useState<boolean>(false);
-
   useEffect(() => {
     async function loadData() {
       try {
@@ -62,9 +54,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
         if (s.scoringWeights) {
           setWeights(s.scoringWeights);
         }
-
-        const sql = await api.getMigrationsSql();
-        setSqlContent(sql);
       } catch (err) {
         console.error(err);
       } finally {
@@ -112,12 +101,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
     }
   };
 
-  const copySqlToClipboard = () => {
-    navigator.clipboard.writeText(sqlContent);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2000);
-  };
-
   if (loading && !settings) {
     return (
       <div className="flex items-center justify-center p-12 text-xs text-neutral-400">
@@ -138,7 +121,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
               <span>Configurações do Sistema & APIs Oficiais</span>
             </h2>
             <p className="text-xs text-neutral-500 mt-0.5">
-              Gerencie chaves seguras, limites de quota, parâmetros de Lead Score e esquemas do Supabase.
+              Gerencie chaves seguras, limites de quota e parâmetros de Lead Score.
             </p>
           </div>
 
@@ -400,44 +383,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
         </div>
       </form>
 
-      {/* Seção 3: Supabase & PostgreSQL Migration SQL Viewer */}
-      <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-2xs space-y-4">
-        <div className="pb-3 border-b border-neutral-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Database className="h-4 w-4 text-neutral-700" />
-            <h3 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
-              Script SQL de Migrações (Supabase / PostgreSQL)
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={copySqlToClipboard}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors"
-          >
-            {copiedSql ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="text-emerald-700 font-semibold">Copiado!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5 text-neutral-500" />
-                <span>Copiar SQL</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        <p className="text-xs text-neutral-500 leading-relaxed">
-          Copie este script SQL para executar no <strong>SQL Editor do Supabase</strong>. Ele cria todas as tabelas (<code>profiles</code>, <code>places</code>, <code>leads</code>, <code>lead_notes</code>, <code>search_jobs</code>, <code>search_areas</code>, <code>search_queries</code>, <code>pipeline_history</code>), índices de alta performance e políticas de Row Level Security (RLS).
-        </p>
-
-        <div className="relative">
-          <pre className="max-h-60 overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-950 p-4 font-mono text-[11px] text-neutral-300 leading-relaxed">
-            {sqlContent}
-          </pre>
-        </div>
-      </div>
     </div>
   );
 };

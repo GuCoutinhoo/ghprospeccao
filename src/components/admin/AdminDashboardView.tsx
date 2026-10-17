@@ -493,7 +493,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               Zona Crítica Administrativa: Limpeza Global de Leads
             </div>
             <p className="text-xs text-red-700 mt-1 max-w-2xl">
-              Zera <strong>permanentemente todos os leads de TODOS os workspaces</strong> (Admin e todos os freelancers) no banco Firestore e local. Preserva integralmente os cadastros e logins de freelancers, configurações e estruturas de workspace.
+              Zera <strong>permanentemente todos os leads de TODOS os workspaces</strong> (Admin e todos os freelancers) no Supabase. Preserva integralmente os cadastros e logins de freelancers, configurações e estruturas de workspace.
             </p>
             {purgeFeedback && (
               <div
@@ -538,8 +538,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 Atenção: Esta ação excluirá permanentemente todos os leads de TODOS os workspaces:
               </p>
               <ul className="list-disc pl-4 space-y-1 text-[11px] text-red-700">
-                <li>Exclusão em lotes de toda a coleção <code>leads</code> no Firebase Firestore;</li>
-                <li>Limpeza dos registros em <code>deleted_leads</code> e caches locais;</li>
+                <li>Exclusão transacional da coleção <code>leads</code> no Supabase;</li>
+                <li>Criação de tombstones para impedir recriação automática dos leads excluídos;</li>
                 <li>Cancelamento de buscas ativas para impedir recriação;</li>
                 <li>Contas de freelancers, senhas e configurações permanecem 100% preservadas.</li>
               </ul>
@@ -582,7 +582,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 {isPurging ? (
                   <>
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    Excluindo no Firestore...
+                    Excluindo no Supabase...
                   </>
                 ) : (
                   <>

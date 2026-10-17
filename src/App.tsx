@@ -19,8 +19,7 @@ import { FreelancersListView } from './components/admin/FreelancersListView';
 import { FreelancerDetailView } from './components/admin/FreelancerDetailView';
 import { AuditLogView } from './components/admin/AuditLogView';
 import { DashboardStats, Lead, Freelancer, UserRole } from './types';
-import { api, getActiveFreelancerSession } from './lib/api';
-import { invalidateLeadsCache } from './lib/firebase/client';
+import { api, getActiveFreelancerSession, invalidateLeadsCache } from './lib/api';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 const DEFAULT_STATS: DashboardStats = {
@@ -326,7 +325,9 @@ export default function App() {
     setIsRefreshing(true);
     try {
       invalidateLeadsCache();
-      await api.syncFirestore().catch((e) => console.warn('[App] Sincronização Firestore falhou:', e));
+      if (userRole === 'admin') {
+        await api.syncSupabase().catch((e) => console.warn('[App] Verificação do Supabase falhou:', e));
+      }
       await loadInitialData();
       setRefreshTrigger((prev) => prev + 1);
     } catch (err) {

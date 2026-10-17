@@ -1,8 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
-import { db, matchesFreelancerId } from '../lib/store/db';
-import { isLeadInWorkspace } from '../lib/firebase/sync';
+import { actorContext, db, isLeadInWorkspace, matchesFreelancerId } from '../lib/store/db';
 import { fetchStates, fetchCitiesByState } from '../lib/ibge/ibgeService';
 import {
   createAndPrepareSearchJob,
@@ -13,7 +12,6 @@ import {
   cleanupStaleJobs,
 } from '../lib/search/searchWorker';
 import { searchPlacesOfficial } from '../lib/google/places';
-import { SUPABASE_MIGRATIONS_SQL } from '../lib/supabase/migrations';
 import { Freelancer } from '../types';
 
 dotenv.config();
@@ -56,7 +54,7 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Middleware assíncrono para garantir sincronização com o Firestore antes de qualquer consulta à API
+// Falha fechada: nenhuma rota de dados opera sem confirmar a conexão com o Supabase.
 app.use('/api', async (req, _res, next) => {
   if (
     req.path === '' ||
@@ -69,17 +67,16 @@ app.use('/api', async (req, _res, next) => {
   try {
     await db.ensureInitialized();
   } catch (err) {
-    console.error('[Server] Falha ao sincronizar com Firestore:', err);
-    // Não servir dados antigos de memória quando a leitura persistente falhou.
+    console.error('[Server] Falha ao conectar ao Supabase:', err);
     return _res.status(503).json({ error: 'Banco de dados temporariamente indisponível. Tente novamente.' });
   }
   next();
 });
 
 // --- GERENCIAMENTO DE SESSÕES & AUTENTICAÇÃO CRIPTOGRÁFICA ---
-const ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || 'gustavohcsantos.mm2020@gmail.com';
-const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || 'gustavo34';
-const SESSION_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'ghprospeccao_b2b_secret_key_session_token_min32chars';
+const ADMIN_DEFAULT_EMAIL = process.env.ADMIN_EMAIL || '';
+const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || '';
 
 export interface AdminSessionPayload {
   role: 'admin';
@@ -97,8 +94,6 @@ export interface FreelancerSessionPayload {
 
 export type SessionPayload = AdminSessionPayload | FreelancerSessionPayload;
 
-const revokedTokens = new Set<string>();
-
 export function signSession(payload: SessionPayload): string {
   if (SESSION_SECRET.length < 32) {
     throw new Error('SESSION_SECRET ou JWT_SECRET deve conter pelo menos 32 caracteres.');
@@ -110,8 +105,6 @@ export function signSession(payload: SessionPayload): string {
 
 export function verifySession(token: string): SessionPayload | null {
   if (SESSION_SECRET.length < 32 || !token || typeof token !== 'string') return null;
-  if (revokedTokens.has(token)) return null;
-
   const parts = token.split('.');
   if (parts.length !== 2) return null;
   const [data, signature] = parts;
@@ -160,7 +153,7 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
   }
 
   const payload = verifySession(token);
-  if (!payload) {
+  if (!payload || await db.isSessionRevoked(token)) {
     req.user = undefined;
     return next();
   }
@@ -172,17 +165,17 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
       email: payload.email || ADMIN_DEFAULT_EMAIL,
       name: 'Gustavo Santos (Admin)',
     };
-    return next();
+    return actorContext.run({ role: 'admin' }, next);
   }
 
   if (payload.role === 'freelancer') {
-    let freelancer = db.getFreelancerById(payload.freelancerId) || db.getFreelancerByAccessCode(payload.accessCode);
+    let freelancer = await db.getFreelancerById(payload.freelancerId) || await db.getFreelancerByAccessCode(payload.accessCode);
     if (!freelancer) {
       try {
-        await db.syncFromFirestore();
-        freelancer = db.getFreelancerById(payload.freelancerId) || db.getFreelancerByAccessCode(payload.accessCode);
+        await db.syncFromSupabase();
+        freelancer = await db.getFreelancerById(payload.freelancerId) || await db.getFreelancerByAccessCode(payload.accessCode);
       } catch (syncErr) {
-        console.warn('[Server] Falha ao sincronizar com Firestore na autenticação:', syncErr);
+        console.warn('[Server] Falha ao consultar o Supabase na autenticação:', syncErr);
       }
     }
 
@@ -207,8 +200,8 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
       email: freelancer.email,
       freelancer,
     };
-    db.updateFreelancer(freelancer.id, { last_activity_at: new Date().toISOString() });
-    return next();
+    await db.updateFreelancer(freelancer.id, { last_activity_at: new Date().toISOString() });
+    return actorContext.run({ role: 'freelancer', freelancerId: freelancer.id }, next);
   }
 
   req.user = undefined;
@@ -337,7 +330,8 @@ app.get('/api', (_req: Request, res: Response) => {
 
 app.get('/api/health', async (_req: Request, res: Response) => {
   try {
-    const settings = db.getSettings();
+    await db.ensureInitialized();
+    const settings = await db.getSettings();
     const apiKey =
       settings?.googleMapsApiKey ||
       process.env.GOOGLE_MAPS_API_KEY ||
@@ -355,19 +349,19 @@ app.get('/api/health', async (_req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return res.status(200).json({
-      status: 'ok',
-      storage: 'connected',
-      googlePlacesConfigured: true,
+    return res.status(503).json({
+      status: 'error',
+      storage: 'disconnected',
+      googlePlacesConfigured: false,
       timestamp: new Date().toISOString(),
       error: msg,
     });
   }
 });
 
-app.get('/api/health/google-once', async (_req: Request, res: Response) => {
+app.get('/api/health/google-once', requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const settings = db.getSettings();
+    const settings = await db.getSettings();
     const apiKey =
       settings?.googleMapsApiKey ||
       process.env.GOOGLE_MAPS_API_KEY ||
@@ -387,31 +381,28 @@ app.get('/api/health/google-once', async (_req: Request, res: Response) => {
       }
     }
 
-    if (placesFound === 0) {
-      placesFound = 1;
-    }
-
-    return res.status(200).json({
+    return res.status(placesFound > 0 ? 200 : 503).json({
       status: 'ok',
       placesFound,
       timestamp: new Date().toISOString(),
     });
-  } catch {
-    return res.status(200).json({
-      status: 'ok',
-      placesFound: 1,
+  } catch (error) {
+    return res.status(503).json({
+      status: 'error',
+      placesFound: 0,
+      error: error instanceof Error ? error.message : String(error),
       timestamp: new Date().toISOString(),
     });
   }
 });
 
-app.post('/api/sync', async (_req: Request, res: Response) => {
+app.post('/api/sync', requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const result = await db.syncFromFirestore();
-    const stats = db.getDashboardStats();
+    const result = await db.syncFromSupabase();
+    const stats = await db.getDashboardStats();
     res.json({
       success: true,
-      message: 'Sincronização com o Firestore concluída com sucesso!',
+      message: 'Conexão e leitura do Supabase confirmadas com sucesso!',
       leadsCount: result.leadsCount,
       placesCount: result.placesCount,
       stats,
@@ -437,16 +428,10 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
   }
 
-  const isValidPass =
-    cleanPass === ADMIN_DEFAULT_PASSWORD ||
-    cleanPass === 'gustavo34' ||
-    cleanPass === 'gu123';
+  const isValidPass = ADMIN_DEFAULT_PASSWORD.length >= 12 && cleanPass === ADMIN_DEFAULT_PASSWORD;
 
   const isValidEmail =
-    !email ||
-    cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase() ||
-    cleanEmail === 'admin' ||
-    cleanEmail.includes('gustavo');
+    Boolean(ADMIN_DEFAULT_EMAIL) && cleanEmail === ADMIN_DEFAULT_EMAIL.toLowerCase();
 
   if (!isValidPass || !isValidEmail) {
     return res.status(401).json({ error: 'Credenciais de administrador inválidas.' });
@@ -477,11 +462,11 @@ app.get('/api/admin/me', requireAdmin, (req: Request, res: Response) => {
   });
 });
 
-app.post('/api/admin/logout', requireAdmin, (req: Request, res: Response) => {
+app.post('/api/admin/logout', requireAdmin, async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (token) {
-    revokedTokens.add(token);
+    await db.revokeSession(token);
   }
   res.json({ success: true });
 });
@@ -495,11 +480,11 @@ app.get('/api/auth/me', requireAuth, (req: Request, res: Response) => {
   res.json({ user: req.user });
 });
 
-app.post('/api/auth/logout', (req: Request, res: Response) => {
+app.post('/api/auth/logout', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (token) {
-    revokedTokens.add(token);
+    if (verifySession(token)) await db.revokeSession(token);
   }
   res.json({ success: true });
 });
@@ -511,13 +496,13 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Código de acesso do freelancer é obrigatório.' });
   }
 
-  let freelancer = db.getFreelancerByAccessCode(accessCode) || db.getFreelancerById(accessCode);
+  let freelancer = await db.getFreelancerByAccessCode(accessCode) || await db.getFreelancerById(accessCode);
   if (!freelancer) {
     try {
-      await db.syncFromFirestore();
-      freelancer = db.getFreelancerByAccessCode(accessCode) || db.getFreelancerById(accessCode);
+      await db.syncFromSupabase();
+      freelancer = await db.getFreelancerByAccessCode(accessCode) || await db.getFreelancerById(accessCode);
     } catch (err) {
-      console.warn('[Server] Falha ao sincronizar Firestore ao verificar código:', err);
+      console.warn('[Server] Falha ao consultar Supabase ao verificar código:', err);
     }
   }
 
@@ -553,12 +538,12 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
 
-  const updated = db.updateFreelancer(freelancer.id, {
+  const updated = await db.updateFreelancer(freelancer.id, {
     last_access_at: new Date().toISOString(),
     last_activity_at: new Date().toISOString(),
   });
 
-  db.logActivity({
+  await db.logActivity({
     freelancer_id: freelancer.id,
     freelancer_name: freelancer.name,
     action_type: 'login',
@@ -573,21 +558,21 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
   });
 });
 
-app.post('/api/freelancer/logout', requireAuth, (req: Request, res: Response) => {
+app.post('/api/freelancer/logout', requireAuth, async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (token) {
-    revokedTokens.add(token);
+    await db.revokeSession(token);
   }
   res.json({ success: true });
 });
 
-app.get('/api/freelancer/me', (req: Request, res: Response) => {
+app.get('/api/freelancer/me', async (req: Request, res: Response) => {
   if (!req.user || req.user.role !== 'freelancer' || !req.user.freelancer) {
     return res.status(401).json({ error: 'Sessão de freelancer não encontrada ou expirada.' });
   }
 
-  const f = db.getFreelancerById(req.user.freelancer.id);
+  const f = await db.getFreelancerById(req.user.freelancer.id);
   if (!f || f.status === 'blocked') {
     return res.status(403).json({
       error: 'Acesso desativado',
@@ -624,9 +609,9 @@ app.post('/api/freelancer/workspace/reset', requireAuth, async (req: Request, re
 });
 
 // 3. ADMIN FREELANCER MANAGEMENT ENDPOINTS (PROTEGIDOS POR ADMIN)
-app.get('/api/admin/dashboard/stats', requireAdmin, (req: Request, res: Response) => {
+app.get('/api/admin/dashboard/stats', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const stats = db.getAdminDashboardStats({
+    const stats = await db.getAdminDashboardStats({
       freelancer_id: req.query.freelancer_id as string,
       period: req.query.period as string,
       state: req.query.state as string,
@@ -640,17 +625,17 @@ app.get('/api/admin/dashboard/stats', requireAdmin, (req: Request, res: Response
   }
 });
 
-app.get('/api/admin/freelancers', requireAdmin, (_req: Request, res: Response) => {
+app.get('/api/admin/freelancers', requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const freelancers = db.getFreelancers();
+    const freelancers = await db.getFreelancers();
     // Enriquece com métricas de desempenho individuais
-    const enriched = freelancers.map((f) => {
-      const perf = db.getFreelancerPerformance(f.id);
+    const enriched = await Promise.all(freelancers.map(async (f) => {
+      const perf = await db.getFreelancerPerformance(f.id);
       return {
         ...f,
         performance: perf,
       };
-    });
+    }));
     res.json(enriched);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -674,7 +659,7 @@ app.post('/api/admin/freelancers', requireAdmin, async (req: Request, res: Respo
       status: status || 'active',
     });
 
-    const perf = db.getFreelancerPerformance(freelancer.id);
+    const perf = await db.getFreelancerPerformance(freelancer.id);
 
     res.status(201).json({
       success: true,
@@ -687,13 +672,13 @@ app.post('/api/admin/freelancers', requireAdmin, async (req: Request, res: Respo
   }
 });
 
-app.get('/api/admin/freelancers/:id', requireAdmin, (req: Request, res: Response) => {
+app.get('/api/admin/freelancers/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const f = db.getFreelancerById(req.params.id);
+    const f = await db.getFreelancerById(req.params.id);
     if (!f) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
-    const performance = db.getFreelancerPerformance(f.id);
+    const performance = await db.getFreelancerPerformance(f.id);
     res.json({ freelancer: f, performance });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -701,13 +686,13 @@ app.get('/api/admin/freelancers/:id', requireAdmin, (req: Request, res: Response
   }
 });
 
-app.patch('/api/admin/freelancers/:id', requireAdmin, (req: Request, res: Response) => {
+app.patch('/api/admin/freelancers/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const updated = db.updateFreelancer(req.params.id, req.body);
+    const updated = await db.updateFreelancer(req.params.id, req.body);
     if (!updated) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
-    const perf = db.getFreelancerPerformance(updated.id);
+    const perf = await db.getFreelancerPerformance(updated.id);
     res.json({ success: true, freelancer: { ...updated, performance: perf } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -715,9 +700,9 @@ app.patch('/api/admin/freelancers/:id', requireAdmin, (req: Request, res: Respon
   }
 });
 
-app.post('/api/admin/freelancers/:id/block', requireAdmin, (req: Request, res: Response) => {
+app.post('/api/admin/freelancers/:id/block', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const updated = db.setFreelancerStatus(req.params.id, 'blocked');
+    const updated = await db.setFreelancerStatus(req.params.id, 'blocked');
     if (!updated) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
@@ -728,9 +713,9 @@ app.post('/api/admin/freelancers/:id/block', requireAdmin, (req: Request, res: R
   }
 });
 
-app.post('/api/admin/freelancers/:id/unblock', requireAdmin, (req: Request, res: Response) => {
+app.post('/api/admin/freelancers/:id/unblock', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const updated = db.setFreelancerStatus(req.params.id, 'active');
+    const updated = await db.setFreelancerStatus(req.params.id, 'active');
     if (!updated) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
@@ -741,13 +726,13 @@ app.post('/api/admin/freelancers/:id/unblock', requireAdmin, (req: Request, res:
   }
 });
 
-app.post('/api/admin/freelancers/:id/regenerate-link', requireAdmin, (req: Request, res: Response) => {
+app.post('/api/admin/freelancers/:id/regenerate-link', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const newCode = db.regenerateFreelancerAccessCode(req.params.id);
+    const newCode = await db.regenerateFreelancerAccessCode(req.params.id);
     if (!newCode) {
       return res.status(404).json({ error: 'Freelancer não encontrado.' });
     }
-    const updated = db.getFreelancerById(req.params.id);
+    const updated = await db.getFreelancerById(req.params.id);
     res.json({ success: true, accessCode: newCode, accessLink: `/f/${newCode}`, freelancer: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -763,12 +748,13 @@ app.delete('/api/admin/freelancers/:id', requireAdmin, async (req: Request, res:
     }
     res.json({
       success: true,
-      message: `Workspace "${result.name || req.params.id}" e todos os dados associados (${result.leadsRemoved} leads, ${result.jobsRemoved} buscas e ${result.activitiesRemoved} atividades) foram excluídos permanentemente.`,
+      message: `O acesso ao workspace "${result.name || req.params.id}" foi desativado. Leads e históricos foram preservados; ${result.jobsRemoved} busca(s) ativa(s) foram canceladas.`,
       details: result,
     });
   } catch (err: unknown) {
+    const status = (err as any)?.status || 500;
     const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: message });
+    res.status(status).json({ error: message });
   }
 });
 
@@ -805,7 +791,7 @@ app.post('/api/admin/leads/purge-global', requireAdmin, async (req: Request, res
       success: true,
       deletedCount: result.deletedCount,
       jobsCancelled: result.jobsCancelled,
-      firestoreDeletedCount: result.firestoreDeletedCount,
+      supabaseDeletedCount: result.supabaseDeletedCount,
       message: `Operação concluída com sucesso: ${result.deletedCount} leads foram permanentemente removidos de todos os workspaces (Admin e Freelancers).`,
     });
   } catch (err: unknown) {
@@ -827,7 +813,7 @@ app.delete('/api/leads/all', requireAuth, async (req: Request, res: Response) =>
         success: true,
         deletedCount: result.deletedCount,
         jobsCancelled: result.jobsCancelled,
-        firestoreDeletedCount: result.firestoreDeletedCount,
+        supabaseDeletedCount: result.supabaseDeletedCount,
         message: `Todos os leads de TODOS os workspaces foram excluídos permanentemente (${result.deletedCount} estabelecimentos removidos).`,
       });
     }
@@ -865,7 +851,7 @@ app.post('/api/leads/delete-all', requireAuth, async (req: Request, res: Respons
         success: true,
         deletedCount: result.deletedCount,
         jobsCancelled: result.jobsCancelled,
-        firestoreDeletedCount: result.firestoreDeletedCount,
+        supabaseDeletedCount: result.supabaseDeletedCount,
         message: `Todos os leads de TODOS os workspaces foram excluídos permanentemente (${result.deletedCount} estabelecimentos removidos).`,
       });
     }
@@ -899,17 +885,14 @@ app.post('/api/leads/batch-delete', requireAuth, async (req: Request, res: Respo
 
     if (req.user!.role === 'freelancer') {
       for (const id of leadIds) {
-        const lead = db.getLeadById(id);
+        const lead = await db.getLeadById(id);
         if (lead && !isLeadInWorkspace(lead, req.user!.freelancerId)) {
           return res.status(403).json({ error: 'Acesso negado: um ou mais leads pertencem a outro workspace.' });
         }
       }
     }
 
-    const deletedCount = await db.deleteMultipleLeads(leadIds, {
-      freelancerId: req.user?.freelancerId,
-      role: req.user?.role,
-    });
+    const deletedCount = await db.deleteMultipleLeads(leadIds, req.user?.freelancerId);
 
     res.json({ success: true, deletedCount });
   } catch (err: unknown) {
@@ -922,7 +905,7 @@ app.post('/api/leads/batch-delete', requireAuth, async (req: Request, res: Respo
 app.delete('/api/leads/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const leadId = req.params.id;
-    const lead = db.getLeadById(leadId);
+    const lead = await db.getLeadById(leadId);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
@@ -934,10 +917,7 @@ app.delete('/api/leads/:id', requireAuth, async (req: Request, res: Response) =>
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
 
-    await db.deleteLead(leadId, {
-      freelancerId: req.user?.freelancerId,
-      role: req.user?.role,
-    });
+    await db.deleteLead(leadId, req.user?.freelancerId);
     res.json({ success: true, message: 'Lead excluído com sucesso.' });
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -949,7 +929,7 @@ app.delete('/api/leads/:id', requireAuth, async (req: Request, res: Response) =>
 app.post('/api/leads/:id/delete', requireAuth, async (req: Request, res: Response) => {
   try {
     const leadId = req.params.id;
-    const lead = db.getLeadById(leadId);
+    const lead = await db.getLeadById(leadId);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
@@ -961,10 +941,7 @@ app.post('/api/leads/:id/delete', requireAuth, async (req: Request, res: Respons
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
 
-    await db.deleteLead(leadId, {
-      freelancerId: req.user?.freelancerId,
-      role: req.user?.role,
-    });
+    await db.deleteLead(leadId, req.user?.freelancerId);
     res.json({ success: true, message: 'Lead excluído com sucesso.' });
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -973,9 +950,9 @@ app.post('/api/leads/:id/delete', requireAuth, async (req: Request, res: Respons
   }
 });
 
-app.get('/api/admin/freelancers/:id/leads', requireAdmin, (req: Request, res: Response) => {
+app.get('/api/admin/freelancers/:id/leads', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const leads = db.getLeads({ freelancer_id: req.params.id, limit: 500 });
+    const leads = await db.getLeads({ freelancer_id: req.params.id, limit: 500 });
     res.json(leads);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -983,9 +960,9 @@ app.get('/api/admin/freelancers/:id/leads', requireAdmin, (req: Request, res: Re
   }
 });
 
-app.get('/api/admin/freelancers/:id/searches', requireAdmin, (req: Request, res: Response) => {
+app.get('/api/admin/freelancers/:id/searches', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const searches = db.getAllSearchJobs(req.params.id);
+    const searches = await db.getAllSearchJobs(req.params.id);
     res.json(searches);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -993,9 +970,9 @@ app.get('/api/admin/freelancers/:id/searches', requireAdmin, (req: Request, res:
   }
 });
 
-app.get('/api/admin/freelancers/:id/activities', requireAdmin, (req: Request, res: Response) => {
+app.get('/api/admin/freelancers/:id/activities', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const result = db.getActivities({ freelancer_id: req.params.id, limit: 100 });
+    const result = await db.getActivities({ freelancer_id: req.params.id, limit: 100 });
     res.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1003,10 +980,10 @@ app.get('/api/admin/freelancers/:id/activities', requireAdmin, (req: Request, re
   }
 });
 
-app.get('/api/admin/activities', requireAdmin, (req: Request, res: Response) => {
+app.get('/api/admin/activities', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { freelancer_id, action_type, limit, offset } = req.query;
-    const result = db.getActivities({
+    const result = await db.getActivities({
       freelancer_id: freelancer_id as string,
       action_type: action_type as string,
       limit: limit ? Number(limit) : 50,
@@ -1053,10 +1030,10 @@ app.get('/api/ibge/cities/:uf', async (req: Request, res: Response) => {
 });
 
 // 5. DASHBOARD STATS (COM ISOLAMENTO ESTRITO POR WORKSPACE)
-app.get('/api/dashboard/stats', requireAuth, (req: Request, res: Response) => {
+app.get('/api/dashboard/stats', requireAuth, async (req: Request, res: Response) => {
   try {
     const scope = resolveWorkspaceScope(req);
-    const stats = db.getDashboardStats(scope.freelancerId);
+    const stats = await db.getDashboardStats(scope.freelancerId);
     res.json(stats);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -1066,11 +1043,11 @@ app.get('/api/dashboard/stats', requireAuth, (req: Request, res: Response) => {
 });
 
 // 6. LEADS & NICHES
-app.get('/api/niches', requireAuth, (req: Request, res: Response) => {
+app.get('/api/niches', requireAuth, async (req: Request, res: Response) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === 'true';
     const scope = resolveWorkspaceScope(req);
-    const niches = db.getNichesSummary({ onlyFavorites, freelancer_id: scope.freelancerId });
+    const niches = await db.getNichesSummary({ onlyFavorites, freelancer_id: scope.freelancerId });
     res.json(niches);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -1079,12 +1056,12 @@ app.get('/api/niches', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/states-summary', requireAuth, (req: Request, res: Response) => {
+app.get('/api/states-summary', requireAuth, async (req: Request, res: Response) => {
   try {
     const onlyFavorites = req.query.onlyFavorites === 'true';
     const niche = req.query.niche as string;
     const scope = resolveWorkspaceScope(req);
-    const states = db.getStatesSummary({ onlyFavorites, niche, freelancer_id: scope.freelancerId });
+    const states = await db.getStatesSummary({ onlyFavorites, niche, freelancer_id: scope.freelancerId });
     res.json(states);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -1106,6 +1083,7 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
       minRating,
       maxRating,
       minReviews,
+      maxReviews,
       minScore,
       status,
       search,
@@ -1116,7 +1094,7 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
 
     const scope = resolveWorkspaceScope(req);
 
-    const result = db.getLeads({
+    const result = await db.getLeads({
       freelancer_id: scope.freelancerId,
       state: state as string,
       city: city as string,
@@ -1129,6 +1107,7 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
       minRating: minRating ? Number(minRating) : undefined,
       maxRating: maxRating !== undefined && maxRating !== '' ? Number(maxRating) : undefined,
       minReviews: minReviews ? Number(minReviews) : undefined,
+      maxReviews: maxReviews ? Number(maxReviews) : undefined,
       minScore: minScore ? Number(minScore) : undefined,
       status: status as string,
       search: search as string,
@@ -1145,9 +1124,9 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
+app.get('/api/leads/:id', requireAuth, async (req: Request, res: Response) => {
   try {
-    const lead = db.getLeadById(req.params.id);
+    const lead = await db.getLeadById(req.params.id);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
@@ -1159,18 +1138,18 @@ app.get('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Acesso negado: este lead não pertence ao seu workspace.' });
     }
 
-    const notes = db.getLeadNotes(lead.id);
-    const place = db.getPlaceByPlaceId(lead.place_id);
+    const [notes, place] = await Promise.all([db.getLeadNotes(lead.id), db.getPlaceByPlaceId(lead.place_id)]);
     res.json({ lead, notes, place });
   } catch (err: unknown) {
+    const status = (err as any)?.status || 500;
     const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: message });
+    res.status(status).json({ error: message });
   }
 });
 
-app.patch('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
+app.patch('/api/leads/:id', requireAuth, async (req: Request, res: Response) => {
   try {
-    const oldLead = db.getLeadById(req.params.id);
+    const oldLead = await db.getLeadById(req.params.id);
     if (!oldLead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
@@ -1189,7 +1168,7 @@ app.patch('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
     delete safeUpdates.user_id;
 
     const freelancerId = req.user!.role === 'freelancer' ? req.user!.freelancerId : undefined;
-    const updated = db.updateLead(req.params.id, safeUpdates, freelancerId);
+    const updated = await db.updateLead(req.params.id, safeUpdates, freelancerId);
     if (!updated) {
       return res.status(404).json({ error: 'Lead não encontrado ou acesso não autorizado.' });
     }
@@ -1206,7 +1185,7 @@ app.patch('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
       else if (safeUpdates.pipeline_status === 'NEGOCIACAO') actionType = 'negotiation_started';
       else if (safeUpdates.pipeline_status === 'FECHADO') actionType = 'sale_registered';
 
-      db.logActivity({
+      await db.logActivity({
         freelancer_id: actorId,
         freelancer_name: actorName,
         action_type: actionType,
@@ -1223,9 +1202,9 @@ app.patch('/api/leads/:id', requireAuth, (req: Request, res: Response) => {
 });
 
 // Ações rápidas de contato, resposta e venda com log de auditoria
-app.post('/api/leads/:id/contact-attempt', requireAuth, (req: Request, res: Response) => {
+app.post('/api/leads/:id/contact-attempt', requireAuth, async (req: Request, res: Response) => {
   try {
-    const lead = db.getLeadById(req.params.id);
+    const lead = await db.getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
 
     if (
@@ -1237,7 +1216,7 @@ app.post('/api/leads/:id/contact-attempt', requireAuth, (req: Request, res: Resp
 
     const currentAttempts = lead.contact_attempts_count || (lead.contacted_at ? 1 : 0);
     const newStatus = lead.pipeline_status === 'NOVO' || lead.pipeline_status === 'PRÉVIA CRIADA' ? 'CONTATADO' : lead.pipeline_status;
-    const updated = db.updateLead(lead.id, {
+    const updated = await db.updateLead(lead.id, {
       contacted_at: new Date().toISOString(),
       contact_attempts_count: currentAttempts + 1,
       pipeline_status: newStatus,
@@ -1246,7 +1225,7 @@ app.post('/api/leads/:id/contact-attempt', requireAuth, (req: Request, res: Resp
     const actorId = req.user!.freelancerId || lead.freelancer_id || 'admin_1';
     const actorName = req.user!.name || lead.freelancer_name || 'Usuário';
 
-    db.logActivity({
+    await db.logActivity({
       freelancer_id: actorId,
       freelancer_name: actorName,
       action_type: 'lead_contacted',
@@ -1261,10 +1240,10 @@ app.post('/api/leads/:id/contact-attempt', requireAuth, (req: Request, res: Resp
   }
 });
 
-app.post('/api/leads/:id/register-sale', requireAuth, (req: Request, res: Response) => {
+app.post('/api/leads/:id/register-sale', requireAuth, async (req: Request, res: Response) => {
   try {
     const { value } = req.body;
-    const lead = db.getLeadById(req.params.id);
+    const lead = await db.getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
 
     if (
@@ -1275,7 +1254,7 @@ app.post('/api/leads/:id/register-sale', requireAuth, (req: Request, res: Respon
     }
 
     const saleVal = Number(value) || 0;
-    const updated = db.updateLead(lead.id, {
+    const updated = await db.updateLead(lead.id, {
       pipeline_status: 'FECHADO',
       sale_value: saleVal,
       sale_date: new Date().toISOString(),
@@ -1284,7 +1263,7 @@ app.post('/api/leads/:id/register-sale', requireAuth, (req: Request, res: Respon
     const actorId = req.user!.freelancerId || lead.freelancer_id || 'admin_1';
     const actorName = req.user!.name || lead.freelancer_name || 'Usuário';
 
-    db.logActivity({
+    await db.logActivity({
       freelancer_id: actorId,
       freelancer_name: actorName,
       action_type: 'sale_registered',
@@ -1299,9 +1278,9 @@ app.post('/api/leads/:id/register-sale', requireAuth, (req: Request, res: Respon
   }
 });
 
-app.post('/api/leads/:id/favorite', requireAuth, (req: Request, res: Response) => {
+app.post('/api/leads/:id/favorite', requireAuth, async (req: Request, res: Response) => {
   try {
-    const lead = db.getLeadById(req.params.id);
+    const lead = await db.getLeadById(req.params.id);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
@@ -1313,7 +1292,7 @@ app.post('/api/leads/:id/favorite', requireAuth, (req: Request, res: Response) =
       return res.status(403).json({ error: 'Acesso negado: este lead pertence a outro workspace.' });
     }
 
-    const updated = db.toggleFavoriteLead(req.params.id);
+    const updated = await db.toggleFavoriteLead(req.params.id);
     res.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1321,9 +1300,9 @@ app.post('/api/leads/:id/favorite', requireAuth, (req: Request, res: Response) =
   }
 });
 
-app.post('/api/leads/:id/hide', requireAuth, (req: Request, res: Response) => {
+app.post('/api/leads/:id/hide', requireAuth, async (req: Request, res: Response) => {
   try {
-    const lead = db.getLeadById(req.params.id);
+    const lead = await db.getLeadById(req.params.id);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
@@ -1336,7 +1315,7 @@ app.post('/api/leads/:id/hide', requireAuth, (req: Request, res: Response) => {
     }
 
     const explicitValue = typeof req.body?.is_hidden === 'boolean' ? req.body.is_hidden : undefined;
-    const updated = db.toggleHideLead(req.params.id, explicitValue);
+    const updated = await db.toggleHideLead(req.params.id, explicitValue);
     res.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1344,13 +1323,13 @@ app.post('/api/leads/:id/hide', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/leads/:id/notes', requireAuth, (req: Request, res: Response) => {
+app.post('/api/leads/:id/notes', requireAuth, async (req: Request, res: Response) => {
   try {
     const { content } = req.body;
     if (!content || !content.trim()) {
       return res.status(400).json({ error: 'Conteúdo da observação não pode ser vazio.' });
     }
-    const lead = db.getLeadById(req.params.id);
+    const lead = await db.getLeadById(req.params.id);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
@@ -1363,11 +1342,11 @@ app.post('/api/leads/:id/notes', requireAuth, (req: Request, res: Response) => {
     }
 
     const userId = req.user!.role === 'freelancer' ? req.user!.freelancerId! : req.user!.id;
-    const note = db.addLeadNote(req.params.id, userId, content.trim());
+    const note = await db.addLeadNote(req.params.id, userId, content.trim());
 
     const actorId = req.user!.freelancerId || lead.freelancer_id || 'admin_1';
     const actorName = req.user!.name || lead.freelancer_name || 'Usuário';
-    db.logActivity({
+    await db.logActivity({
       freelancer_id: actorId,
       freelancer_name: actorName,
       action_type: 'note_added',
@@ -1383,10 +1362,10 @@ app.post('/api/leads/:id/notes', requireAuth, (req: Request, res: Response) => {
 });
 
 // 7. PIPELINE (COM ISOLAMENTO)
-app.get('/api/pipeline', requireAuth, (req: Request, res: Response) => {
+app.get('/api/pipeline', requireAuth, async (req: Request, res: Response) => {
   try {
     const scope = resolveWorkspaceScope(req);
-    const board = db.getPipelineBoard(scope.freelancerId);
+    const board = await db.getPipelineBoard(scope.freelancerId);
     res.json(board);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -1395,14 +1374,14 @@ app.get('/api/pipeline', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/pipeline/move', requireAuth, (req: Request, res: Response) => {
+app.post('/api/pipeline/move', requireAuth, async (req: Request, res: Response) => {
   try {
     const { leadId, toStatus } = req.body;
     if (!leadId || !toStatus) {
       return res.status(400).json({ error: 'leadId e toStatus são obrigatórios.' });
     }
 
-    const lead = db.getLeadById(leadId);
+    const lead = await db.getLeadById(leadId);
     if (!lead) {
       return res.status(404).json({ error: 'Lead não encontrado.' });
     }
@@ -1428,7 +1407,7 @@ app.post('/api/pipeline/move', requireAuth, (req: Request, res: Response) => {
       updates.sale_date = new Date().toISOString();
     }
 
-    const updated = db.updateLead(leadId, updates);
+    const updated = await db.updateLead(leadId, updates);
 
     // Auditoria de atividade
     const actorId = req.user!.freelancerId || lead.freelancer_id || 'admin_1';
@@ -1441,7 +1420,7 @@ app.post('/api/pipeline/move', requireAuth, (req: Request, res: Response) => {
     else if (toStatus === 'NEGOCIACAO') actionType = 'negotiation_started';
     else if (toStatus === 'FECHADO') actionType = 'sale_registered';
 
-    db.logActivity({
+    await db.logActivity({
       freelancer_id: actorId,
       freelancer_name: actorName,
       action_type: actionType,
@@ -1457,11 +1436,11 @@ app.post('/api/pipeline/move', requireAuth, (req: Request, res: Response) => {
 });
 
 // 8. SEARCH JOBS (COM ISOLAMENTO POR WORKSPACE)
-app.get('/api/search-jobs', requireAuth, (req: Request, res: Response) => {
+app.get('/api/search-jobs', requireAuth, async (req: Request, res: Response) => {
   try {
-    cleanupStaleJobs();
+    await cleanupStaleJobs();
     const scope = resolveWorkspaceScope(req);
-    const jobs = db.getAllSearchJobs(scope.freelancerId);
+    const jobs = await db.getAllSearchJobs(scope.freelancerId);
     res.json(jobs);
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
@@ -1496,7 +1475,7 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
     } else {
       // Admin: busca normal realizada no Admin sempre pertence ao workspace Admin!
       if (req.body.targetFreelancerId) {
-        const targetF = db.getFreelancerById(req.body.targetFreelancerId);
+        const targetF = await db.getFreelancerById(req.body.targetFreelancerId);
         if (targetF) {
           jobFreelancerId = targetF.id;
           jobFreelancerName = targetF.name;
@@ -1518,6 +1497,12 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
         (maxRatingValue !== undefined && (!Number.isFinite(maxRatingValue) || maxRatingValue <= 0 || maxRatingValue > 5 || maxRatingValue < minRatingValue))) {
       return res.status(400).json({ error: 'Faixa de notas inválida: a nota máxima deve ser maior ou igual à mínima, com valores entre 0 e 5.' });
     }
+    const minReviewsValue=Number(filters?.minReviews ?? 0);
+    const maxReviewsValue=filters?.maxReviews !== undefined && filters?.maxReviews !== null && filters?.maxReviews !== '' ? Number(filters.maxReviews) : undefined;
+    const targetLeadsValue=filters?.targetLeads !== undefined && filters?.targetLeads !== null && filters?.targetLeads !== '' ? Number(filters.targetLeads) : 0;
+    if(!Number.isInteger(minReviewsValue) || minReviewsValue<0 || (maxReviewsValue!==undefined && (!Number.isInteger(maxReviewsValue) || maxReviewsValue<minReviewsValue)) || !Number.isInteger(targetLeadsValue) || targetLeadsValue<0) {
+      return res.status(400).json({error:'Filtros de quantidade devem ser números inteiros não negativos; o máximo de avaliações deve ser maior ou igual ao mínimo.'});
+    }
 
     const cleanFilters: {
       onlyWithoutWebsite: boolean;
@@ -1531,14 +1516,14 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
       onlyWithoutWebsite: Boolean(filters?.onlyWithoutWebsite),
       onlyWithPhone: Boolean(filters?.onlyWithPhone),
       minRating: minRatingValue,
-      minReviews: Number(filters?.minReviews ?? 0),
-      targetLeads: filters?.targetLeads !== undefined && filters?.targetLeads !== null && filters?.targetLeads !== '' ? Number(filters.targetLeads) : 0,
+      minReviews: minReviewsValue,
+      targetLeads: targetLeadsValue,
     };
     if (maxRatingValue !== undefined) {
       cleanFilters.maxRating = maxRatingValue;
     }
-    if (filters?.maxReviews !== undefined && filters?.maxReviews !== null && filters?.maxReviews !== '') {
-      cleanFilters.maxReviews = Number(filters.maxReviews);
+    if (maxReviewsValue !== undefined) {
+      cleanFilters.maxReviews = maxReviewsValue;
     }
 
     const { job, estimatedQueries, totalCities, totalAreas } = await createAndPrepareSearchJob({
@@ -1555,7 +1540,7 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
 
     // Registra atividade de busca iniciada
     if (jobFreelancerId) {
-      db.logActivity({
+      await db.logActivity({
         freelancer_id: jobFreelancerId,
         freelancer_name: jobFreelancerName,
         action_type: 'search_performed',
@@ -1574,9 +1559,9 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
   }
 });
 
-app.get('/api/search-jobs/:id', requireAuth, (req: Request, res: Response) => {
+app.get('/api/search-jobs/:id', requireAuth, async (req: Request, res: Response) => {
   try {
-    const job = db.getSearchJob(req.params.id);
+    const job = await db.getSearchJob(req.params.id);
     if (!job) {
       return res.status(404).json({ error: 'Search Job não encontrado.' });
     }
@@ -1589,8 +1574,7 @@ app.get('/api/search-jobs/:id', requireAuth, (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
 
-    const areas = db.getSearchAreas(job.id);
-    const queries = db.getSearchQueries(job.id);
+    const [areas, queries] = await Promise.all([db.getSearchAreas(job.id), db.getSearchQueries(job.id)]);
     res.json({ job, areas, queries });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1598,9 +1582,9 @@ app.get('/api/search-jobs/:id', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/search-jobs/:id/pause', requireAuth, (req: Request, res: Response) => {
+app.post('/api/search-jobs/:id/pause', requireAuth, async (req: Request, res: Response) => {
   try {
-    const job = db.getSearchJob(req.params.id);
+    const job = await db.getSearchJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Search Job não encontrado.' });
     if (
       req.user!.role === 'freelancer' &&
@@ -1608,7 +1592,7 @@ app.post('/api/search-jobs/:id/pause', requireAuth, (req: Request, res: Response
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
-    const ok = pauseSearchJob(req.params.id);
+    const ok = await pauseSearchJob(req.params.id);
     res.json({ success: ok });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1616,9 +1600,9 @@ app.post('/api/search-jobs/:id/pause', requireAuth, (req: Request, res: Response
   }
 });
 
-app.post('/api/search-jobs/:id/resume', requireAuth, (req: Request, res: Response) => {
+app.post('/api/search-jobs/:id/resume', requireAuth, async (req: Request, res: Response) => {
   try {
-    const job = db.getSearchJob(req.params.id);
+    const job = await db.getSearchJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Search Job não encontrado.' });
     if (
       req.user!.role === 'freelancer' &&
@@ -1626,7 +1610,7 @@ app.post('/api/search-jobs/:id/resume', requireAuth, (req: Request, res: Respons
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
-    const ok = resumeSearchJob(req.params.id);
+    const ok = await resumeSearchJob(req.params.id);
     res.json({ success: ok });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1634,9 +1618,9 @@ app.post('/api/search-jobs/:id/resume', requireAuth, (req: Request, res: Respons
   }
 });
 
-app.post('/api/search-jobs/:id/cancel', requireAuth, (req: Request, res: Response) => {
+app.post('/api/search-jobs/:id/cancel', requireAuth, async (req: Request, res: Response) => {
   try {
-    const job = db.getSearchJob(req.params.id);
+    const job = await db.getSearchJob(req.params.id);
     if (!job) return res.status(404).json({ error: 'Search Job não encontrado.' });
     if (
       req.user!.role === 'freelancer' &&
@@ -1644,7 +1628,7 @@ app.post('/api/search-jobs/:id/cancel', requireAuth, (req: Request, res: Respons
     ) {
       return res.status(403).json({ error: 'Acesso negado: esta busca pertence a outro workspace.' });
     }
-    const ok = cancelSearchJob(req.params.id);
+    const ok = await cancelSearchJob(req.params.id);
     res.json({ success: ok });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1653,9 +1637,9 @@ app.post('/api/search-jobs/:id/cancel', requireAuth, (req: Request, res: Respons
 });
 
 // 9. SETTINGS & TEST KEY (ADMIN ONLY)
-app.get('/api/settings', requireAdmin, (req: Request, res: Response) => {
+app.get('/api/settings', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const settings = db.getSettings();
+    const settings = await db.getSettings();
     const maskedKey = settings.googleMapsApiKey
       ? `${settings.googleMapsApiKey.substring(0, 6)}...${settings.googleMapsApiKey.substring(settings.googleMapsApiKey.length - 4)}`
       : '';
@@ -1670,13 +1654,13 @@ app.get('/api/settings', requireAdmin, (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/settings', requireAdmin, (req: Request, res: Response) => {
+app.post('/api/settings', requireAdmin, async (req: Request, res: Response) => {
   try {
     const updates = req.body;
     if (updates.googleMapsApiKey && updates.googleMapsApiKey.includes('••••')) {
       delete updates.googleMapsApiKey;
     }
-    const updated = db.updateSettings(updates);
+    const updated = await db.updateSettings(updates);
     res.json({ success: true, settings: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1688,7 +1672,7 @@ app.post('/api/settings/test-key', requireAdmin, async (req: Request, res: Respo
   try {
     let keyToTest = req.body.key;
     if (!keyToTest || keyToTest.includes('••••')) {
-      keyToTest = db.getSettings().googleMapsApiKey;
+      keyToTest = (await db.getSettings()).googleMapsApiKey;
     }
 
     if (!keyToTest || keyToTest.trim() === '') {
@@ -1711,32 +1695,26 @@ app.post('/api/settings/test-key', requireAdmin, async (req: Request, res: Respo
   }
 });
 
-// 10. SUPABASE MIGRATIONS
-app.get('/api/supabase/migrations', (_req: Request, res: Response) => {
-  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  res.send(SUPABASE_MIGRATIONS_SQL);
-});
-
 // Auto-recuperação de jobs em andamento após reinício do processo
-setTimeout(() => {
+const recoveryTimer = setTimeout(async () => {
   try {
-    cleanupStaleJobs();
-    const jobs = db.getAllSearchJobs();
+    await cleanupStaleJobs();
+    const jobs = await db.getAllSearchJobs();
     for (const job of jobs) {
       if (job.status === 'running') {
-        const areas = db.getSearchAreas(job.id);
+        const areas = await db.getSearchAreas(job.id);
         const hasPending = areas.some((a) => a.status === 'pending' || a.status === 'processing' || a.status === 'failed');
         if (hasPending && areas.length > 0) {
           for (const a of areas) {
             if (a.status === 'processing') {
-              db.updateSearchArea(a.id, { status: 'pending' });
+              await db.updateSearchArea(a.id, { status: 'pending' });
             }
           }
           console.log(`[Server] Retomando busca pendente ${job.id} (${job.niche} em ${job.city})...`);
           runSearchJob(job.id).catch(console.error);
         } else {
           // Não inventar conclusão após reinício se não houver evidência de término.
-          db.updateSearchJob(job.id, {
+          await db.updateSearchJob(job.id, {
             status: 'failed',
             error_message: 'Busca interrompida durante a execução. Retome para verificar as áreas pendentes.',
             finished_at: new Date().toISOString(),
@@ -1748,6 +1726,7 @@ setTimeout(() => {
     console.warn('[Server] Falha ao verificar jobs anteriores:', err);
   }
 }, 2000);
+recoveryTimer.unref?.();
 
 export { app };
 export default app;
