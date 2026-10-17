@@ -159,6 +159,8 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   const [isDeletingAll, setIsDeletingAll] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Garante uma nova consulta mesmo quando o usuário já está com todos os filtros limpos.
+  const [filterResetVersion, setFilterResetVersion] = useState(0);
 
   // Ref sempre atualizada com os filtros vigentes para evitar closures defasadas
   const latestFiltersRef = useRef({
@@ -246,7 +248,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
       if (thisRequestId === requestIdRef.current) {
         console.error('Erro ao carregar leads:', err);
         // Em falha de consulta, jamais limpa os dados válidos que já estão na tela
-        setLoadError('Não foi possível sincronizar os dados mais recentes. Mantendo dados atuais.');
+        setLoadError('Não foi possível consultar os leads deste workspace agora. Nenhum registro foi apagado. Tente novamente.');
       }
     } finally {
       if (thisRequestId === requestIdRef.current) {
@@ -255,13 +257,8 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     }
   }, []);
 
-  // Timer de segurança para garantir que o indicador de sincronização nunca fique preso
-  useEffect(() => {
-    if (loading) {
-      const timer = setTimeout(() => setLoading(false), 7000);
-      return () => clearTimeout(timer);
-    }
-  }, [loading]);
+  // O loading termina com a resposta (ou falha) da API, nunca por um timer
+  // que poderia exibir falsamente "nenhuma loja" durante uma consulta lenta.
 
   const loadNiches = useCallback(async () => {
     try {
@@ -317,13 +314,16 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     cityFilter,
     nicheFilter,
     statusFilter,
+    ratingFilter,
     onlyWithoutWebsite,
     onlyWithPhone,
     onlyFavorites,
+    excludeHidden,
     minScore,
     sortBy,
     activeSearch,
     refreshTrigger,
+    filterResetVersion,
     loadLeads,
     loadNiches,
     loadStates,
@@ -551,18 +551,20 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     (stateFilter && stateFilter !== 'ALL') ||
     (cityFilter && cityFilter !== 'ALL') ||
     (statusFilter && statusFilter !== 'ALL') ||
+    (ratingFilter && ratingFilter !== 'ALL') ||
     onlyWithoutWebsite ||
     onlyWithPhone ||
     onlyFavorites ||
     excludeHidden ||
     minScore > 0 ||
-    Boolean(search && search.trim() !== '');
+    Boolean(activeSearch && activeSearch.trim() !== '');
 
   const handleClearAllFilters = () => {
     setNicheFilter('ALL');
     setStateFilter('ALL');
     setCityFilter('ALL');
     setStatusFilter('ALL');
+    setRatingFilter('ALL');
     setOnlyWithoutWebsite(false);
     setOnlyWithPhone(false);
     setOnlyFavorites(false);
@@ -570,7 +572,9 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     setMinScore(0);
     setSearch('');
     setActiveSearch('');
+    setSortBy('score');
     setPage(1);
+    setFilterResetVersion((version) => version + 1);
     onClearInitialFilters?.();
   };
 
@@ -1264,6 +1268,25 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         <div className="py-20 text-center text-xs text-neutral-400 flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white">
           <RotateCw className="h-4 w-4 animate-spin text-neutral-500" />
           <span>Carregando estabelecimentos e dados do Maps...</span>
+        </div>
+      ) : loadError && leads.length === 0 ? (
+        <div role="alert" className="py-16 text-center space-y-4 rounded-xl border border-amber-200 bg-white p-6 shadow-2xs">
+          <AlertTriangle className="h-10 w-10 text-amber-600 mx-auto" />
+          <h4 className="text-sm font-bold text-neutral-900">Não foi possível carregar os leads</h4>
+          <p className="text-xs text-neutral-600 max-w-md mx-auto">
+            A consulta ao servidor falhou. Seus leads continuam armazenados; uma falha de leitura não significa que o workspace foi zerado.
+          </p>
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+            <button type="button" onClick={() => loadLeads(false)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-neutral-950 bg-amber-400 hover:bg-amber-300 rounded-xl transition-all cursor-pointer">
+              <RotateCw className="h-4 w-4" />
+              Tentar carregar novamente
+            </button>
+            <button type="button" onClick={handleClearAllFilters}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-neutral-700 bg-white border border-neutral-200 rounded-xl hover:bg-neutral-50 cursor-pointer">
+              Limpar filtros e buscar todos
+            </button>
+          </div>
         </div>
       ) : leads.length === 0 ? (
         <div className="py-16 text-center space-y-4 rounded-xl border border-neutral-200 bg-white p-6 shadow-2xs">
