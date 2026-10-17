@@ -105,6 +105,25 @@ export async function getRecords<T>(collection: string, filters?: { field: strin
   return records.filter(record => (record.document as Record<string, unknown>)?.[filters.field] === filters.value);
 }
 
+/** Fetch only requested IDs in a single PostgREST read, rather than one HTTP request per place. */
+export async function getRecordsByIds<T>(collection: string, ids: string[]): Promise<StoredRecord<T>[]> {
+  validateCollection(collection);
+  if (!ids.length) return [];
+  const unique = [...new Set(ids)];
+  const result: StoredRecord<T>[] = [];
+  for (let offset = 0; offset < unique.length; offset += 80) {
+    const chunk = unique.slice(offset, offset + 80);
+    const escapeId = (id: string) => '"' + id.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+    const query = new URLSearchParams({
+      select: 'collection,id,workspace_id,document,revision',
+      collection: `eq.${collection}`,
+      id: `in.(${chunk.map(escapeId).join(',')})`,
+    });
+    result.push(...await request<StoredRecord<T>[]>(`app_records?${query}`));
+  }
+  return result;
+}
+
 export async function getRecord<T>(collection: string, id: string): Promise<StoredRecord<T> | undefined> {
   validateCollection(collection);
   const search = new URLSearchParams({
