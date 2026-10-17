@@ -201,7 +201,9 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
       email: freelancer.email,
       freelancer,
     };
-    await db.updateFreelancer(freelancer.id, { last_activity_at: new Date().toISOString() });
+    // Validar uma sessão deve ser somente leitura. Atualizar o mesmo registro
+    // em TODA requisição (inclusive polls simultâneos) causa GH_TX_CONFLICT no
+    // Supabase e faz listagens de leads falharem com 503.
     return actorContext.run({ role: 'freelancer', freelancerId: freelancer.id }, next);
   }
 
@@ -547,18 +549,29 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
 
-  const updated = await db.updateFreelancer(freelancer.id, {
-    last_access_at: new Date().toISOString(),
-    last_activity_at: new Date().toISOString(),
-  });
+  // Telemetria é secundária: jamais impedir login ou leitura dos leads
+  // porque uma gravação de last_access/activity sofreu conflito de revisão.
+  let updated: Freelancer | undefined;
+  try {
+    updated = await db.updateFreelancer(freelancer.id, {
+      last_access_at: new Date().toISOString(),
+      last_activity_at: new Date().toISOString(),
+    });
+  } catch (activityError) {
+    console.warn('[Auth] Falha não bloqueante ao registrar último acesso:', activityError);
+  }
 
-  await db.logActivity({
-    freelancer_id: freelancer.id,
-    freelancer_name: freelancer.name,
-    action_type: 'login',
-    description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
-    metadata: { access_code: freelancer.access_code },
-  });
+  try {
+    await db.logActivity({
+      freelancer_id: freelancer.id,
+      freelancer_name: freelancer.name,
+      action_type: 'login',
+      description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
+      metadata: { access_code: freelancer.access_code },
+    });
+  } catch (activityError) {
+    console.warn('[Auth] Falha não bloqueante ao registrar atividade de login:', activityError);
+  }
 
   return res.json({
     success: true,
