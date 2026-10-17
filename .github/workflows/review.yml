@@ -69,13 +69,15 @@ jobs:
             echo 'Production backend did not confirm its Supabase connection.'
             exit 1
           fi
-      - name: Verify live Google Places text search once
+      - name: Verify admin-only Google Places test route is protected
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 50 'https://ghprospeccao.vercel.app/api/health/google-once' -o /tmp/gh-google.json
-          python3 -c "import json; d=json.load(open('/tmp/gh-google.json')); assert d.get('status')=='ok' and d.get('placesFound',0)>0"
-          echo 'Google Places returned at least one real business.'
+          # /api/health/google-once exige admin; o teste anônimo anterior
+          # devolvia 401 mesmo com a plataforma saudável.
+          status=$(curl --silent --show-error --max-time 15 -o /dev/null -w '%{http_code}' 'https://ghprospeccao.vercel.app/api/health/google-once')
+          test "$status" = 401
+          echo 'Admin-only Google Places test route correctly requires authentication.'
       - name: Reject unauthenticated access to commercial leads
         shell: bash
         run: |
