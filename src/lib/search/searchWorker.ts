@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { db } from '../store/db';
-import { searchPlacesOfficial, normalizePlace, GooglePlaceRaw } from '../google/places';
+import { searchPlacesAdaptive, normalizePlace, GooglePlaceRaw } from '../google/places';
+import { prioritizeSearchAreas } from './smartScheduler';
 import { CITY_COORDINATES, METROPOLITAN_GRIDS, POPULAR_CITIES_BY_STATE, fetchCitiesByState } from '../ibge/ibgeService';
 import { calculateLeadScore } from '../scoring/leadScore';
 import { SearchArea, SearchJob, SearchQueryLog } from '../../types';
@@ -150,21 +151,9 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
 
   try {
     const areas = await db.getSearchAreas(jobId);
-    const pendingAreas = areas.filter(a => a.status === 'pending' || (a.status === 'processing' && (job.lease_until || 0) < Date.now()));
-    // Prioritize underexplored large cities over repetitive metropolitan grid cells.
-    const firstCities = [...new Set(areas.map(a => a.city))].slice(0, 16);
-    const priorityCities = new Set(firstCities);
-    const doneByCity = new Map<string,number>();
-    for (const area of areas.filter(a => a.status === 'completed')) {
-      doneByCity.set(area.city, (doneByCity.get(area.city)||0)+1);
-    }
-    pendingAreas.sort((a,b)=>{
-      const priorityA=priorityCities.has(a.city)?0:1;
-      const priorityB=priorityCities.has(b.city)?0:1;
-      return priorityA-priorityB
-        || (doneByCity.get(a.city)||0)-(doneByCity.get(b.city)||0)
-        || firstCities.indexOf(a.city)-firstCities.indexOf(b.city);
-    });
+    const pendingAreas = prioritizeSearchAreas(areas).filter(
+      a => a.status === 'pending' || (a.status === 'processing' && (job.lease_until || 0) < Date.now())
+    );
     const settings = await db.getSettings();
     const targetGoal = job.target_leads || 0;
     let persistedLeadCount = job.leads_created || 0;
@@ -211,7 +200,7 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
         // Consulta oficial à Google Places API (New) Text Search
         const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || '';
         const hasRealCoords = area.lat !== 0 && area.lng !== 0;
-        const res = await searchPlacesOfficial(
+        const res = await searchPlacesAdaptive(
           query,
           apiKey,
           hasRealCoords
@@ -262,6 +251,7 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
           results_count: rawPlaces.length,
           duration_ms: durationMs,
           error_details: queryError,
+          search_method: res.source,
           created_at: new Date().toISOString(),
         });
 

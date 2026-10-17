@@ -57,7 +57,13 @@ export class Query {
     const workspace = this.predicates.find(
       predicate => !('kind' in predicate) && predicate.field === 'workspace_id' && predicate.operator === '==',
     ) as Criterion | undefined;
-    const all = await getRecords<Data>(this.collectionName, workspace ? { field: 'workspace_id', value: String(workspace.value) } : undefined);
+    const searchable = new Set(['search_job_id','job_id','place_id','lead_id']);
+    const exact = this.predicates.find(predicate => !('kind' in predicate) &&
+      predicate.operator === '==' && searchable.has(predicate.field)) as Criterion | undefined;
+    const pushdown = workspace
+      ? { field: 'workspace_id', value: String(workspace.value) }
+      : exact ? { field: exact.field, value: String(exact.value) } : undefined;
+    const all = await getRecords<Data>(this.collectionName, pushdown);
     const docs = all
       .filter(record => this.predicates.every(predicate => matches(record.document, predicate)))
       .slice(0, this.maximum === undefined ? undefined : Math.max(0, this.maximum))

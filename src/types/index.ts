@@ -223,6 +223,9 @@ export interface SearchArea {
   status: 'pending' | 'processing' | 'completed' | 'failed';
   attempts: number;
   places_found: number;
+  new_places_found?: number;
+  matching_filters?: number;
+  new_leads?: number;
   processed_at?: string;
   error?: string;
 }
@@ -237,6 +240,7 @@ export interface SearchQueryLog {
   created_at: string;
   duration_ms: number;
   error_details?: string;
+  search_method?: 'nearby' | 'text';
 }
 
 export interface IBGEState {

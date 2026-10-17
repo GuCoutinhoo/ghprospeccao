@@ -187,7 +187,8 @@ export async function searchPlacesNearby(
   apiKey: string,
   center: { latitude: number; longitude: number },
   radius: number,
-  includedTypes?: string[]
+  includedTypes?: string[],
+  rankPreference: 'POPULARITY' | 'DISTANCE' = 'POPULARITY',
 ): Promise<{ places: GooglePlaceRaw[]; error?: string }> {
   const endpoint = 'https://places.googleapis.com/v1/places:searchNearby';
   const body: Record<string, unknown> = {
@@ -198,6 +199,7 @@ export async function searchPlacesNearby(
       },
     },
     maxResultCount: 20,
+    rankPreference,
   };
 
   if (includedTypes && includedTypes.length > 0) {
@@ -233,6 +235,36 @@ export async function searchPlacesNearby(
 }
 
 /**
+ * Smart geo search: for typed niches and actual grid coordinates, Nearby is
+ * more precise and avoids repeating a Text Search biased to adjacent grids.
+ * The Google response is still validated by the exact business filters.
+ * Text search remains the fallback when the niche has no reliable place types,
+ * coordinates are missing, or Nearby reports a transport/API error.
+ */
+export async function searchPlacesAdaptive(
+  query: string,
+  apiKey: string,
+  options?: Parameters<typeof searchPlacesOfficial>[2],
+): Promise<{ places: GooglePlaceRaw[]; error?: string; isQuotaExceeded?: boolean; source: 'nearby' | 'text' }> {
+  const circle = options?.locationBias?.circle;
+  const center = circle?.center;
+  const types = getIncludedTypesForQuery(query);
+  const validCoordinates = center && Number.isFinite(center.latitude) &&
+    Number.isFinite(center.longitude) && center.latitude !== 0 && center.longitude !== 0;
+  if (apiKey?.trim() && validCoordinates && types?.length) {
+    const nearby = await searchPlacesNearby(apiKey, center, circle?.radius || 12000, types, 'DISTANCE');
+    // A valid, empty geographic response is not an API error. Do not double
+    // bill/consume quota by automatically repeating it as a text search.
+    if (!nearby.error) return { places: nearby.places, source: 'nearby' };
+    // Errors are not empty results. Try the text endpoint at most once, so
+    // either quota can be used when the other endpoint is unavailable.
+    const textResult = await searchPlacesOfficial(query, apiKey, options, 1, false);
+    return { ...textResult, source: 'text' };
+  }
+  return { ...await searchPlacesOfficial(query, apiKey, options), source: 'text' };
+}
+
+/**
  * Consulta oficial à Google Places API (New) com fallback automático para searchNearby
  * Garante que a busca NUNCA trave por limite de cota temporário do endpoint searchText
  */
@@ -248,7 +280,8 @@ export async function searchPlacesOfficial(
     };
     maxResultCount?: number;
   },
-  maxRetries = 2
+  maxRetries = 2,
+  allowNearbyFallback = true,
 ): Promise<{ places: GooglePlaceRaw[]; error?: string; isQuotaExceeded?: boolean }> {
   if (!apiKey || apiKey.trim() === '') {
     return { places: [], error: 'GOOGLE_MAPS_API_KEY_MISSING' };
@@ -279,6 +312,7 @@ export async function searchPlacesOfficial(
   }
 
   let lastError: string | undefined;
+  const typesForNearby = getIncludedTypesForQuery(query) || [];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -303,7 +337,7 @@ export async function searchPlacesOfficial(
         // If Search Text daily quota is exhausted, try Nearby at most once.
         // Never make 2 or 3 more Search Text calls that cannot succeed today.
         if (quotaExceeded) {
-          if (hasValidCenter && options?.locationBias?.circle?.center) {
+          if (allowNearbyFallback && hasValidCenter && typesForNearby.length && options?.locationBias?.circle?.center) {
             const nearbyRes = await searchPlacesNearby(
               apiKey,
               options.locationBias.circle.center,
@@ -329,15 +363,8 @@ export async function searchPlacesOfficial(
         return { places: data.places };
       }
 
-      // Se searchText não retornou resultados e temos coordenadas válidas
-      if (hasValidCenter && options?.locationBias?.circle?.center) {
-        const types = getIncludedTypesForQuery(query);
-        const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 12000, types);
-        if (nearbyRes.places && nearbyRes.places.length > 0) {
-          return { places: nearbyRes.places };
-        }
-      }
-
+      // Empty Text Search is authoritative. Never perform an untyped Nearby
+      // search, which could add unrelated businesses and consume quota.
       return { places: [] };
     } catch (err: unknown) {
       lastError = err instanceof Error ? err.message : String(err);
@@ -348,7 +375,7 @@ export async function searchPlacesOfficial(
   }
 
   // Fallback final: somente se houver coordenadas válidas reais
-  if (hasValidCenter && options?.locationBias?.circle?.center) {
+  if (allowNearbyFallback && hasValidCenter && typesForNearby.length && options?.locationBias?.circle?.center) {
     try {
       const types = getIncludedTypesForQuery(query);
       const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 12000, types);

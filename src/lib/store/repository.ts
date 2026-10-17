@@ -321,7 +321,7 @@ export class Repository {
       const index=areas.findIndex(a=>a.id===areaId);
       if(index<0 || areas[index].status==='completed')return false;
       const updatedAreas=areas.slice();
-      updatedAreas[index]=clean({...areas[index],status:'completed',places_found:metrics.placesInArea,processed_at:now(),error:undefined});
+      updatedAreas[index]=clean({...areas[index],status:'completed',places_found:metrics.placesInArea,new_places_found:metrics.newPlaces,matching_filters:metrics.matchingFilters,new_leads:metrics.newLeads,processed_at:now(),error:undefined});
       const processedCities=new Set(updatedAreas.filter(a=>a.status==='completed').map(a=>a.city)).size;
       tx.update(ref,{
         area_plan:updatedAreas,

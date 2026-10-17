@@ -265,33 +265,54 @@ export default function App() {
     };
   }, []);
 
-  // Serverless-safe search driver. One awaited cell per request, persisted in
-  // Supabase, so reload/navigation does not lose completed progress.
+  // Search driver: one awaited request at a time, with job summaries cached.
+  // A full search-job listing before *every* cell is wasteful and can return
+  // multi-hundred-area plans from Supabase repeatedly.
   useEffect(() => {
     if (!isAuthenticated) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let index = 0;
+    let cachedJobs: Awaited<ReturnType<typeof api.getSearchJobs>> = [];
+    let lastSync = 0;
+    let roundRobin = 0;
+    const invalidate = () => { lastSync = 0; };
+    window.addEventListener('gh:search-started', invalidate);
     const drive = async () => {
-      let hasWork = false;
+      let activeCount = 0;
       try {
-        const jobs = await api.getSearchJobs();
-        if (stopped) return;
-        const active = jobs.filter(j => j.status === 'pending' || j.status === 'running');
-        hasWork = active.length > 0;
-        if (hasWork) {
-          const next = active[index % active.length];
-          index++;
-          await api.stepSearchJob(next.id);
+        const now = Date.now();
+        const previouslyActive = cachedJobs.some(job => job.status === 'running' || job.status === 'pending');
+        const refreshAfter = previouslyActive ? 12000 : 3500;
+        if (!lastSync || now - lastSync >= refreshAfter) {
+          cachedJobs = await api.getSearchJobs();
+          if (stopped) return;
+          lastSync = Date.now();
+        }
+        const active = cachedJobs.filter(job => job.status === 'running' || job.status === 'pending');
+        activeCount = active.length;
+        if (activeCount) {
+          const next = active[roundRobin % activeCount];
+          roundRobin++;
+          const updated = await api.stepSearchJob(next.id);
+          if (stopped) return;
+          cachedJobs = cachedJobs.map(job => job.id === updated.id ? updated : job);
+          if (updated.status !== 'running' && updated.status !== 'pending') lastSync = 0;
         }
       } catch (err) {
-        if (!stopped) console.warn('[SearchDriver] Falha transitória ao processar lote:', err);
+        if (!stopped) {
+          console.warn('[SearchDriver] Falha transitória ao processar área:', err);
+          lastSync = 0; // Retry refreshing after transient Supabase / network errors.
+        }
       } finally {
-        if (!stopped) timer = setTimeout(drive, hasWork ? 1200 : 5000);
+        if (!stopped) timer = setTimeout(drive, activeCount ? 200 : 1800);
       }
     };
     void drive();
-    return () => { stopped = true; if (timer) clearTimeout(timer); };
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('gh:search-started', invalidate);
+    };
   }, [isAuthenticated, userRole, activeFreelancer?.id]);
 
   // 2. Prévia de Lead pública via ?leadId=
@@ -389,6 +410,7 @@ export default function App() {
   };
 
   const handleJobStarted = (jobId: string) => {
+    window.dispatchEvent(new Event('gh:search-started'));
     setActiveSearchJobId(jobId);
     setCurrentPath(`/search/${jobId}`);
   };
