@@ -209,3 +209,48 @@ test('login responde antes de auditoria lenta e mantém os leads intactos', asyn
   const existing = await repository.getLeadById(originalLead.id);
   assert.deepEqual(existing, originalLead);
 });
+
+
+test('login de freelancer não grava telemetria nem altera registros comerciais', async () => {
+  const harness = createSupabaseHarness();
+  globalThis.fetch = harness.fetchMock;
+  const db = new Repository(new DocumentStore());
+  const freelancer = await db.createFreelancer({name:'Sem Escritas',email:'no-write@example.com',access_code:'no-write'});
+  const created = await db.createLead(lead({
+    workspace_id: freelancer.id,
+    freelancer_id: freelancer.id,
+    user_id: freelancer.id,
+    place_id: 'login-no-write',
+    is_hidden: true,
+  }));
+  let commits = 0;
+  globalThis.fetch = async (input,init) => {
+    if(String(input).includes('/rpc/gh_commit_changes')) commits++;
+    return harness.fetchMock(input,init);
+  };
+  const { app } = await import('../src/server/app');
+  const response = await request(app).post('/api/freelancer/auth/verify').send({accessCode:'no-write'}).expect(200);
+  assert.equal(response.body.freelancer.id,freelancer.id);
+  assert.equal(commits,0,'login must not perform any RPC writes');
+  assert.deepEqual(await db.getLeadById(created.lead.id),created.lead);
+});
+
+test('atualizar um freelancer não bloqueia documentos de outros workspaces', async () => {
+  const harness = createSupabaseHarness();
+  globalThis.fetch = harness.fetchMock;
+  const db = new Repository(new DocumentStore());
+  const one = await db.createFreelancer({name:'Um',email:'one@example.com',access_code:'one'});
+  const two = await db.createFreelancer({name:'Dois',email:'two@example.com',access_code:'two'});
+  let reads: Array<{collection:string;id:string}> = [];
+  globalThis.fetch = async (input,init) => {
+    if(String(input).includes('/rpc/gh_commit_changes')) {
+      const body=JSON.parse(String(init?.body||'{}'));
+      reads=body.p_reads||[];
+    }
+    return harness.fetchMock(input,init);
+  };
+  await db.updateFreelancer(one.id,{notes:'Nova anotação'});
+  assert.deepEqual(reads.map(r=>r.id),[one.id]);
+  assert.equal((await db.getFreelancerById(two.id))?.notes,undefined);
+  await assert.rejects(db.updateFreelancer(one.id,{access_code:'two'}),/Link de acesso já está em uso/);
+});
