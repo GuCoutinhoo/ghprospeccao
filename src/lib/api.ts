@@ -116,12 +116,20 @@ export const api = {
 
   // Freelancer Authentication & Workspace Access
   async verifyFreelancerLink(accessCode: string, pin?: string) {
-    const res = await fetch('/api/freelancer/auth/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessCode, pin }),
-      signal: AbortSignal.timeout(20_000),
-    });
+    let res: Response;
+    try {
+      res = await fetch('/api/freelancer/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessCode, pin }),
+        signal: AbortSignal.timeout(20_000),
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && ['AbortError', 'TimeoutError'].includes(err.name)) {
+        throw new Error('O servidor demorou a responder. Tente acessar o workspace novamente.');
+      }
+      throw new Error('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.');
+    }
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
