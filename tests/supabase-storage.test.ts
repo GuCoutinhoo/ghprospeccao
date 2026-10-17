@@ -156,3 +156,56 @@ test('API rejeita acesso anônimo e não expõe leads de outro workspace', async
   await request(app).get('/api/leads').set('Authorization',`Bearer ${login.body.token}`).expect(401);
   assert.equal(await new Repository(new DocumentStore()).isSessionRevoked(login.body.token),true);
 });
+
+
+test('login responde antes de auditoria lenta e mantém os leads intactos', async () => {
+  const harness = createSupabaseHarness();
+  globalThis.fetch = harness.fetchMock;
+  const repository = new Repository(new DocumentStore());
+  const freelancer = await repository.createFreelancer({
+    name: 'Workspace Danilo teste',
+    email: 'test-login@example.com',
+    access_code: 'test-danilo',
+  });
+  const originalLead = (await repository.createLead(lead({
+    workspace_id: freelancer.id,
+    freelancer_id: freelancer.id,
+    user_id: freelancer.id,
+    place_id: 'login-read-only-lead',
+  }))).lead;
+
+  let unblockCommit!: () => void;
+  const blockedCommit = new Promise<void>((resolve) => { unblockCommit = resolve; });
+  const normalFetch = harness.fetchMock;
+  let pauseNextCommit = true;
+  globalThis.fetch = async (input, init) => {
+    if (pauseNextCommit && String(input).includes('/rpc/gh_commit_changes')) {
+      pauseNextCommit = false;
+      await blockedCommit; // Simula Supabase travado ao gravar atividade.
+    }
+    return normalFetch(input, init);
+  };
+
+  const { app } = await import('../src/server/app');
+  const login = request(app)
+    .post('/api/freelancer/auth/verify')
+    .send({accessCode: 'test-danilo'})
+    .expect(200)
+    .then(response => response);
+  let respondedBeforeTelemetry = false;
+  try {
+    respondedBeforeTelemetry = await Promise.race([
+      login.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 1000)),
+    ]);
+  } finally {
+    unblockCommit();
+  }
+
+  assert.equal(respondedBeforeTelemetry, true, 'login não deve aguardar atualização de atividade');
+  const response = await login;
+  assert.equal(response.body.freelancer.id, freelancer.id);
+  assert.equal(typeof response.body.token, 'string');
+  const existing = await repository.getLeadById(originalLead.id);
+  assert.deepEqual(existing, originalLead);
+});

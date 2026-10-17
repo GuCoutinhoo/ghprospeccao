@@ -60,7 +60,10 @@ app.use('/api', async (req, _res, next) => {
     req.path === '' ||
     req.path === '/' ||
     req.path === '/health' ||
-    req.path.startsWith('/health/')
+    req.path.startsWith('/health/') ||
+    // O login consulta diretamente a fonte autoritativa do Supabase.
+    // Evita uma segunda consulta de "health" antes de cada autenticação.
+    (req.method === 'POST' && req.path === '/freelancer/auth/verify')
   ) {
     return next();
   }
@@ -507,15 +510,10 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Código de acesso do freelancer é obrigatório.' });
   }
 
-  let freelancer = await db.getFreelancerByAccessCode(accessCode) || await db.getFreelancerById(accessCode);
-  if (!freelancer) {
-    try {
-      await db.syncFromSupabase();
-      freelancer = await db.getFreelancerByAccessCode(accessCode) || await db.getFreelancerById(accessCode);
-    } catch (err) {
-      console.warn('[Server] Falha ao consultar Supabase ao verificar código:', err);
-    }
-  }
+  // A primeira consulta já é feita no Supabase; não é necessário varrer
+  // leads e lugares de TODOS os workspaces caso o código não exista.
+  const freelancer = await db.getFreelancerByAccessCode(String(accessCode)) ||
+    await db.getFreelancerById(String(accessCode));
 
   if (!freelancer) {
     return res.status(404).json({
@@ -549,35 +547,35 @@ app.post('/api/freelancer/auth/verify', async (req: Request, res: Response) => {
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
 
-  // Telemetria é secundária: jamais impedir login ou leitura dos leads
-  // porque uma gravação de last_access/activity sofreu conflito de revisão.
-  let updated: Freelancer | undefined;
-  try {
-    updated = await db.updateFreelancer(freelancer.id, {
+  // Autorização concluída: responder ao navegador ANTES da telemetria.
+  // Atualização de atividade e auditoria são best-effort; nunca podem
+  // prender a autenticação até o timeout de 20 segundos do frontend.
+  res.json({
+    success: true,
+    token,
+    freelancer,
+  });
+
+  void Promise.allSettled([
+    db.updateFreelancer(freelancer.id, {
       last_access_at: new Date().toISOString(),
       last_activity_at: new Date().toISOString(),
-    });
-  } catch (activityError) {
-    console.warn('[Auth] Falha não bloqueante ao registrar último acesso:', activityError);
-  }
-
-  try {
-    await db.logActivity({
+    }),
+    db.logActivity({
       freelancer_id: freelancer.id,
       freelancer_name: freelancer.name,
       action_type: 'login',
       description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
       metadata: { access_code: freelancer.access_code },
-    });
-  } catch (activityError) {
-    console.warn('[Auth] Falha não bloqueante ao registrar atividade de login:', activityError);
-  }
-
-  return res.json({
-    success: true,
-    token,
-    freelancer: updated || freelancer,
+    }),
+  ]).then((results) => {
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.warn('[Auth] Falha não bloqueante ao registrar telemetria:', result.reason);
+      }
+    }
   });
+  return;
   } catch (err: unknown) {
     console.error('[Server] Falha ao autenticar workspace de freelancer:', err);
     return res.status(503).json({
