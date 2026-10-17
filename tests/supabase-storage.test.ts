@@ -4,7 +4,8 @@ import request from 'supertest';
 import { DocumentStore } from '../src/lib/supabase/documentStore';
 import { Repository, actorContext } from '../src/lib/store/repository';
 import { checkLeadFilters } from '../src/lib/search/searchWorker';
-import { searchPlacesOfficial } from '../src/lib/google/places';
+import { searchPlacesOfficial, searchPlacesAdaptive } from '../src/lib/google/places';
+import { prioritizeSearchAreas } from '../src/lib/search/smartScheduler';
 import type { Lead, SearchJob, Place, SearchArea } from '../src/types';
 
 type Row = { collection:string; id:string; workspace_id:string; document:Record<string,any>; revision:number };
@@ -69,6 +70,88 @@ function searchJob(id:string,workspace:string):SearchJob {
   const stamp='2026-10-17T12:00:00.000Z';
   return {id,workspace_id:workspace,user_id:workspace,freelancer_id:workspace,state:'SP',city:'São Paulo',niche:'barbearia',status:'pending',filters:{onlyWithoutWebsite:true,onlyWithPhone:true,minRating:3.5,maxRating:4.5,minReviews:10,maxReviews:30},total_cities:1,processed_cities:0,total_search_areas:0,processed_search_areas:0,places_found:0,places_without_website:0,leads_created:0,created_at:stamp,updated_at:stamp};
 }
+
+test('Nearby geográfico consulta categoria compatível uma única vez, por DISTANCE',async()=>{
+  const originalFetch=globalThis.fetch;
+  const calls:Array<{url:string;body:Record<string,any>}>=[];
+  try {
+    globalThis.fetch=async(input,init)=>{
+      calls.push({url:String(input),body:JSON.parse(String(init?.body||'{}'))});
+      return new Response(JSON.stringify({places:[{
+        id:'dental-1', displayName:{text:'Clínica Odontológica'}, rating:3.5,
+        userRatingCount:12, types:['dental_clinic'], nationalPhoneNumber:'11999999999'
+      }]}),{status:200,headers:{'content-type':'application/json'}});
+    };
+    const result=await searchPlacesAdaptive('Clínica odontológica em Campinas SP','test-key',{
+      locationBias:{circle:{center:{latitude:-22.9,longitude:-47.0},radius:4500}},
+      maxResultCount:20,
+    });
+    assert.equal(calls.length,1,'nunca duplicar busca Text após Nearby bem-sucedido');
+    assert.match(calls[0].url,/searchNearby$/);
+    assert.deepEqual(calls[0].body.includedTypes,['dentist','dental_clinic']);
+    assert.equal(calls[0].body.rankPreference,'DISTANCE');
+    assert.equal(result.source,'nearby');
+    assert.equal(result.places.length,1);
+    assert.equal(checkLeadFilters({website:'',website_status:'no_website',rating:result.places[0].rating,reviews_count:12},{
+      onlyWithoutWebsite:true,onlyWithPhone:false,minRating:3,maxRating:3.9,minReviews:0
+    }),true);
+  } finally {globalThis.fetch=originalFetch;}
+});
+
+test('Nearby vazio não executa Text extra, e nicho sem tipo usa Text normalmente',async()=>{
+  const initial=globalThis.fetch;
+  const calls:string[]=[];
+  try {
+    globalThis.fetch=async(input)=>{
+      calls.push(String(input));
+      return new Response(JSON.stringify({places:[]}),{status:200,headers:{'content-type':'application/json'}});
+    };
+    const opts={locationBias:{circle:{center:{latitude:-23.5,longitude:-46.6},radius:4000}}};
+    const nearby=await searchPlacesAdaptive('dentista em São Paulo SP','test-key',opts);
+    assert.equal(nearby.source,'nearby');
+    assert.equal(calls.length,1);
+    assert.match(calls[0],/searchNearby$/);
+    const text=await searchPlacesAdaptive('consultoria tributária em São Paulo SP','test-key',opts);
+    assert.equal(text.source,'text');
+    assert.match(calls[1],/searchText$/);
+    assert.equal(calls.length,2);
+  } finally {globalThis.fetch=initial;}
+});
+
+test('erro no Nearby recorre a Text uma única vez e mantém resultado',async()=>{
+  const initial=globalThis.fetch;
+  const calls:string[]=[];
+  try {
+    globalThis.fetch=async(input)=>{
+      calls.push(String(input));
+      return String(input).includes('searchNearby')
+        ? new Response(JSON.stringify({error:{message:'endpoint unavailable'}}),{status:503})
+        : new Response(JSON.stringify({places:[{id:'p1',rating:3.2}]}),{status:200});
+    };
+    const result=await searchPlacesAdaptive('Clínica odontológica em Santos SP','test-key',{
+      locationBias:{circle:{center:{latitude:-23.96,longitude:-46.33},radius:3000}}
+    });
+    assert.equal(result.source,'text');
+    assert.equal(result.places.length,1);
+    assert.equal(calls.length,2);
+  } finally {globalThis.fetch=initial;}
+});
+
+test('planejador prioriza cidades novas e depois regiões com mais leads, sem modificar plano',()=>{
+  const area=(id:string,city:string,status:SearchArea['status'],newLeads=0):SearchArea=>({
+    id,city,state:'SP',search_job_id:'job-priority',lat:-23.5,lng:-46.6,
+    radius:4000,status,attempts:0,places_found:20,new_leads:newLeads,
+    new_places_found:newLeads>0?18:0,matching_filters:newLeads,
+  });
+  const seed=[area('s1','São Paulo','completed'),area('s2','São Paulo','pending'),
+    area('c1','Campinas','pending'),area('g1','Guarulhos','pending')];
+  const original=JSON.stringify(seed);
+  assert.equal(prioritizeSearchAreas(seed)[0].city,'Campinas');
+  assert.equal(JSON.stringify(seed),original,'scheduler nunca modifica o plano');
+  const productive=[area('s1','São Paulo','completed',4),area('s2','São Paulo','pending'),
+    area('c1','Campinas','completed',0),area('c2','Campinas','pending')];
+  assert.equal(prioritizeSearchAreas(productive)[0].city,'São Paulo');
+});
 
 test('cota diária do Search Text é reconhecida sem refazer chamadas inúteis',async()=>{
   let attempts=0;
