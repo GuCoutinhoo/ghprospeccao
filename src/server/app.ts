@@ -144,6 +144,7 @@ declare global {
 
 // Middleware para resolução de identidade do usuário
 app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
+  try {
   const authHeader = req.headers.authorization || (req.headers['x-access-token'] as string);
   const token = authHeader ? (authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim()) : '';
 
@@ -206,6 +207,13 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
 
   req.user = undefined;
   next();
+  } catch (err: unknown) {
+    console.error('[Server] Falha ao validar sessão:', err);
+    return res.status(503).json({
+      error: 'Falha temporária na validação da sessão. Tente novamente.',
+      code: 'WORKSPACE_SESSION_UNAVAILABLE',
+    });
+  }
 });
 
 // Middleware de proteção: exige usuário autenticado
