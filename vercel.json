@@ -23,5 +23,8 @@
       "source": "/((?!api).*)",
       "destination": "/index.html"
     }
+  ],
+  "regions": [
+    "gru1"
   ]
 }
