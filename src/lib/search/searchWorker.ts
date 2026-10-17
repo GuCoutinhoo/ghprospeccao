@@ -117,6 +117,8 @@ export async function createAndPrepareSearchJob(params: {
     processed_search_areas: 0,
     places_found: 0,
     places_without_website: 0,
+    matching_filters: 0,
+    metrics_version: 1,
     leads_created: 0,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -148,7 +150,21 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
 
   try {
     const areas = await db.getSearchAreas(jobId);
-    const pendingAreas = areas.filter((a) => a.status === 'pending' || (a.status === 'processing' && (job.lease_until || 0) < Date.now()));
+    const pendingAreas = areas.filter(a => a.status === 'pending' || (a.status === 'processing' && (job.lease_until || 0) < Date.now()));
+    // Prioritize underexplored large cities over repetitive metropolitan grid cells.
+    const firstCities = [...new Set(areas.map(a => a.city))].slice(0, 16);
+    const priorityCities = new Set(firstCities);
+    const doneByCity = new Map<string,number>();
+    for (const area of areas.filter(a => a.status === 'completed')) {
+      doneByCity.set(area.city, (doneByCity.get(area.city)||0)+1);
+    }
+    pendingAreas.sort((a,b)=>{
+      const priorityA=priorityCities.has(a.city)?0:1;
+      const priorityB=priorityCities.has(b.city)?0:1;
+      return priorityA-priorityB
+        || (doneByCity.get(a.city)||0)-(doneByCity.get(b.city)||0)
+        || firstCities.indexOf(a.city)-firstCities.indexOf(b.city);
+    });
     const settings = await db.getSettings();
     const targetGoal = job.target_leads || 0;
     let persistedLeadCount = job.leads_created || 0;
@@ -160,7 +176,7 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
       if (attemptedAreas >= maxAreas) break;
       attemptedAreas++;
       try {
-        if (!(await db.renewSearchJobLease(jobId, leaseToken))) return;
+        if (maxAreas > 1 && !(await db.renewSearchJobLease(jobId, leaseToken))) return;
         // Checa se já atingiu a meta de leads desejada pelo usuário
         if (targetGoal > 0) {
           const currentJobCheck = await db.getSearchJob(jobId);
@@ -260,16 +276,19 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
           continue;
         }
 
-        let newPlacesFound = 0;
+        // Deduplicate the Google page and persist all Places in a single transaction.
+        const normalized = [...new Map(rawPlaces.map(raw=>{
+          const place=normalizePlace(raw,area.city,area.state);
+          return [place.place_id,place] as const;
+        })).values()];
+        const createdPlaces = await db.upsertPlacesBatch(normalized);
+        const newPlacesFound = createdPlaces.size;
         let newWithoutWebsite = 0;
         let newLeadsCreated = 0;
+        let matchingFilters = 0;
+        const searchResults: Array<Record<string,unknown> & {id?:string}> = [];
 
-        for (const raw of rawPlaces) {
-          const normalizedPlace = normalizePlace(raw, area.city, area.state);
-          const { isNew } = await db.upsertPlace(normalizedPlace);
-          if (isNew) {
-            newPlacesFound++;
-          }
+        for (const normalizedPlace of normalized) {
 
           if ((!normalizedPlace.website || normalizedPlace.website.trim() === '') && normalizedPlace.website_status === 'no_website') {
             newWithoutWebsite++;
@@ -279,6 +298,7 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
           const isRelevant = isPlaceRelevantToNiche(normalizedPlace, job.niche);
           const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
           if (matchesFilters && isRelevant) {
+            matchingFilters++;
             const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
             const workspaceId = job.workspace_id || (job.freelancer_id ? job.freelancer_id : 'admin');
             const leadPrefix = job.freelancer_id ? `lead_${job.freelancer_id}_` : 'lead_admin_';
@@ -286,7 +306,7 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
 
             // Se o lead foi excluído e está tombstoned, não recria
             if (await db.isLeadDeleted(leadId)) {
-              await db.logSearchResult({
+              searchResults.push({
                 job_id: jobId, workspace_id: workspaceId, place_id: normalizedPlace.place_id,
                 result: 'deleted', rating: normalizedPlace.rating || 0,
                 reviews_count: normalizedPlace.reviews_count || 0,
@@ -324,7 +344,7 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
               continue;
             }
 
-            await db.logSearchResult({
+            searchResults.push({
               job_id: jobId, workspace_id: workspaceId, place_id: normalizedPlace.place_id,
               lead_id: persistedLead.id, result: created ? 'created' : 'duplicate',
               rating: normalizedPlace.rating || 0, reviews_count: normalizedPlace.reviews_count || 0,
@@ -341,9 +361,15 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
               break;
             }
           } else {
-            await db.logSearchResult({
+            const reason = !isRelevant ? 'niche'
+              : job.filters.onlyWithoutWebsite && normalizedPlace.website_status !== 'no_website' ? 'website'
+              : !matchesRatingRange(normalizedPlace.rating,job.filters) ? 'rating'
+              : job.filters.onlyWithPhone && (!normalizedPlace.phone || normalizedPlace.phone.trim().length<8) ? 'phone'
+              : 'reviews';
+            searchResults.push({
               job_id: jobId, workspace_id: job.workspace_id || job.freelancer_id || 'admin',
               place_id: normalizedPlace.place_id, result: isRelevant ? 'filtered' : 'irrelevant',
+              filter_reason: reason,
               rating: normalizedPlace.rating || 0, reviews_count: normalizedPlace.reviews_count || 0,
               website: normalizedPlace.website || '', website_status: normalizedPlace.website_status,
               phone: normalizedPlace.phone || '', created_at: new Date().toISOString(),
@@ -351,26 +377,15 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
           }
         }
 
+        await db.logSearchResultsBatch(searchResults);
+
         citiesSeen.add(area.city);
 
-        // Atualiza status da área
-        await db.updateJobArea(jobId, area.id, {
-          status: 'completed',
-          places_found: rawPlaces.length,
-          processed_at: new Date().toISOString(),
+        const committed = await db.completeSearchArea(jobId,area.id,leaseToken,{
+          newPlaces:newPlacesFound,withoutSite:newWithoutWebsite,
+          newLeads:newLeadsCreated,matchingFilters,placesInArea:rawPlaces.length,
         });
-
-        // Atualiza progresso do Job
-        const updatedJob = await db.getSearchJob(jobId);
-        if (updatedJob) {
-          await db.updateSearchJob(jobId, {
-            processed_search_areas: updatedJob.processed_search_areas + 1,
-            processed_cities: citiesSeen.size,
-            places_found: updatedJob.places_found + newPlacesFound,
-            places_without_website: updatedJob.places_without_website + newWithoutWebsite,
-            leads_created: updatedJob.leads_created + newLeadsCreated,
-          });
-        }
+        if (!committed) return;
 
         // Se atingiu a meta de leads, conclui a busca imediatamente
         if (targetGoal > 0 && persistedLeadCount >= targetGoal) {
@@ -411,7 +426,7 @@ export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INF
       const goalReached = (finalJob.target_leads || 0) > 0 && finalJob.leads_created >= (finalJob.target_leads || 0);
       await db.updateSearchJob(jobId, failedAreas.length > 0 && !goalReached
         ? { status: 'failed', error_message: `${failedAreas.length} área(s) falharam. Tente novamente para retomar.`, finished_at: new Date().toISOString() }
-        : { status: 'completed', processed_search_areas: finalJob.total_search_areas, finished_at: new Date().toISOString() });
+        : { status: 'completed', finished_at: new Date().toISOString() });
     }
 
     if (job.freelancer_id) {
