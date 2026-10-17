@@ -265,6 +265,35 @@ export default function App() {
     };
   }, []);
 
+  // Serverless-safe search driver. One awaited cell per request, persisted in
+  // Supabase, so reload/navigation does not lose completed progress.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let index = 0;
+    const drive = async () => {
+      let hasWork = false;
+      try {
+        const jobs = await api.getSearchJobs();
+        if (stopped) return;
+        const active = jobs.filter(j => j.status === 'pending' || j.status === 'running');
+        hasWork = active.length > 0;
+        if (hasWork) {
+          const next = active[index % active.length];
+          index++;
+          await api.stepSearchJob(next.id);
+        }
+      } catch (err) {
+        if (!stopped) console.warn('[SearchDriver] Falha transitória ao processar lote:', err);
+      } finally {
+        if (!stopped) timer = setTimeout(drive, hasWork ? 1200 : 5000);
+      }
+    };
+    void drive();
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
+  }, [isAuthenticated, userRole, activeFreelancer?.id]);
+
   // 2. Prévia de Lead pública via ?leadId=
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
