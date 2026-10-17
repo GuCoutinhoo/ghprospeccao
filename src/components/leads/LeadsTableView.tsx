@@ -42,6 +42,7 @@ import { api } from '../../lib/api';
 import { getScoreColorClass } from '../../lib/scoring/leadScore';
 import { formatBrazilianPhone, getWhatsAppUrl } from '../../utils/whatsapp';
 import { BRAZILIAN_STATES } from '../../lib/ibge/ibgeService';
+import { resolveRatingRange } from '../../lib/search/ratingFilter';
 
 const STATE_NAMES: Record<string, string> = {
   SP: 'São Paulo',
@@ -130,6 +131,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   const [cityFilter, setCityFilter] = useState<string>('ALL');
   const [nicheFilter, setNicheFilter] = useState<string>(initialNicheFilter || 'ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [ratingFilter, setRatingFilter] = useState<string>('ALL');
   const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState<boolean>(false);
   const [onlyWithPhone, setOnlyWithPhone] = useState<boolean>(false);
   const [onlyFavorites, setOnlyFavorites] = useState<boolean>(false);
@@ -165,6 +167,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     cityFilter,
     nicheFilter,
     statusFilter,
+    ratingFilter,
     onlyWithoutWebsite,
     onlyWithPhone,
     onlyFavorites,
@@ -182,6 +185,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     cityFilter,
     nicheFilter,
     statusFilter,
+    ratingFilter,
     onlyWithoutWebsite,
     onlyWithPhone,
     onlyFavorites,
@@ -202,6 +206,14 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     }
     const current = latestFiltersRef.current;
 
+    let minRatingVal: number | undefined = undefined;
+    let maxRatingVal: number | undefined = undefined;
+    if (current.ratingFilter && current.ratingFilter !== 'ALL') {
+      const resolved = resolveRatingRange(current.ratingFilter);
+      minRatingVal = resolved.minRating > 0 ? resolved.minRating : undefined;
+      maxRatingVal = resolved.maxRating;
+    }
+
     try {
       const data = await api.getLeads({
         freelancer_id: current.effectiveFreelancerId,
@@ -209,6 +221,8 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         city: current.cityFilter,
         niche: current.nicheFilter,
         status: current.statusFilter,
+        minRating: minRatingVal,
+        maxRating: maxRatingVal,
         onlyWithoutWebsite: current.onlyWithoutWebsite,
         onlyWithPhone: current.onlyWithPhone,
         onlyFavorites: current.onlyFavorites,

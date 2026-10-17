@@ -20,10 +20,12 @@ import {
   Infinity as InfinityIcon,
   Sparkles,
   CheckCircle2,
+  Star,
 } from 'lucide-react';
 import { IBGEState, IBGECity, SearchJob, UserRole, Freelancer } from '../../types';
 import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from '../../lib/ibge/ibgeService';
 import { api, getActiveFreelancerSession } from '../../lib/api';
+import { RatingMode, RATING_PRESETS, resolveRatingRange } from '../../lib/search/ratingFilter';
 
 interface SearchFormViewProps {
   onJobStarted: (jobId: string) => void;
@@ -74,8 +76,17 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
   const [onlyWithPhone, setOnlyWithPhone] = useState<boolean>(false);
   const [minRating, setMinRating] = useState<number>(0);
   const [maxRating, setMaxRating] = useState<string>('');
+  const [ratingMode, setRatingMode] = useState<RatingMode>('any');
   const [minReviews, setMinReviews] = useState<number>(0);
   const [maxReviews, setMaxReviews] = useState<string>('');
+
+  const handleRatingModeChange = (mode: RatingMode) => {
+    setRatingMode(mode);
+    if (mode === 'custom') return;
+    const resolved = resolveRatingRange(mode);
+    setMinRating(resolved.minRating);
+    setMaxRating(resolved.maxRating !== undefined ? String(resolved.maxRating) : '');
+  };
 
   // Histórico de jobs
   const [recentJobs, setRecentJobs] = useState<SearchJob[]>([]);
@@ -602,42 +613,112 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                   </div>
                 </label>
 
-                {/* Nota mínima */}
-                <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs">
-                  <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
-                    Nota mínima no Google
-                  </label>
-                  <select
-                    value={minRating}
-                    onChange={(e) => setMinRating(Number(e.target.value))}
-                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
-                  >
-                    <option value={0}>Qualquer nota</option>
-                    <option value={3.0}>3,0 ou mais</option>
-                    <option value={3.5}>3,5 ou mais</option>
-                    <option value={4.0}>4,0 ou mais (Recomendado)</option>
-                    <option value={4.5}>4,5 ou mais (Alto padrão)</option>
-                  </select>
-                </div>
+                {/* Avaliação no Google */}
+                <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs space-y-2 col-span-1 sm:col-span-2 lg:col-span-1">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-semibold text-neutral-700">
+                      Avaliação no Google
+                    </label>
+                    {ratingMode === 'around_3_5' && (
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
+                        ~3.5 ativo
+                      </span>
+                    )}
+                  </div>
 
-                {/* Nota máxima: permite intervalos como 3,0–3,9 ou nota 3,5 exata. */}
-                <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs">
-                  <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
-                    Nota máxima no Google
-                  </label>
                   <select
-                    value={maxRating}
-                    onChange={(e) => setMaxRating(e.target.value)}
-                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
+                    value={ratingMode}
+                    onChange={(e) => handleRatingModeChange(e.target.value as RatingMode)}
+                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 font-medium shadow-2xs focus:border-neutral-900 focus:outline-hidden cursor-pointer"
                   >
-                    <option value="">Sem limite máximo</option>
-                    <option value="3.0">Até 3,0 estrelas</option>
-                    <option value="3.5">Até 3,5 estrelas</option>
-                    <option value="3.9">Até 3,9 estrelas</option>
-                    <option value="4.0">Até 4,0 estrelas</option>
-                    <option value="4.5">Até 4,5 estrelas</option>
+                    <option value="any">Qualquer nota (0 a 5)</option>
+                    <option value="around_3_5">⭐ Nota ~3,5 (3,0 a 3,9 - Similar)</option>
+                    <option value="exact_3_5">🎯 Nota 3,5 exata (3,5 estrelas)</option>
+                    <option value="up_to_3_5">⚠️ Até 3,5 estrelas (Notas baixas / Críticas)</option>
+                    <option value="min_3_0">3,0 ou mais</option>
+                    <option value="min_3_5">3,5 ou mais</option>
+                    <option value="min_4_0">4,0 ou mais (Recomendado)</option>
+                    <option value="min_4_5">4,5 ou mais (Alto padrão)</option>
+                    <option value="custom">⚙️ Intervalo manual...</option>
                   </select>
-                  <p className="text-[10px] text-neutral-500 mt-1">Para encontrar notas próximas de 3,5, use mínima 3,0 e máxima 3,9. Para exatamente 3,5, use 3,5 nos dois campos.</p>
+
+                  {/* Atalhos rápidos de 1 clique */}
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleRatingModeChange('around_3_5')}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                        ratingMode === 'around_3_5'
+                          ? 'bg-amber-400 text-neutral-950 font-bold shadow-2xs'
+                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                      }`}
+                    >
+                      ⭐ ~3,5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRatingModeChange('exact_3_5')}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                        ratingMode === 'exact_3_5'
+                          ? 'bg-neutral-900 text-white font-bold shadow-2xs'
+                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                      }`}
+                    >
+                      3,5 exata
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRatingModeChange('up_to_3_5')}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                        ratingMode === 'up_to_3_5'
+                          ? 'bg-rose-600 text-white font-bold shadow-2xs'
+                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                      }`}
+                    >
+                      Até 3,5
+                    </button>
+                  </div>
+
+                  {ratingMode === 'custom' && (
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-neutral-100">
+                      <div>
+                        <label className="text-[10px] text-neutral-500 block mb-0.5">Mínima</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="5"
+                          value={minRating || ''}
+                          onChange={(e) => setMinRating(Number(e.target.value))}
+                          placeholder="0.0"
+                          className="w-full text-xs p-1 border border-neutral-200 rounded font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-neutral-500 block mb-0.5">Máxima</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="5"
+                          value={maxRating}
+                          onChange={(e) => setMaxRating(e.target.value)}
+                          placeholder="5.0"
+                          className="w-full text-xs p-1 border border-neutral-200 rounded font-mono"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-neutral-500 leading-tight">
+                    {ratingMode === 'around_3_5' && 'Busca empresas com nota de 3,0 a 3,9 estrelas (próximas de 3,5).'}
+                    {ratingMode === 'exact_3_5' && 'Busca empresas estritamente com nota 3,5 estrelas.'}
+                    {ratingMode === 'up_to_3_5' && 'Busca empresas com nota até 3,5 estrelas.'}
+                    {ratingMode === 'any' && 'Sem restrição de nota.'}
+                    {ratingMode === 'min_3_5' && 'Busca empresas a partir de 3,5 estrelas.'}
+                    {ratingMode === 'min_4_0' && 'Busca empresas a partir de 4,0 estrelas.'}
+                    {ratingMode === 'min_4_5' && 'Busca empresas de alto padrão (4,5+).'}
+                  </p>
                 </div>
 
                 {/* Avaliações mínimas */}
@@ -693,7 +774,15 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                   {activeTargetLeads === 0 ? 'Sem limite' : `${activeTargetLeads} leads`}
                   {onlyWithPhone ? ' · C/ Tel' : ''}
                   {onlyWithoutWebsite ? ' · S/ Site' : ''}
-                  {minRating > 0 || maxRating !== '' ? ` · Nota ${minRating > 0 ? minRating.toLocaleString('pt-BR') : '0'}–${maxRating !== '' ? Number(maxRating).toLocaleString('pt-BR') : '5'}` : ''}
+                  {ratingMode === 'around_3_5'
+                    ? ' · ⭐ Nota ~3,5 (3,0–3,9)'
+                    : ratingMode === 'exact_3_5'
+                    ? ' · 🎯 Nota 3,5 exata'
+                    : ratingMode === 'up_to_3_5'
+                    ? ' · ⚠️ Até 3,5 estrelas'
+                    : (minRating > 0 || maxRating !== '')
+                    ? ` · Nota ${minRating > 0 ? minRating.toLocaleString('pt-BR') : '0'}–${maxRating !== '' ? Number(maxRating).toLocaleString('pt-BR') : '5'}`
+                    : ''}
                 </p>
               </div>
             </div>

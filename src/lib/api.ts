@@ -607,6 +607,7 @@ export const api = {
     excludeHidden?: boolean;
     onlyHidden?: boolean;
     minRating?: number;
+    maxRating?: number;
     minReviews?: number;
     minScore?: number;
     status?: string;
@@ -627,7 +628,8 @@ export const api = {
     if (params.onlyFavorites) query.set('onlyFavorites', 'true');
     if (params.excludeHidden) query.set('excludeHidden', 'true');
     if (params.onlyHidden) query.set('onlyHidden', 'true');
-    if (params.minRating) query.set('minRating', String(params.minRating));
+    if (params.minRating !== undefined && params.minRating !== null) query.set('minRating', String(params.minRating));
+    if (params.maxRating !== undefined && params.maxRating !== null) query.set('maxRating', String(params.maxRating));
     if (params.minReviews) query.set('minReviews', String(params.minReviews));
     if (params.minScore) query.set('minScore', String(params.minScore));
     if (params.status) query.set('status', params.status);

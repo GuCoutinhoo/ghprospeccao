@@ -1132,6 +1132,30 @@ var init_ibgeService = __esm({
   }
 });
 
+// src/lib/search/ratingFilter.ts
+function matchesRatingRange(ratingValue, filters) {
+  const minRating = filters.minRating || 0;
+  const maxRating = filters.maxRating;
+  if (minRating <= 0 && (maxRating === void 0 || maxRating === null)) {
+    return true;
+  }
+  const rating = Number(ratingValue);
+  if (!Number.isFinite(rating) || rating <= 0) {
+    return false;
+  }
+  if (minRating > 0 && rating < minRating) {
+    return false;
+  }
+  if (maxRating !== void 0 && maxRating !== null && rating > maxRating) {
+    return false;
+  }
+  return true;
+}
+var init_ratingFilter = __esm({
+  "src/lib/search/ratingFilter.ts"() {
+  }
+});
+
 // src/lib/search/searchWorker.ts
 var searchWorker_exports = {};
 __export(searchWorker_exports, {
@@ -1460,8 +1484,7 @@ function checkLeadFilters(place, filters) {
   if (filters.onlyWithPhone && (!place.phone || place.phone.trim().length < 8)) {
     return false;
   }
-  const rating = Number(place.rating || 0);
-  if (filters.minRating > 0 && rating < filters.minRating) {
+  if (!matchesRatingRange(place.rating, filters)) {
     return false;
   }
   const reviews = Number(place.reviews_count || 0);
@@ -1579,6 +1602,7 @@ var init_searchWorker = __esm({
     init_ibgeService();
     init_leadScore();
     init_sync();
+    init_ratingFilter();
     activeWorkers = /* @__PURE__ */ new Map();
   }
 });
@@ -4343,13 +4367,22 @@ app.post("/api/search-jobs", requireAuth, async (req, res) => {
       }
     }
     const userId = jobFreelancerId || "admin_1";
+    const minRatingValue = Number(filters?.minRating ?? 0);
+    const hasMaxRating = filters?.maxRating !== void 0 && filters?.maxRating !== null && filters?.maxRating !== "";
+    const maxRatingValue = hasMaxRating ? Number(filters.maxRating) : void 0;
+    if (!Number.isFinite(minRatingValue) || minRatingValue < 0 || minRatingValue > 5 || maxRatingValue !== void 0 && (!Number.isFinite(maxRatingValue) || maxRatingValue <= 0 || maxRatingValue > 5 || maxRatingValue < minRatingValue)) {
+      return res.status(400).json({ error: "Faixa de notas inv\xE1lida: a nota m\xE1xima deve ser maior ou igual \xE0 m\xEDnima, com valores entre 0 e 5." });
+    }
     const cleanFilters = {
       onlyWithoutWebsite: Boolean(filters?.onlyWithoutWebsite),
       onlyWithPhone: Boolean(filters?.onlyWithPhone),
-      minRating: Number(filters?.minRating ?? 0),
+      minRating: minRatingValue,
       minReviews: Number(filters?.minReviews ?? 0),
       targetLeads: filters?.targetLeads !== void 0 && filters?.targetLeads !== null && filters?.targetLeads !== "" ? Number(filters.targetLeads) : 0
     };
+    if (maxRatingValue !== void 0) {
+      cleanFilters.maxRating = maxRatingValue;
+    }
     if (filters?.maxReviews !== void 0 && filters?.maxReviews !== null && filters?.maxReviews !== "") {
       cleanFilters.maxReviews = Number(filters.maxReviews);
     }

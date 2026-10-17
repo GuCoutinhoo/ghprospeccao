@@ -17,6 +17,7 @@ import {
   AdminDashboardStats,
 } from '../../types';
 import { calculateLeadScore, DEFAULT_SCORING_WEIGHTS } from '../scoring/leadScore';
+import { matchesRatingRange } from '../search/ratingFilter';
 import {
   fetchAllFromFirestore,
   fetchGlobalConfigFromFirestore,
@@ -632,6 +633,7 @@ class Database {
     excludeHidden?: boolean;
     onlyHidden?: boolean;
     minRating?: number;
+    maxRating?: number;
     minReviews?: number;
     minScore?: number;
     status?: string;
@@ -699,8 +701,13 @@ class Database {
       filtered = filtered.filter((l) => Boolean(l.is_hidden));
     }
 
-    if (params.minRating) {
-      filtered = filtered.filter((l) => l.rating >= params.minRating!);
+    if (params.minRating !== undefined || params.maxRating !== undefined) {
+      filtered = filtered.filter((l) =>
+        matchesRatingRange(l.rating, {
+          minRating: params.minRating ?? 0,
+          maxRating: params.maxRating,
+        })
+      );
     }
 
     if (params.minReviews) {

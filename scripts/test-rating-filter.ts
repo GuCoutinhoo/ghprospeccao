@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesRatingRange } from '../src/lib/search/ratingFilter';
+import { matchesRatingRange, resolveRatingRange } from '../src/lib/search/ratingFilter';
 
 describe('Filtro por faixa de notas do Google', () => {
   it('preserva o comportamento sem filtro', () => {
@@ -31,5 +31,19 @@ describe('Filtro por faixa de notas do Google', () => {
     assert.equal(matchesRatingRange(4.8, { minRating: 0, maxRating: 3.5 }), false);
     assert.equal(matchesRatingRange(0, { minRating: 0, maxRating: 3.5 }), false);
     assert.equal(matchesRatingRange(undefined, { minRating: 0, maxRating: 3.5 }), false);
+  });
+
+  it('resolveRatingRange mapeia corretamente o modo around_3_5 e outros presets', () => {
+    const range35 = resolveRatingRange('around_3_5');
+    assert.equal(range35.minRating, 3.0);
+    assert.equal(range35.maxRating, 3.9);
+
+    const rangeExact = resolveRatingRange('exact_3_5');
+    assert.equal(rangeExact.minRating, 3.5);
+    assert.equal(rangeExact.maxRating, 3.5);
+
+    const rangeUpTo = resolveRatingRange('up_to_3_5');
+    assert.equal(rangeUpTo.minRating, 0.1);
+    assert.equal(rangeUpTo.maxRating, 3.5);
   });
 });
