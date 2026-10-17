@@ -91,6 +91,12 @@ export async function getRecords<T>(collection: string, filters?: { field: strin
     order: 'id.asc',
   });
   if (filters?.field === 'workspace_id') search.set('workspace_id', `eq.${filters.value}`);
+  // Push exact document ID predicates to PostgREST rather than downloading
+  // *every* query, search result or lead in the project on each poll.
+  const indexedDocumentFields = new Set(['search_job_id','job_id','place_id','lead_id']);
+  if (filters && indexedDocumentFields.has(filters.field)) {
+    search.set(`document->>${filters.field}`, `eq.${filters.value}`);
+  }
 
   const records: StoredRecord<T>[] = [];
   for (let offset = 0; offset < 1_000_000; offset += 500) {
