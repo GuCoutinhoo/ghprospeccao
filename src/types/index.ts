@@ -199,6 +199,8 @@ export interface SearchJob {
   processed_search_areas: number;
   places_found: number;
   places_without_website: number;
+  matching_filters?: number; // total de resultados que atendem todos os filtros, incluindo duplicados
+  metrics_version?: number; // 1 para buscas com contagem completa desde o início
   leads_created: number;
   error_message?: string;
   started_at?: string;
