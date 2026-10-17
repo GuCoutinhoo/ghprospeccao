@@ -41,6 +41,8 @@ jobs:
         run: npm run lint
       - name: Rating filter test
         run: npm run test:rating
+      - name: Supabase and login regression tests
+        run: npm test
       - name: Build
         run: npm run build
 
