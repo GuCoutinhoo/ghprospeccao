@@ -239,8 +239,8 @@ export class Repository {
   async logActivity(activity:Omit<Activity,'id'|'created_at'>) {const item=clean({...activity,id:crypto.randomUUID(),created_at:now()});await this.store.collection('activities').doc(item.id).create(item);return item;}
   async getSearchJob(id:string) {const job=await this.get<SearchJob>('search_jobs',id);if(job)assertOwner(job);return job;}
   async getAllSearchJobs(id?:string) {const actor=actorContext.getStore();return (await this.list<SearchJob>('search_jobs')).filter(j=>(id===undefined || isLeadInWorkspace(j,id)) && (actor?.role!=='freelancer'||isLeadInWorkspace(j,actor.freelancerId))).sort((a,b)=>b.created_at.localeCompare(a.created_at));}
-  async claimSearchJob(id:string,token:string,leaseMs=120_000) {return this.store.runTransaction(async tx=>{const ref=this.store.collection('search_jobs').doc(id);const snap=await tx.get(ref);if(!snap.exists)return false;const job={...snap.data(),id} as SearchJob;assertOwner(job);if(['cancelled','completed'].includes(job.status))return false;if(job.lease_token && job.lease_token!==token && (job.lease_until || 0)>Date.now())return false;tx.set(ref,clean({...job,status:'running',lease_token:token,lease_until:Date.now()+leaseMs,updated_at:now()}));return true;});}
-  async renewSearchJobLease(id:string,token:string,leaseMs=120_000) {return this.store.runTransaction(async tx=>{const ref=this.store.collection('search_jobs').doc(id);const snap=await tx.get(ref);if(!snap.exists || snap.data()?.lease_token!==token)return false;tx.update(ref,{lease_until:Date.now()+leaseMs,updated_at:now()});return true;});}
+  async claimSearchJob(id:string,token:string,leaseMs=80_000) {return this.store.runTransaction(async tx=>{const ref=this.store.collection('search_jobs').doc(id);const snap=await tx.get(ref);if(!snap.exists)return false;const job={...snap.data(),id} as SearchJob;assertOwner(job);if(!['pending','running'].includes(job.status))return false;if(job.lease_token && job.lease_token!==token && (job.lease_until || 0)>Date.now())return false;tx.set(ref,clean({...job,status:'running',lease_token:token,lease_until:Date.now()+leaseMs,started_at:job.started_at||now(),updated_at:now()}));return true;});}
+  async renewSearchJobLease(id:string,token:string,leaseMs=80_000) {return this.store.runTransaction(async tx=>{const ref=this.store.collection('search_jobs').doc(id);const snap=await tx.get(ref);if(!snap.exists || snap.data()?.lease_token!==token || snap.data()?.status!=='running')return false;tx.update(ref,{lease_until:Date.now()+leaseMs,updated_at:now()});return true;});}
   async releaseSearchJobLease(id:string,token:string) {return this.store.runTransaction(async tx=>{const ref=this.store.collection('search_jobs').doc(id);const snap=await tx.get(ref);if(!snap.exists || snap.data()?.lease_token!==token)return false;tx.update(ref,{lease_token:'',lease_until:0,updated_at:now()});return true;});}
   async createSearchJob(job:SearchJob,areas:SearchArea[]=[]) {
     // Areas are embedded in the initial document so no partially prepared job is runnable.
@@ -262,6 +262,23 @@ export class Repository {
     const areas=(job.area_plan||[]).map(area=>area.id===id?clean({...area,...updates,id}):area);
     await this.updateSearchJob(job.id,{area_plan:areas});
     return areas.find(area=>area.id===id);
+  }
+  // Update just the target job's area plan, avoiding a full search_jobs scan.
+  async updateJobArea(jobId:string,areaId:string,updates:Partial<SearchArea>) {
+    return this.store.runTransaction(async tx=>{
+      const ref=this.store.collection('search_jobs').doc(jobId);
+      const snap=await tx.get(ref);
+      if(!snap.exists)return undefined;
+      assertOwner(snap.data()!);
+      const original=(snap.data() as SearchJob).area_plan||[];
+      const index=original.findIndex(a=>a.id===areaId);
+      if(index<0)return undefined;
+      const updated=clean({...original[index],...updates,id:areaId});
+      const areas=original.slice();
+      areas[index]=updated;
+      tx.update(ref,{area_plan:areas,updated_at:now()});
+      return updated;
+    });
   }
   async logSearchQuery(query:SearchQueryLog) {await this.store.collection('search_queries').doc(query.id).create(clean(query));return query;}
   async logSearchResult(result:Record<string,unknown>&{id?:string}) {const id=result.id||crypto.randomUUID();const item=clean({...result,id});await this.store.collection('search_results').doc(id).set(item);return item;}

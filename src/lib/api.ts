@@ -842,6 +842,19 @@ export const api = {
     return res.json();
   },
 
+  async stepSearchJob(id: string): Promise<SearchJob> {
+    const response = await fetch(`/api/search-jobs/${encodeURIComponent(id)}/step`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Não foi possível continuar a varredura.');
+    }
+    const data = await response.json();
+    return data.job as SearchJob;
+  },
+
   async pauseSearchJob(id: string): Promise<boolean> {
     const res = await fetch(`/api/search-jobs/${id}/pause`, {
       method: 'POST',

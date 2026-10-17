@@ -213,6 +213,7 @@ export async function searchPlacesNearby(
         'X-Goog-FieldMask': OFFICIAL_PLACES_FIELD_MASK,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(12000),
     });
 
     if (!response.ok) {
@@ -289,6 +290,7 @@ export async function searchPlacesOfficial(
           'X-Goog-FieldMask': OFFICIAL_PLACES_FIELD_MASK,
         },
         body: JSON.stringify(body),
+      signal: AbortSignal.timeout(12000),
       });
 
       if (!response.ok) {

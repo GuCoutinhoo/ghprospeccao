@@ -1447,7 +1447,7 @@ app.get('/api/search-jobs', requireAuth, async (req: Request, res: Response) => 
     await cleanupStaleJobs();
     const scope = resolveWorkspaceScope(req);
     const jobs = await db.getAllSearchJobs(scope.freelancerId);
-    res.json(jobs);
+    res.json(jobs.map(({ area_plan, ...summary }) => summary));
   } catch (err: unknown) {
     const status = (err as any)?.status || 500;
     const message = err instanceof Error ? err.message : String(err);
@@ -1555,10 +1555,9 @@ app.post('/api/search-jobs', requireAuth, async (req: Request, res: Response) =>
       });
     }
 
-    // Inicia worker em segundo plano
-    runSearchJob(job.id).catch(console.error);
-
-    res.json({ job, estimatedQueries, totalCities, totalAreas });
+    // Serverless: do not abandon an asynchronous search after returning HTTP 200.
+    const { area_plan, ...summary } = job;
+    res.json({ job: summary, estimatedQueries, totalCities, totalAreas });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
@@ -1581,10 +1580,33 @@ app.get('/api/search-jobs/:id', requireAuth, async (req: Request, res: Response)
     }
 
     const [areas, queries] = await Promise.all([db.getSearchAreas(job.id), db.getSearchQueries(job.id)]);
-    res.json({ job, areas, queries });
+    const { area_plan, ...summary } = job;
+    const activeAreas = areas.filter(a => a.status !== 'pending').slice(-80);
+    const nextAreas = areas.filter(a => a.status === 'pending').slice(0, 20);
+    res.json({ job: summary, areas: [...activeAreas,...nextAreas], queries: queries.slice(-30) });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/search-jobs/:id/step', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const job = await db.getSearchJob(req.params.id);
+    if (!job) return res.status(404).json({ error: 'Busca não encontrada.' });
+    if (req.user!.role === 'freelancer' && !isLeadInWorkspace(job, req.user!.freelancerId)) {
+      return res.status(403).json({ error: 'Acesso negado ao workspace.' });
+    }
+    if (job.status === 'pending' || job.status === 'running') {
+      await runSearchJob(job.id, 1);
+    }
+    const fresh = await db.getSearchJob(job.id);
+    if (!fresh) return res.status(404).json({ error: 'Busca não encontrada.' });
+    const { area_plan, ...summary } = fresh;
+    res.json({ job: summary });
+  } catch (err: unknown) {
+    const status = (err as any)?.status || 500;
+    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
 
@@ -1701,38 +1723,7 @@ app.post('/api/settings/test-key', requireAdmin, async (req: Request, res: Respo
   }
 });
 
-// Auto-recuperação de jobs em andamento após reinício do processo
-const recoveryTimer = setTimeout(async () => {
-  try {
-    await cleanupStaleJobs();
-    const jobs = await db.getAllSearchJobs();
-    for (const job of jobs) {
-      if (job.status === 'running') {
-        const areas = await db.getSearchAreas(job.id);
-        const hasPending = areas.some((a) => a.status === 'pending' || a.status === 'processing' || a.status === 'failed');
-        if (hasPending && areas.length > 0) {
-          for (const a of areas) {
-            if (a.status === 'processing') {
-              await db.updateSearchArea(a.id, { status: 'pending' });
-            }
-          }
-          console.log(`[Server] Retomando busca pendente ${job.id} (${job.niche} em ${job.city})...`);
-          runSearchJob(job.id).catch(console.error);
-        } else {
-          // Não inventar conclusão após reinício se não houver evidência de término.
-          await db.updateSearchJob(job.id, {
-            status: 'failed',
-            error_message: 'Busca interrompida durante a execução. Retome para verificar as áreas pendentes.',
-            finished_at: new Date().toISOString(),
-          });
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('[Server] Falha ao verificar jobs anteriores:', err);
-  }
-}, 2000);
-recoveryTimer.unref?.();
+// Search slices are explicitly awaited by HTTP requests; no orphaned startup workers.
 
 export { app };
 export default app;

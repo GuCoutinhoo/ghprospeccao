@@ -132,7 +132,7 @@ export async function createAndPrepareSearchJob(params: {
   };
 }
 
-export async function runSearchJob(jobId: string) {
+export async function runSearchJob(jobId: string, maxAreas = Number.POSITIVE_INFINITY) {
   const job = await db.getSearchJob(jobId);
   if (!job) return;
 
@@ -147,20 +147,18 @@ export async function runSearchJob(jobId: string) {
   activeWorkers.set(jobId, worker);
 
   try {
-    await db.updateSearchJob(jobId, {
-      status: 'running',
-      started_at: job.started_at || new Date().toISOString(),
-    });
-
     const areas = await db.getSearchAreas(jobId);
-    const pendingAreas = areas.filter((a) => a.status === 'pending' || a.status === 'failed');
+    const pendingAreas = areas.filter((a) => a.status === 'pending' || (a.status === 'processing' && (job.lease_until || 0) < Date.now()));
     const settings = await db.getSettings();
     const targetGoal = job.target_leads || 0;
     let persistedLeadCount = job.leads_created || 0;
 
-    const citiesSeen = new Set<string>();
+    const citiesSeen = new Set(areas.filter(a=>a.status==='completed').map(a=>a.city));
+    let attemptedAreas = 0;
 
     for (const area of pendingAreas) {
+      if (attemptedAreas >= maxAreas) break;
+      attemptedAreas++;
       try {
         if (!(await db.renewSearchJobLease(jobId, leaseToken))) return;
         // Checa se já atingiu a meta de leads desejada pelo usuário
@@ -183,7 +181,7 @@ export async function runSearchJob(jobId: string) {
         }
 
         // Marca área como em processamento
-        await db.updateSearchArea(area.id, {
+        await db.updateJobArea(jobId, area.id, {
           status: 'processing',
           attempts: area.attempts + 1,
         });
@@ -216,7 +214,7 @@ export async function runSearchJob(jobId: string) {
         );
 
         if (res.isQuotaExceeded) {
-          await db.updateSearchArea(area.id, {
+          await db.updateJobArea(jobId, area.id, {
             status: 'failed',
             error: res.error || 'Limite de cota da Google Places API excedido.',
           });
@@ -235,6 +233,9 @@ export async function runSearchJob(jobId: string) {
           rawPlaces = res.places;
         }
 
+        // A pause/cancel on a different serverless instance is authoritative.
+        if ((await db.getSearchJob(jobId))?.status !== 'running') return;
+
         const durationMs = Date.now() - startTime;
 
         // Log da consulta realizada
@@ -251,7 +252,7 @@ export async function runSearchJob(jobId: string) {
         });
 
         if (queryError) {
-          await db.updateSearchArea(area.id, { status: 'failed', error: queryError });
+          await db.updateJobArea(jobId, area.id, { status: 'failed', error: queryError });
           const currentJob = await db.getSearchJob(jobId);
           if (currentJob) {
             await db.updateSearchJob(jobId, { processed_search_areas: currentJob.processed_search_areas + 1 });
@@ -353,7 +354,7 @@ export async function runSearchJob(jobId: string) {
         citiesSeen.add(area.city);
 
         // Atualiza status da área
-        await db.updateSearchArea(area.id, {
+        await db.updateJobArea(jobId, area.id, {
           status: 'completed',
           places_found: rawPlaces.length,
           processed_at: new Date().toISOString(),
@@ -377,11 +378,13 @@ export async function runSearchJob(jobId: string) {
         }
 
         // Delay de proteção contra rate limit
-        const delay = Math.max(300, settings.requestDelayMs || 600);
-        await new Promise((r) => setTimeout(r, delay));
+        if (maxAreas > 1) {
+          const delay = Math.max(300, settings.requestDelayMs || 600);
+          await new Promise((r) => setTimeout(r, delay));
+        }
       } catch (areaErr) {
         console.warn(`[SearchWorker] Erro ao processar área ${area.id}:`, areaErr);
-        await db.updateSearchArea(area.id, {
+        await db.updateJobArea(jobId, area.id, {
           status: 'failed',
           error: areaErr instanceof Error ? areaErr.message : String(areaErr),
         });
@@ -395,6 +398,11 @@ export async function runSearchJob(jobId: string) {
         }
       }
     }
+
+    // An HTTP slice is NOT the end of the search if any cell remains.
+    const remaining = await db.getSearchAreas(jobId);
+    const reachedGoal = targetGoal > 0 && persistedLeadCount >= targetGoal;
+    if (!reachedGoal && remaining.some(a => a.status === 'pending' || a.status === 'processing')) return;
 
     // Só concluir se as áreas processadas não falharam. Falhas devem ser visíveis e recuperáveis.
     const finalJob = await db.getSearchJob(jobId);
@@ -504,12 +512,11 @@ export async function resumeSearchJob(jobId: string): Promise<boolean> {
   });
   for (const a of areas) {
     if (a.status === 'failed' || a.status === 'processing') {
-      await db.updateSearchArea(a.id, { status: 'pending', error: undefined });
+      await db.updateJobArea(jobId, a.id, { status: 'pending', error: undefined });
     }
   }
 
-  // Roda em segundo plano
-  runSearchJob(jobId).catch(console.error);
+  // Processing resumes through authenticated, awaited HTTP slices.
   return true;
 }
 
@@ -554,11 +561,12 @@ export async function cleanupStaleJobs(): Promise<number> {
         // Se não há worker ativo em memória e o job não foi atualizado nos últimos 2 minutos
         const lastUpdated = job.updated_at ? new Date(job.updated_at).getTime() : 0;
         const isStale = (now - lastUpdated) > 120000;
-        if (!activeWorkers.has(job.id) && isStale) {
+        if (!activeWorkers.has(job.id) && isStale && (job.lease_until || 0) < now) {
           await db.updateSearchJob(job.id, {
-            status: 'failed',
-            error_message: 'A execução foi interrompida. Retome a busca para processar as áreas restantes.',
-            finished_at: new Date().toISOString(),
+            status: 'pending',
+            lease_token: '',
+            lease_until: 0,
+            error_message: undefined,
           });
           cleaned++;
           console.warn(`[SearchWorker] Busca interrompida detectada: ${job.id} (${job.niche})`);

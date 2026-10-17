@@ -36,34 +36,36 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Polling a cada 2 segundos enquanto estiver rodando
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
-    async function loadData() {
+  // Poll serially: never load the same 657-area job twice concurrently.
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async () => {
+      let keepRunning = false;
       try {
         const data = await api.getSearchJob(jobId);
+        if (stopped) return;
         setJob(data.job);
         setAreas(data.areas);
         setQueries(data.queries);
+        setErrorMsg(null);
+        keepRunning = data.job.status === 'running' || data.job.status === 'pending';
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setErrorMsg(msg);
+        if (stopped) return;
+        setErrorMsg(err instanceof Error ? err.message : String(err));
+        keepRunning = true;
       } finally {
-        setLoading(false);
+        if (!stopped) {
+          setLoading(false);
+          if (keepRunning) timer = setTimeout(load, 3000);
+        }
       }
-    }
-
-    loadData();
-
-    timer = setInterval(() => {
-      if (job?.status === 'running' || job?.status === 'pending') {
-        loadData();
-      }
-    }, 2000);
-
-    return () => clearInterval(timer);
-  }, [jobId, job?.status]);
+    };
+    void load();
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
+  }, [jobId, refreshNonce]);
 
   const handlePause = async () => {
     setActionLoading(true);
@@ -84,6 +86,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
       await api.resumeSearchJob(jobId);
       const data = await api.getSearchJob(jobId);
       setJob(data.job);
+      setRefreshNonce(n => n + 1);
     } catch (err) {
       console.error(err);
     } finally {
@@ -128,7 +131,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
   const leadsPercent = job.target_leads && job.target_leads > 0
     ? Math.min(100, Math.round((job.leads_created / job.target_leads) * 100))
     : 0;
-  const percent = job.status === 'completed' ? 100 : Math.max(areasPercent, leadsPercent);
+  const percent = job.status === 'completed' ? 100 : areasPercent;
 
   const statusLabels: Record<string, { label: string; bg: string; text: string; icon: React.ElementType }> = {
     running: { label: 'Em execução', bg: 'bg-blue-50 border-blue-200', text: 'text-blue-700', icon: RotateCw },
@@ -266,10 +269,10 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-neutral-700 uppercase tracking-wider text-[11px]">
-              Progresso Geral da Varredura
+              {job.status === 'completed' ? 'Busca Concluída' : 'Áreas Processadas'}
             </span>
             <span className="font-mono tabular-nums text-neutral-900 font-bold text-sm">
-              {percent}%
+              {percent}%{job.target_leads ? ` · ${leadsPercent}% da meta de leads` : ''}
             </span>
           </div>
 
@@ -347,7 +350,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
         <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-2xs">
           <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
             <h3 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
-              Áreas Geográficas Percorridas ({areas.length})
+              Áreas Geográficas ({areas.length} exibidas de {job.total_search_areas})
             </h3>
             <span className="text-[11px] text-neutral-400">Raio de varredura</span>
           </div>
@@ -395,7 +398,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
             <div className="flex items-center gap-1.5">
               <Terminal className="h-4 w-4 text-neutral-700" />
               <h3 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
-                Logs de Execução da API ({queries.length})
+                Últimos logs da API ({queries.length})
               </h3>
             </div>
             <span className="text-[11px] text-neutral-400 font-mono">Tempo real</span>
