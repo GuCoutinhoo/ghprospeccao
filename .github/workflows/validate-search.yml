@@ -1,0 +1,26 @@
+name: Validar varredura e regressões
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [fix/otimizar-varredura-20261017]
+
+permissions:
+  contents: read
+
+jobs:
+  verificacoes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:rating
+      - run: npm run build
