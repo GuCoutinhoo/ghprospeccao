@@ -22,8 +22,11 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  RotateCw,
+  ArrowRight,
 } from 'lucide-react';
 import { Freelancer, UserRole } from '../../types';
+import { api } from '../../lib/api';
 
 interface SidebarProps {
   currentPath: string;
@@ -31,6 +34,7 @@ interface SidebarProps {
   isOpenMobile: boolean;
   onCloseMobile: () => void;
   onLogout: () => void;
+  onSwitchToAdmin?: (adminUser: { name: string; email: string }) => void;
   hasCustomKey: boolean;
   userRole?: UserRole;
   freelancer?: Freelancer | null;
@@ -43,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile,
   onCloseMobile,
   onLogout,
+  onSwitchToAdmin,
   hasCustomKey,
   userRole = 'admin',
   freelancer,
@@ -52,7 +57,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
+  const [passwordErrorMessage, setPasswordErrorMessage] = useState('');
+  const [isLoggingInAdmin, setIsLoggingInAdmin] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const handleAdminPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPass = passwordInput.trim();
+    if (!cleanPass) {
+      setPasswordError(true);
+      setPasswordErrorMessage('Digite a senha de administrador.');
+      return;
+    }
+
+    setIsLoggingInAdmin(true);
+    setPasswordError(false);
+    setPasswordErrorMessage('');
+
+    try {
+      const email = adminUser?.email || 'gustavohcsantos.mm2020@gmail.com';
+      const res = await api.adminLogin(email, cleanPass);
+      setIsPasswordModalOpen(false);
+      setPasswordInput('');
+      setPasswordError(false);
+      setPasswordErrorMessage('');
+
+      if (onSwitchToAdmin) {
+        onSwitchToAdmin(res.user);
+      } else {
+        window.location.href = '/admin';
+      }
+    } catch (err: unknown) {
+      setPasswordError(true);
+      const msg = err instanceof Error ? err.message : 'Senha incorreta. Tente novamente.';
+      setPasswordErrorMessage(msg);
+    } finally {
+      setIsLoggingInAdmin(false);
+    }
+  };
 
   // Links do Administrador
   const adminManagementItems = [
@@ -338,17 +380,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (passwordInput.trim() === 'gu123') {
-                  setIsPasswordModalOpen(false);
-                  setPasswordInput('');
-                  setPasswordError(false);
-                  onLogout();
-                } else {
-                  setPasswordError(true);
-                }
-              }}
+              onSubmit={handleAdminPasswordSubmit}
               className="mt-4 space-y-3"
             >
               <div>
@@ -361,10 +393,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     value={passwordInput}
                     onChange={(e) => {
                       setPasswordInput(e.target.value);
-                      if (passwordError) setPasswordError(false);
+                      if (passwordError) {
+                        setPasswordError(false);
+                        setPasswordErrorMessage('');
+                      }
                     }}
                     autoFocus
-                    placeholder="Digite a senha..."
+                    placeholder="Digite a senha de administrador..."
+                    disabled={isLoggingInAdmin}
                     className={`w-full rounded-lg border px-3 py-2 text-sm pr-10 focus:outline-none transition-colors ${
                       passwordError
                         ? 'border-red-500 focus:border-red-500 ring-1 ring-red-500'
@@ -383,7 +419,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {passwordError && (
                   <div className="flex items-center gap-1.5 text-xs text-red-600 mt-1.5 font-medium">
                     <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                    <span>Senha incorreta. Tente novamente.</span>
+                    <span>{passwordErrorMessage || 'Senha incorreta. Tente novamente.'}</span>
                   </div>
                 )}
               </div>
@@ -395,16 +431,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     setIsPasswordModalOpen(false);
                     setPasswordInput('');
                     setPasswordError(false);
+                    setPasswordErrorMessage('');
                   }}
+                  disabled={isLoggingInAdmin}
                   className="px-3 py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                  disabled={isLoggingInAdmin}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg transition-colors shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
                 >
-                  Acessar Painel
+                  {isLoggingInAdmin ? (
+                    <>
+                      <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                      <span>Validando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Acessar Painel Geral</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </>
+                  )}
                 </button>
               </div>
             </form>

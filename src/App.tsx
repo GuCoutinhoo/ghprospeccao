@@ -388,6 +388,22 @@ export default function App() {
     }
   };
 
+  const handleSwitchToAdmin = (admin: { name: string; email: string }) => {
+    setAdminUser(admin);
+    setUserRole('admin');
+    setActiveFreelancer(null);
+    setIsAuthenticated(true);
+    setAuthMode('admin');
+    setCurrentPath('/admin');
+
+    if (typeof window !== 'undefined' && window.history && window.history.pushState) {
+      window.history.pushState(null, '', '/admin');
+    }
+
+    invalidateLeadsCache();
+    loadInitialData();
+  };
+
   // Títulos e subtítulos contextuais para o header
   const getHeaderMeta = () => {
     if (currentPath === '/admin' || currentPath === '/admin/dashboard') {
@@ -571,6 +587,7 @@ export default function App() {
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onLogout={handleLogout}
+        onSwitchToAdmin={handleSwitchToAdmin}
         hasCustomKey={hasCustomKey}
         userRole={userRole}
         freelancer={activeFreelancer}
