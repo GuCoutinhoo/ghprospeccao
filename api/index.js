@@ -1934,9 +1934,19 @@ async function runSearchJob(jobId) {
         let newPlacesFound = 0;
         let newWithoutWebsite = 0;
         let newLeadsCreated = 0;
-        for (const raw of rawPlaces) {
-          const normalizedPlace = normalizePlace(raw, area.city, area.state);
-          const { isNew } = await db.upsertPlace(normalizedPlace);
+        // Persist place metadata with bounded concurrency; lead creation stays sequential
+        // to preserve target counts, deduplication, and deleted-lead protections.
+        const preparedPlaces = [];
+        for (let batchStart = 0; batchStart < rawPlaces.length; batchStart += 4) {
+          const batch = rawPlaces.slice(batchStart, batchStart + 4);
+          const preparedBatch = await Promise.all(batch.map(async (raw) => {
+            const normalizedPlace = normalizePlace(raw, area.city, area.state);
+            const { isNew } = await db.upsertPlace(normalizedPlace);
+            return { normalizedPlace, isNew };
+          }));
+          preparedPlaces.push(...preparedBatch);
+        }
+        for (const { normalizedPlace, isNew } of preparedPlaces) {
           if (isNew) {
             newPlacesFound++;
           }
