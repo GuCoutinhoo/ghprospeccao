@@ -144,7 +144,8 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
   const [activePitchType, setActivePitchType] = useState<PitchType>('niche_specialized');
   const [customText, setCustomText] = useState<string>('');
   const [copiedSuccess, setCopiedSuccess] = useState<boolean>(false);
-  const [actionFeedback, setActionFeedback] = useState<{ message: string; type: 'success' | 'skip' | 'favorite' } | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ message: string; type: 'success' | 'skip' | 'favorite' | 'error' } | null>(null);
+  const [isTogglingHide, setIsTogglingHide] = useState(false);
 
   // Timer da sessão
   useEffect(() => {
@@ -158,7 +159,8 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
   const loadLeads = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.getLeads({ limit: 100, sortBy: 'score' });
+      // A esteira trabalha com todos os leads disponíveis, sem corte arbitrário em 100.
+      const res = await api.getLeads({ limit: 0, sortBy: 'score' });
       if (res && res.leads) {
         setAllLeads(res.leads);
       }
@@ -293,11 +295,11 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
   }, [currentLead, activePitchType, pitches]);
 
   // Mostra feedback temporário
-  const triggerFeedback = (message: string, type: 'success' | 'skip' | 'favorite') => {
+  const triggerFeedback = (message: string, type: 'success' | 'skip' | 'favorite' | 'error') => {
     setActionFeedback({ message, type });
     setTimeout(() => {
       setActionFeedback(null);
-    }, 2200);
+    }, type === 'error' ? 5000 : 2200);
   };
 
   // Copia texto para o clipboard
@@ -442,16 +444,25 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
 
   // Ocultar / Deixar Cinza (Evita pegar repetido)
   const handleToggleHide = async () => {
-    if (!currentLead) return;
+    if (!currentLead || isTogglingHide) return;
     const newHidden = !currentLead.is_hidden;
-    await api.toggleLeadHide(currentLead.id, newHidden);
-    setAllLeads((prev) =>
-      prev.map((l) => (l.id === currentLead.id ? { ...l, is_hidden: newHidden } : l))
-    );
-    triggerFeedback(
-      newHidden ? 'Lead ocultado (marcado como cinza para não repetir).' : 'Lead reexibido.',
-      'skip'
-    );
+    setIsTogglingHide(true);
+    try {
+      const updated = await api.toggleLeadHide(currentLead.id, newHidden);
+      setAllLeads((prev) =>
+        prev.map((l) => (l.id === currentLead.id ? { ...l, ...updated } : l))
+      );
+      if (newHidden) {
+        // Ocultar o último item não pode deixar a esteira em uma posição vazia.
+        setCurrentIndex((index) => Math.min(index, Math.max(0, queue.length - 2)));
+      }
+      triggerFeedback(newHidden ? 'Lead ocultado e salvo.' : 'Lead reexibido e salvo.', 'skip');
+    } catch (err) {
+      console.error('Erro ao salvar ocultação na esteira:', err);
+      triggerFeedback(err instanceof Error ? err.message : 'Não foi possível salvar a ocultação.', 'error');
+    } finally {
+      setIsTogglingHide(false);
+    }
   };
 
   // Marcar como Desqualificado / Perdido
@@ -700,6 +711,8 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
               ? 'bg-emerald-950 text-emerald-200 border-emerald-800'
               : actionFeedback.type === 'favorite'
               ? 'bg-amber-950 text-amber-200 border-amber-800'
+              : actionFeedback.type === 'error'
+              ? 'bg-rose-950 text-rose-100 border-rose-800'
               : 'bg-neutral-900 text-neutral-200 border-neutral-800'
           }`}
         >
@@ -887,6 +900,7 @@ export const SpeedOutreachView: React.FC<SpeedOutreachViewProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleToggleHide}
+                    disabled={isTogglingHide}
                     className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
                       currentLead.is_hidden
                         ? 'bg-neutral-800 text-amber-300 border-neutral-700'

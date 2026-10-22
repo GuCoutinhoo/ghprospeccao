@@ -1322,6 +1322,9 @@ app.post('/api/leads/:id/hide', requireAuth, async (req: Request, res: Response)
 
     const explicitValue = typeof req.body?.is_hidden === 'boolean' ? req.body.is_hidden : undefined;
     const updated = await db.toggleHideLead(req.params.id, explicitValue);
+    if (!updated) {
+      return res.status(404).json({ error: 'Lead não encontrado. Recarregue a lista.' });
+    }
     res.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

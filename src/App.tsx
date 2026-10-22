@@ -790,6 +790,7 @@ export default function App() {
           onClose={() => setSelectedLead(null)}
           onLeadUpdated={(updated) => {
             setSelectedLead(updated);
+            setRefreshTrigger((prev) => prev + 1);
             loadInitialData();
           }}
           onDeleteLead={() => {

@@ -739,11 +739,16 @@ export const api = {
       body: JSON.stringify(explicitValue !== undefined ? { is_hidden: explicitValue } : {}),
     });
     if (!res.ok) {
-      // Fallback via PATCH
-      return this.updateLead(id, { is_hidden: explicitValue !== undefined ? explicitValue : true });
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || 'Não foi possível salvar a ocultação do lead. Tente novamente.');
+    }
+    const updated = await res.json() as Lead | null;
+    if (!updated || updated.id !== id || typeof updated.is_hidden !== 'boolean' ||
+      (explicitValue !== undefined && updated.is_hidden !== explicitValue)) {
+      throw new Error('O servidor não confirmou a ocultação do lead. Atualize a lista e tente novamente.');
     }
     invalidateLeadsCache();
-    return res.json();
+    return updated;
   },
 
   async addLeadNote(id: string, content: string): Promise<LeadNote> {

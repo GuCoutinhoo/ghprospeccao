@@ -98,6 +98,8 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const [showConfirmDelete, setShowConfirmDelete] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isTogglingHide, setIsTogglingHide] = useState(false);
+  const [hideError, setHideError] = useState<string | null>(null);
 
   // Tabs do modal: 'loja' (vitrine e mapas), 'mockup' (prévia do site), 'pitch' (scripts), 'audit' (diagnóstico), 'notas'
   const [activeTab, setActiveTab] = useState<'loja' | 'mockup' | 'pitch' | 'audit' | 'notas'>('loja');
@@ -218,13 +220,18 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   };
 
   const handleToggleHide = async () => {
-    if (!lead) return;
+    if (!lead || isTogglingHide) return;
+    setIsTogglingHide(true);
+    setHideError(null);
     try {
-      const updated = await api.toggleLeadHide(lead.id);
+      const updated = await api.toggleLeadHide(lead.id, !lead.is_hidden);
       setLead(updated);
       onLeadUpdated(updated);
     } catch (err) {
       console.error('Erro ao alternar status de ocultação/cinza do lead:', err);
+      setHideError(err instanceof Error ? err.message : 'Não foi possível salvar a ocultação.');
+    } finally {
+      setIsTogglingHide(false);
     }
   };
 
@@ -353,6 +360,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
               <button
                 type="button"
                 onClick={handleToggleHide}
+                disabled={isTogglingHide}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all border shadow-xs cursor-pointer ${
                   lead.is_hidden
                     ? 'bg-neutral-800 text-amber-300 border-neutral-600 hover:bg-neutral-900 ring-1 ring-neutral-400'
@@ -372,6 +380,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
                   </>
                 )}
               </button>
+              {hideError && <span role="alert" className="text-xs text-rose-200 max-w-48">{hideError}</span>}
 
               <button
                 type="button"

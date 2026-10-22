@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import request from 'supertest';
 import { DocumentStore } from '../src/lib/supabase/documentStore';
+import { api } from '../src/lib/api';
 import { Repository, actorContext } from '../src/lib/store/repository';
 import { checkLeadFilters } from '../src/lib/search/searchWorker';
 import { searchPlacesOfficial, searchPlacesAdaptive } from '../src/lib/google/places';
@@ -295,6 +296,24 @@ test('persiste alterações comerciais e uma nova instância lê o mesmo estado'
   assert.equal(persisted?.notes,'Retornar amanhã');
 });
 
+test('nova varredura não reexibe lead ocultado e não transfere ocultação a outro workspace', async () => {
+  const harness=createSupabaseHarness(); globalThis.fetch=harness.fetchMock;
+  const repository=new Repository(new DocumentStore());
+  const original=(await repository.createLead(lead({place_id:'mesmo-local'}))).lead;
+  await repository.toggleHideLead(original.id,true);
+
+  const repeated=await repository.createLead(lead({id:'outro-id',place_id:'mesmo-local',name:'Nome atualizado na busca'}));
+  assert.equal(repeated.created,false);
+  assert.equal(repeated.lead.id,original.id);
+  assert.equal((await repository.getLeadById(original.id))?.is_hidden,true);
+
+  const another=await repository.createLead(lead({place_id:'mesmo-local',workspace_id:'free_beta',freelancer_id:'free_beta',user_id:'free_beta'}));
+  assert.equal(another.created,true);
+  assert.equal(another.lead.is_hidden,false);
+  assert.equal((await repository.getLeads({freelancer_id:'free_alpha',onlyHidden:true,limit:0})).total,1);
+  assert.equal((await repository.getLeads({freelancer_id:'free_beta',onlyHidden:true,limit:0})).total,0);
+});
+
 test('impede duplicação sob concorrência usando identidade determinística e retry otimista', async () => {
   const harness=createSupabaseHarness(); globalThis.fetch=harness.fetchMock;
   const repository=new Repository(new DocumentStore());
@@ -310,6 +329,52 @@ test('falha de escrita não é mascarada nem altera o estado persistido', async 
   harness.failCommit();
   await assert.rejects(repository.toggleHideLead(created.lead.id,true),/Supabase storage failure/);
   assert.equal((await repository.getLeadById(created.lead.id))?.is_hidden,false);
+});
+
+test('API de ocultação persiste após recarregar e reporta falha real de gravação', async () => {
+  const harness=createSupabaseHarness(); globalThis.fetch=harness.fetchMock;
+  const repository=new Repository(new DocumentStore());
+  const freelancer=await repository.createFreelancer({name:'Teste de Ocultação',email:'hide@example.com',access_code:'hide-test'});
+  const existing=await repository.createLead(lead({workspace_id:freelancer.id,freelancer_id:freelancer.id,user_id:freelancer.id}));
+  const {app}=await import('../src/server/app');
+  const login=await request(app).post('/api/freelancer/auth/verify').send({accessCode:'hide-test'}).expect(200);
+  const auth=`Bearer ${login.body.token}`;
+  const endpoint=`/api/leads/${existing.lead.id}/hide`;
+
+  const hidden=await request(app).post(endpoint).set('Authorization',auth).send({is_hidden:true}).expect(200);
+  assert.equal(hidden.body.is_hidden,true);
+  const reloaded=await request(app).get(`/api/leads/${existing.lead.id}`).set('Authorization',auth).expect(200);
+  assert.equal(reloaded.body.lead.is_hidden,true,'F5 deve ler o estado persistido');
+
+  harness.failCommit();
+  await request(app).post(endpoint).set('Authorization',auth).send({is_hidden:false}).expect(500);
+  assert.equal((await repository.getLeadById(existing.lead.id))?.is_hidden,true,
+    'Falha temporária não pode reexibir o lead no banco');
+});
+
+test('cliente de ocultação não mascara erro com PATCH e exige confirmação do servidor', async () => {
+  const original=globalThis.fetch;
+  const calls:string[]=[];
+  try {
+    globalThis.fetch=async(input,init) => {
+      calls.push(`${init?.method} ${input}`);
+      return new Response(JSON.stringify({error:'Gravação indisponível'}),{status:503,headers:{'Content-Type':'application/json'}});
+    };
+    await assert.rejects(api.toggleLeadHide('lead-test',true),/Gravação indisponível/);
+    assert.deepEqual(calls,['POST /api/leads/lead-test/hide'],'erro de ocultação não deve disparar PATCH implícito');
+
+    globalThis.fetch=async()=>new Response(JSON.stringify({id:'lead-test',is_hidden:false}),{
+      status:200,headers:{'Content-Type':'application/json'},
+    });
+    await assert.rejects(api.toggleLeadHide('lead-test',true),/não confirmou/);
+
+    globalThis.fetch=async()=>new Response(JSON.stringify({id:'lead-test',is_hidden:true}),{
+      status:200,headers:{'Content-Type':'application/json'},
+    });
+    assert.equal((await api.toggleLeadHide('lead-test',true)).is_hidden,true);
+  } finally {
+    globalThis.fetch=original;
+  }
 });
 
 test('contexto de freelancer bloqueia leitura e mutação de outro workspace', async () => {

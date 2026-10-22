@@ -200,6 +200,9 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   };
 
   const requestIdRef = useRef(0);
+  // Impede que respostas antigas da atualização automática desfaçam uma ocultação pendente.
+  const pendingHideRef = useRef(new Map<string, boolean>());
+  const [hidingLeadIds, setHidingLeadIds] = useState<string[]>([]);
 
   const loadLeads = useCallback(async (silent = false) => {
     const thisRequestId = ++requestIdRef.current;
@@ -240,7 +243,9 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
       if (thisRequestId !== requestIdRef.current) return;
 
       // Atualiza os leads com a resposta exata do servidor
-      setLeads(data.leads || []);
+      setLeads((data.leads || []).map((lead) => pendingHideRef.current.has(lead.id)
+        ? { ...lead, is_hidden: pendingHideRef.current.get(lead.id)! }
+        : lead));
       setTotal(data.total ?? 0);
       setTotalPages(data.totalPages || 1);
       setLoadError(null);
@@ -398,42 +403,59 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   const handleToggleFavorite = async (e: React.MouseEvent, leadId: string) => {
     e.stopPropagation();
-    // Otimista
-    setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, is_favorite: !l.is_favorite } : l))
-    );
     try {
       const updated = await api.toggleLeadFavorite(leadId);
-      setLeads((prev) => prev.map((l) => (l.id === leadId ? updated : l)));
+      setLeads((prev) => prev.map((l) => (l.id === leadId
+        ? { ...l, ...updated, is_hidden: pendingHideRef.current.get(leadId) ?? updated.is_hidden }
+        : l)));
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao salvar favorito:', err);
+      setToastMessage({type:'error',text:'Não foi possível salvar o favorito. Tente novamente.'});
     }
   };
 
   const handleToggleHide = async (e: React.MouseEvent, leadId: string) => {
     e.stopPropagation();
     const targetLead = leads.find((l) => l.id === leadId);
-    const newHiddenState = !targetLead?.is_hidden;
+    if (!targetLead || pendingHideRef.current.has(leadId)) return;
+    const newHiddenState = !targetLead.is_hidden;
+    pendingHideRef.current.set(leadId, newHiddenState);
+    setHidingLeadIds((prev) => [...prev, leadId]);
+    // Descarta carregamentos iniciados antes da ação do usuário.
+    requestIdRef.current += 1;
 
-    // Atualização otimista imediata na interface
+    // Atualização provisória; só confirma após persistência no Supabase.
     setLeads((prev) =>
       prev.map((l) => (l.id === leadId ? { ...l, is_hidden: newHiddenState } : l))
     );
 
-    setToastMessage({
-      type: 'success',
-      text: newHiddenState
-        ? `"${targetLead?.name || 'Lead'}" ocultado (marcado como cinza).`
-        : `"${targetLead?.name || 'Lead'}" reexibido.`,
-    });
-
     try {
       const updated = await api.toggleLeadHide(leadId, newHiddenState);
+      requestIdRef.current += 1;
       setLeads((prev) =>
-        prev.map((l) => (l.id === leadId ? { ...l, ...updated, is_hidden: newHiddenState } : l))
+        prev.map((l) => (l.id === leadId ? { ...l, ...updated } : l))
       );
+      setToastMessage({
+        type: 'success',
+        text: newHiddenState
+          ? `"${targetLead.name}" ocultado e salvo com sucesso.`
+          : `"${targetLead.name}" reexibido e salvo com sucesso.`,
+      });
+      // Confere o estado persistido, inclusive durante varreduras simultâneas.
+      await loadLeads(true);
     } catch (err) {
       console.error('Erro ao alternar ocultação do lead:', err);
+      pendingHideRef.current.delete(leadId);
+      requestIdRef.current += 1;
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, is_hidden: targetLead.is_hidden } : l)));
+      setToastMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'A ocultação não foi salva. Tente novamente.',
+      });
+      await loadLeads(true);
+    } finally {
+      pendingHideRef.current.delete(leadId);
+      setHidingLeadIds((prev) => prev.filter((id) => id !== leadId));
     }
   };
 
@@ -1385,6 +1407,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                         <button
                           type="button"
                           onClick={(e) => handleToggleHide(e, lead.id)}
+                          disabled={hidingLeadIds.includes(lead.id)}
                           className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                             lead.is_hidden
                               ? 'bg-neutral-800 text-amber-300 hover:bg-neutral-900 ring-1 ring-neutral-400'
@@ -1579,6 +1602,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                     <button
                       type="button"
                       onClick={(e) => handleToggleHide(e, lead.id)}
+                      disabled={hidingLeadIds.includes(lead.id)}
                       className={`w-full py-1.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer border shadow-2xs ${
                         lead.is_hidden
                           ? 'bg-neutral-800 text-amber-300 border-neutral-700 hover:bg-neutral-900 ring-1 ring-neutral-400'
@@ -1780,6 +1804,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
                           <button
                             type="button"
                             onClick={(e) => handleToggleHide(e, lead.id)}
+                            disabled={hidingLeadIds.includes(lead.id)}
                             title={lead.is_hidden ? 'Lead marcado como cinza (já coletado). Clique para reexibir' : 'Ocultar lead (deixar cinza para não pegar repetido)'}
                             className={`p-1.5 rounded-md transition-colors cursor-pointer ${
                               lead.is_hidden

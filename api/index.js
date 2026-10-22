@@ -92,6 +92,10 @@ async function getRecords(collection, filters) {
     order: "id.asc"
   });
   if (filters?.field === "workspace_id") search.set("workspace_id", `eq.${filters.value}`);
+  const indexedDocumentFields = /* @__PURE__ */ new Set(["search_job_id", "job_id", "place_id", "lead_id"]);
+  if (filters && indexedDocumentFields.has(filters.field)) {
+    search.set(`document->>${filters.field}`, `eq.${filters.value}`);
+  }
   const records = [];
   for (let offset = 0; offset < 1e6; offset += 500) {
     const page = await request(`app_records?${search}`, {
@@ -103,6 +107,23 @@ async function getRecords(collection, filters) {
   }
   if (!filters || filters.field === "workspace_id") return records;
   return records.filter((record) => record.document?.[filters.field] === filters.value);
+}
+async function getRecordsByIds(collection, ids) {
+  validateCollection(collection);
+  if (!ids.length) return [];
+  const unique = [...new Set(ids)];
+  const result = [];
+  for (let offset = 0; offset < unique.length; offset += 80) {
+    const chunk = unique.slice(offset, offset + 80);
+    const escapeId = (id) => '"' + id.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+    const query = new URLSearchParams({
+      select: "collection,id,workspace_id,document,revision",
+      collection: `eq.${collection}`,
+      id: `in.(${chunk.map(escapeId).join(",")})`
+    });
+    result.push(...await request(`app_records?${query}`));
+  }
+  return result;
 }
 async function getRecord(collection, id) {
   validateCollection(collection);
@@ -174,7 +195,10 @@ var Query = class _Query {
     const workspace = this.predicates.find(
       (predicate) => !("kind" in predicate) && predicate.field === "workspace_id" && predicate.operator === "=="
     );
-    const all = await getRecords(this.collectionName, workspace ? { field: "workspace_id", value: String(workspace.value) } : void 0);
+    const searchable = /* @__PURE__ */ new Set(["search_job_id", "job_id", "place_id", "lead_id"]);
+    const exact = this.predicates.find((predicate) => !("kind" in predicate) && predicate.operator === "==" && searchable.has(predicate.field));
+    const pushdown = workspace ? { field: "workspace_id", value: String(workspace.value) } : exact ? { field: exact.field, value: String(exact.value) } : void 0;
+    const all = await getRecords(this.collectionName, pushdown);
     const docs = all.filter((record) => this.predicates.every((predicate) => matches(record.document, predicate))).slice(0, this.maximum === void 0 ? void 0 : Math.max(0, this.maximum)).map((record) => new DocumentSnapshot(record.id, record.document, record.revision, new DocumentReference(record.collection, record.id)));
     return new QuerySnapshot(docs);
   }
@@ -236,6 +260,23 @@ var Transaction = class {
     }
     return snapshot;
   }
+  /** Bulk read, including missing documents, with optimistic revision tracking. */
+  async getMany(collectionName, ids) {
+    const unique = [...new Set(ids)];
+    const records = await getRecordsByIds(collectionName, unique);
+    const byId = new Map(records.map((record) => [record.id, record]));
+    return unique.map((id) => {
+      const record = byId.get(id);
+      const ref = new DocumentReference(collectionName, id);
+      const snapshot = new DocumentSnapshot(id, record?.document, record?.revision || 0, ref);
+      const key = `${collectionName}/${id}`;
+      this.cache.set(key, snapshot);
+      if (!this.reads.some((read) => read.collection === collectionName && read.id === id)) {
+        this.reads.push({ collection: collectionName, id, revision: snapshot.revision });
+      }
+      return snapshot;
+    });
+  }
   async getAll(...references) {
     return Promise.all(references.map((reference) => this.get(reference)));
   }
@@ -277,6 +318,8 @@ var DocumentStore = class {
         return result;
       } catch (error) {
         if (index === attempts - 1 || !/GH_TX_CONFLICT|40001|serialization|23505|duplicate key/i.test(String(error))) throw error;
+        const delayMs = Math.min(400, 25 * 2 ** index) + Math.floor(Math.random() * 25);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
     throw new Error("Transaction retry exhausted.");
@@ -995,6 +1038,26 @@ var Repository = class {
       return { place, isNew: !previous.exists };
     });
   }
+  /** One selective read and one atomic commit for all Places in the Google response. */
+  async upsertPlacesBatch(places) {
+    const unique = [...new Map(places.map((place) => [place.id, place])).values()];
+    if (!unique.length) return /* @__PURE__ */ new Set();
+    return this.store.runTransaction(async (tx) => {
+      const snapshots = await tx.getMany("places", unique.map((place) => place.id));
+      const newIds = new Set(snapshots.filter((snapshot) => !snapshot.exists).map((snapshot) => snapshot.id));
+      for (const place of unique) tx.set(this.store.collection("places").doc(place.id), clean(place), { merge: true });
+      return newIds;
+    });
+  }
+  async logSearchResultsBatch(results) {
+    if (!results.length) return;
+    await this.store.runTransaction(async (tx) => {
+      for (const result of results) {
+        const id = result.id || crypto3.randomUUID();
+        tx.create(this.store.collection("search_results").doc(id), clean({ ...result, id }));
+      }
+    });
+  }
   async createLead(lead) {
     assertOwner(lead);
     return this.store.runTransaction(async (tx) => this.createLeadInTransaction(tx, lead));
@@ -1140,10 +1203,15 @@ var Repository = class {
     const allowed = ["name", "email", "access_code", "notes", "pin", "pin_hash", "status", "last_access_at", "last_activity_at"];
     return this.store.runTransaction(async (tx) => {
       const ref = this.store.collection("freelancers").doc(id);
-      const [snap, all] = await Promise.all([tx.get(ref), tx.get(this.store.collection("freelancers"))]);
+      const snap = await tx.get(ref);
       if (!snap.exists || snap.data()?.deleted_at) return void 0;
       const accepted = Object.fromEntries(Object.entries(updates).filter(([k]) => allowed.includes(k)));
-      if (accepted.access_code && all.docs.some((doc) => doc.id !== id && String(doc.data()?.access_code || "").toLowerCase() === String(accepted.access_code).toLowerCase())) throw Object.assign(new Error("Link de acesso j\xE1 est\xE1 em uso."), { status: 409 });
+      if (accepted.access_code) {
+        const all = await tx.get(this.store.collection("freelancers"));
+        if (all.docs.some((doc) => doc.id !== id && String(doc.data()?.access_code || "").toLowerCase() === String(accepted.access_code).toLowerCase())) {
+          throw Object.assign(new Error("Link de acesso j\xE1 est\xE1 em uso."), { status: 409 });
+        }
+      }
       const f = clean({ ...snap.data(), ...accepted, id, updated_at: now() });
       tx.set(ref, f);
       return f;
@@ -1180,24 +1248,24 @@ var Repository = class {
     const actor = actorContext.getStore();
     return (await this.list("search_jobs")).filter((j) => (id === void 0 || isLeadInWorkspace(j, id)) && (actor?.role !== "freelancer" || isLeadInWorkspace(j, actor.freelancerId))).sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
-  async claimSearchJob(id, token, leaseMs = 12e4) {
+  async claimSearchJob(id, token, leaseMs = 8e4) {
     return this.store.runTransaction(async (tx) => {
       const ref = this.store.collection("search_jobs").doc(id);
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const job = { ...snap.data(), id };
       assertOwner(job);
-      if (["cancelled", "completed"].includes(job.status)) return false;
+      if (!["pending", "running"].includes(job.status)) return false;
       if (job.lease_token && job.lease_token !== token && (job.lease_until || 0) > Date.now()) return false;
-      tx.set(ref, clean({ ...job, status: "running", lease_token: token, lease_until: Date.now() + leaseMs, updated_at: now() }));
+      tx.update(ref, { status: "running", lease_token: token, lease_until: Date.now() + leaseMs, started_at: job.started_at || now(), updated_at: now() });
       return true;
     });
   }
-  async renewSearchJobLease(id, token, leaseMs = 12e4) {
+  async renewSearchJobLease(id, token, leaseMs = 8e4) {
     return this.store.runTransaction(async (tx) => {
       const ref = this.store.collection("search_jobs").doc(id);
       const snap = await tx.get(ref);
-      if (!snap.exists || snap.data()?.lease_token !== token) return false;
+      if (!snap.exists || snap.data()?.lease_token !== token || snap.data()?.status !== "running") return false;
       tx.update(ref, { lease_until: Date.now() + leaseMs, updated_at: now() });
       return true;
     });
@@ -1249,6 +1317,76 @@ var Repository = class {
     const areas = (job.area_plan || []).map((area) => area.id === id ? clean({ ...area, ...updates, id }) : area);
     await this.updateSearchJob(job.id, { area_plan: areas });
     return areas.find((area) => area.id === id);
+  }
+  // Update just the target job's area plan, avoiding a full search_jobs scan.
+  async updateJobArea(jobId, areaId, updates) {
+    return this.store.runTransaction(async (tx) => {
+      const ref = this.store.collection("search_jobs").doc(jobId);
+      const snap = await tx.get(ref);
+      if (!snap.exists) return void 0;
+      assertOwner(snap.data());
+      const original = snap.data().area_plan || [];
+      const index = original.findIndex((a) => a.id === areaId);
+      if (index < 0) return void 0;
+      const updated = clean({ ...original[index], ...updates, id: areaId });
+      const areas = original.slice();
+      areas[index] = updated;
+      tx.update(ref, { area_plan: areas, updated_at: now() });
+      return updated;
+    });
+  }
+  /** Complete one search cell and its counters atomically after all receipts are saved. */
+  async completeSearchArea(jobId, areaId, leaseToken, metrics) {
+    return this.store.runTransaction(async (tx) => {
+      const ref = this.store.collection("search_jobs").doc(jobId);
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const job = snap.data();
+      assertOwner(job);
+      if (job.status !== "running" || job.lease_token !== leaseToken) return false;
+      const areas = job.area_plan || [];
+      const index = areas.findIndex((a) => a.id === areaId);
+      if (index < 0 || areas[index].status === "completed") return false;
+      const updatedAreas = areas.slice();
+      updatedAreas[index] = clean({ ...areas[index], status: "completed", places_found: metrics.placesInArea, new_places_found: metrics.newPlaces, matching_filters: metrics.matchingFilters, new_leads: metrics.newLeads, processed_at: now(), error: void 0 });
+      const processedCities = new Set(updatedAreas.filter((a) => a.status === "completed").map((a) => a.city)).size;
+      tx.update(ref, {
+        area_plan: updatedAreas,
+        processed_search_areas: updatedAreas.filter((a) => a.status === "completed" || a.status === "failed").length,
+        processed_cities: processedCities,
+        places_found: (job.places_found || 0) + metrics.newPlaces,
+        places_without_website: (job.places_without_website || 0) + metrics.withoutSite,
+        leads_created: (job.leads_created || 0) + metrics.newLeads,
+        matching_filters: (job.matching_filters || 0) + metrics.matchingFilters,
+        updated_at: now()
+      });
+      return true;
+    });
+  }
+  /** Retry only incomplete cells, resetting them in ONE transaction (not 170 RPC calls). */
+  async prepareSearchJobResume(jobId) {
+    return this.store.runTransaction(async (tx) => {
+      const ref = this.store.collection("search_jobs").doc(jobId);
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const job = snap.data();
+      assertOwner(job);
+      if (!["paused", "failed"].includes(job.status)) return false;
+      const plan = job.area_plan || [];
+      const recovered = plan.map((area) => ["failed", "processing"].includes(area.status) ? clean({ ...area, status: "pending", error: void 0 }) : area);
+      const completed = recovered.filter((area) => area.status === "completed");
+      tx.update(ref, {
+        area_plan: recovered,
+        status: "pending",
+        lease_token: "",
+        lease_until: 0,
+        processed_search_areas: completed.length,
+        processed_cities: new Set(completed.map((area) => area.city)).size,
+        error_message: "",
+        updated_at: now()
+      });
+      return true;
+    });
   }
   async logSearchQuery(query) {
     await this.store.collection("search_queries").doc(query.id).create(clean(query));
@@ -1593,7 +1731,7 @@ function getIncludedTypesForQuery(query) {
   }
   return void 0;
 }
-async function searchPlacesNearby(apiKey, center, radius, includedTypes) {
+async function searchPlacesNearby(apiKey, center, radius, includedTypes, rankPreference = "POPULARITY") {
   const endpoint = "https://places.googleapis.com/v1/places:searchNearby";
   const body = {
     locationRestriction: {
@@ -1602,7 +1740,8 @@ async function searchPlacesNearby(apiKey, center, radius, includedTypes) {
         radius: Math.max(1e3, Math.min(radius || 8e3, 5e4))
       }
     },
-    maxResultCount: 20
+    maxResultCount: 20,
+    rankPreference
   };
   if (includedTypes && includedTypes.length > 0) {
     body.includedTypes = includedTypes;
@@ -1615,7 +1754,8 @@ async function searchPlacesNearby(apiKey, center, radius, includedTypes) {
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask": OFFICIAL_PLACES_FIELD_MASK
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(12e3)
     });
     if (!response.ok) {
       const errorJson = await response.json().catch(() => null);
@@ -1631,7 +1771,20 @@ async function searchPlacesNearby(apiKey, center, radius, includedTypes) {
     return { places: [], error: msg };
   }
 }
-async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
+async function searchPlacesAdaptive(query, apiKey, options) {
+  const circle = options?.locationBias?.circle;
+  const center = circle?.center;
+  const types = getIncludedTypesForQuery(query);
+  const validCoordinates = center && Number.isFinite(center.latitude) && Number.isFinite(center.longitude) && center.latitude !== 0 && center.longitude !== 0;
+  if (apiKey?.trim() && validCoordinates && types?.length) {
+    const nearby = await searchPlacesNearby(apiKey, center, circle?.radius || 12e3, types, "DISTANCE");
+    if (!nearby.error) return { places: nearby.places, source: "nearby" };
+    const textResult = await searchPlacesOfficial(query, apiKey, options, 1, false);
+    return { ...textResult, source: "text" };
+  }
+  return { ...await searchPlacesOfficial(query, apiKey, options), source: "text" };
+}
+async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2, allowNearbyFallback = true) {
   if (!apiKey || apiKey.trim() === "") {
     return { places: [], error: "GOOGLE_MAPS_API_KEY_MISSING" };
   }
@@ -1656,6 +1809,7 @@ async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
     };
   }
   let lastError;
+  const typesForNearby = getIncludedTypesForQuery(query) || [];
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(endpoint, {
@@ -1665,22 +1819,25 @@ async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
           "X-Goog-Api-Key": apiKey,
           "X-Goog-FieldMask": OFFICIAL_PLACES_FIELD_MASK
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(12e3)
       });
       if (!response.ok) {
         const errorJson = await response.json().catch(() => null);
         const errorMessage = errorJson?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
         lastError = errorMessage;
-        if (hasValidCenter && (response.status === 429 || errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("resource_exhausted"))) {
-          console.warn("[Places] Cota de SearchTextRequest atingida, alternando para searchNearby...");
-          const center = options?.locationBias?.circle?.center;
-          if (center) {
-            const types = getIncludedTypesForQuery(query);
-            const nearbyRes = await searchPlacesNearby(apiKey, center, options?.locationBias?.circle?.radius || 12e3, types);
-            if (nearbyRes.places && nearbyRes.places.length > 0) {
-              return { places: nearbyRes.places };
-            }
+        const quotaExceeded = response.status === 429 || /quota|resource_exhausted/i.test(errorMessage);
+        if (quotaExceeded) {
+          if (allowNearbyFallback && hasValidCenter && typesForNearby.length && options?.locationBias?.circle?.center) {
+            const nearbyRes = await searchPlacesNearby(
+              apiKey,
+              options.locationBias.circle.center,
+              options.locationBias.circle.radius || 12e3,
+              getIncludedTypesForQuery(query)
+            );
+            if (nearbyRes.places.length > 0) return { places: nearbyRes.places };
           }
+          return { places: [], error: errorMessage, isQuotaExceeded: true };
         }
         const isTemporary = response.status === 503 || response.status === 500;
         if (isTemporary && attempt < maxRetries) {
@@ -1693,13 +1850,6 @@ async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
       if (data.places && data.places.length > 0) {
         return { places: data.places };
       }
-      if (hasValidCenter && options?.locationBias?.circle?.center) {
-        const types = getIncludedTypesForQuery(query);
-        const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 12e3, types);
-        if (nearbyRes.places && nearbyRes.places.length > 0) {
-          return { places: nearbyRes.places };
-        }
-      }
       return { places: [] };
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
@@ -1708,7 +1858,7 @@ async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
       }
     }
   }
-  if (hasValidCenter && options?.locationBias?.circle?.center) {
+  if (allowNearbyFallback && hasValidCenter && typesForNearby.length && options?.locationBias?.circle?.center) {
     try {
       const types = getIncludedTypesForQuery(query);
       const nearbyRes = await searchPlacesNearby(apiKey, options.locationBias.circle.center, options.locationBias.circle.radius || 12e3, types);
@@ -1719,6 +1869,35 @@ async function searchPlacesOfficial(query, apiKey, options, maxRetries = 2) {
     }
   }
   return { places: [], error: lastError };
+}
+
+// src/lib/search/smartScheduler.ts
+function prioritizeSearchAreas(areas) {
+  const firstCities = [...new Set(areas.map((area) => area.city))].slice(0, 16);
+  const cityOrder = /* @__PURE__ */ new Map();
+  const metrics = /* @__PURE__ */ new Map();
+  areas.forEach((area, index) => {
+    if (!cityOrder.has(area.city)) cityOrder.set(area.city, index);
+    if (area.status !== "completed") return;
+    const stat = metrics.get(area.city) || { count: 0, matches: 0, leads: 0, unique: 0, saturation: 0 };
+    stat.count++;
+    stat.matches += area.matching_filters || 0;
+    stat.leads += area.new_leads || 0;
+    stat.unique += area.new_places_found === void 0 ? Math.min(20, area.places_found) / 2 : area.new_places_found;
+    if ((area.new_places_found ?? 20) <= 2 && (area.matching_filters || 0) === 0) stat.saturation++;
+    metrics.set(area.city, stat);
+  });
+  function score(city) {
+    const priority = firstCities.includes(city);
+    const stat = metrics.get(city);
+    if (!stat) return priority ? 70 : 22;
+    const avgMatches = stat.matches / stat.count;
+    const avgLeads = stat.leads / stat.count;
+    const avgNew = stat.unique / stat.count;
+    const varietyPenalty = Math.min(65, stat.count * 9);
+    return (priority ? 28 : 0) + avgMatches * 32 + avgLeads * 42 + Math.min(20, avgNew * 1.2) - varietyPenalty - stat.saturation * 10;
+  }
+  return areas.filter((area) => area.status === "pending" || area.status === "processing").sort((a, b) => score(b.city) - score(a.city) || (cityOrder.get(a.city) || 0) - (cityOrder.get(b.city) || 0) || areas.indexOf(a) - areas.indexOf(b));
 }
 
 // src/lib/search/ratingFilter.ts
@@ -1816,6 +1995,8 @@ async function createAndPrepareSearchJob(params) {
     processed_search_areas: 0,
     places_found: 0,
     places_without_website: 0,
+    matching_filters: 0,
+    metrics_version: 1,
     leads_created: 0,
     created_at: (/* @__PURE__ */ new Date()).toISOString(),
     updated_at: (/* @__PURE__ */ new Date()).toISOString()
@@ -1828,7 +2009,7 @@ async function createAndPrepareSearchJob(params) {
     totalAreas: areas.length
   };
 }
-async function runSearchJob(jobId) {
+async function runSearchJob(jobId, maxAreas = Number.POSITIVE_INFINITY) {
   const job = await db.getSearchJob(jobId);
   if (!job) return;
   const leaseToken = crypto4.randomUUID();
@@ -1840,19 +2021,20 @@ async function runSearchJob(jobId) {
   };
   activeWorkers.set(jobId, worker);
   try {
-    await db.updateSearchJob(jobId, {
-      status: "running",
-      started_at: job.started_at || (/* @__PURE__ */ new Date()).toISOString()
-    });
     const areas = await db.getSearchAreas(jobId);
-    const pendingAreas = areas.filter((a) => a.status === "pending" || a.status === "failed");
+    const pendingAreas = prioritizeSearchAreas(areas).filter(
+      (a) => a.status === "pending" || a.status === "processing" && (job.lease_until || 0) < Date.now()
+    );
     const settings = await db.getSettings();
     const targetGoal = job.target_leads || 0;
     let persistedLeadCount = job.leads_created || 0;
-    const citiesSeen = /* @__PURE__ */ new Set();
+    const citiesSeen = new Set(areas.filter((a) => a.status === "completed").map((a) => a.city));
+    let attemptedAreas = 0;
     for (const area of pendingAreas) {
+      if (attemptedAreas >= maxAreas) break;
+      attemptedAreas++;
       try {
-        if (!await db.renewSearchJobLease(jobId, leaseToken)) return;
+        if (maxAreas > 1 && !await db.renewSearchJobLease(jobId, leaseToken)) return;
         if (targetGoal > 0) {
           const currentJobCheck = await db.getSearchJob(jobId);
           if (currentJobCheck && currentJobCheck.leads_created >= targetGoal) {
@@ -1868,7 +2050,7 @@ async function runSearchJob(jobId) {
           await db.updateSearchJob(jobId, { status: "paused" });
           return;
         }
-        await db.updateSearchArea(area.id, {
+        await db.updateJobArea(jobId, area.id, {
           status: "processing",
           attempts: area.attempts + 1
         });
@@ -1878,7 +2060,7 @@ async function runSearchJob(jobId) {
         let queryError;
         const apiKey = settings.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY || "";
         const hasRealCoords = area.lat !== 0 && area.lng !== 0;
-        const res = await searchPlacesOfficial(
+        const res = await searchPlacesAdaptive(
           query,
           apiKey,
           hasRealCoords ? {
@@ -1894,16 +2076,13 @@ async function runSearchJob(jobId) {
           }
         );
         if (res.isQuotaExceeded) {
-          await db.updateSearchArea(area.id, {
-            status: "failed",
-            error: res.error || "Limite de cota da Google Places API excedido."
+          await db.updateJobArea(jobId, area.id, {
+            status: "pending",
+            error: res.error || "Cota do Google Places esgotada."
           });
-          const curJob = await db.getSearchJob(jobId);
           await db.updateSearchJob(jobId, {
-            status: "failed",
-            error_message: "Limite de cota da Google Places API excedido. A busca foi interrompida.",
-            processed_search_areas: (curJob?.processed_search_areas || 0) + 1,
-            finished_at: (/* @__PURE__ */ new Date()).toISOString()
+            status: "paused",
+            error_message: "A Google Places atingiu a cota de consultas. Busca pausada sem perder leads. Retome quando houver cota dispon\xEDvel."
           });
           return;
         } else if (res.error) {
@@ -1911,6 +2090,7 @@ async function runSearchJob(jobId) {
         } else {
           rawPlaces = res.places;
         }
+        if ((await db.getSearchJob(jobId))?.status !== "running") return;
         const durationMs = Date.now() - startTime;
         await db.logSearchQuery({
           id: `query_${Date.now()}_${Math.random().toString(36).substring(7)}`,
@@ -1921,47 +2101,41 @@ async function runSearchJob(jobId) {
           results_count: rawPlaces.length,
           duration_ms: durationMs,
           error_details: queryError,
+          search_method: res.source,
           created_at: (/* @__PURE__ */ new Date()).toISOString()
         });
         if (queryError) {
-          await db.updateSearchArea(area.id, { status: "failed", error: queryError });
-          const currentJob = await db.getSearchJob(jobId);
-          if (currentJob) {
-            await db.updateSearchJob(jobId, { processed_search_areas: currentJob.processed_search_areas + 1 });
-          }
-          continue;
+          await db.updateJobArea(jobId, area.id, { status: "failed", error: queryError });
+          await db.updateSearchJob(jobId, {
+            status: "failed",
+            error_message: `Falha na consulta Google Places: ${queryError}`.slice(0, 350)
+          });
+          return;
         }
-        let newPlacesFound = 0;
+        const normalized = [...new Map(rawPlaces.map((raw) => {
+          const place = normalizePlace(raw, area.city, area.state);
+          return [place.place_id, place];
+        })).values()];
+        const createdPlaces = await db.upsertPlacesBatch(normalized);
+        const newPlacesFound = createdPlaces.size;
         let newWithoutWebsite = 0;
         let newLeadsCreated = 0;
-        // Persist place metadata with bounded concurrency; lead creation stays sequential
-        // to preserve target counts, deduplication, and deleted-lead protections.
-        const preparedPlaces = [];
-        for (let batchStart = 0; batchStart < rawPlaces.length; batchStart += 4) {
-          const batch = rawPlaces.slice(batchStart, batchStart + 4);
-          const preparedBatch = await Promise.all(batch.map(async (raw) => {
-            const normalizedPlace = normalizePlace(raw, area.city, area.state);
-            const { isNew } = await db.upsertPlace(normalizedPlace);
-            return { normalizedPlace, isNew };
-          }));
-          preparedPlaces.push(...preparedBatch);
-        }
-        for (const { normalizedPlace, isNew } of preparedPlaces) {
-          if (isNew) {
-            newPlacesFound++;
-          }
+        let matchingFilters = 0;
+        const searchResults = [];
+        for (const normalizedPlace of normalized) {
           if ((!normalizedPlace.website || normalizedPlace.website.trim() === "") && normalizedPlace.website_status === "no_website") {
             newWithoutWebsite++;
           }
           const isRelevant = isPlaceRelevantToNiche(normalizedPlace, job.niche);
           const matchesFilters = checkLeadFilters(normalizedPlace, job.filters);
           if (matchesFilters && isRelevant) {
+            matchingFilters++;
             const { score } = calculateLeadScore(normalizedPlace, settings.scoringWeights);
             const workspaceId = job.workspace_id || (job.freelancer_id ? job.freelancer_id : "admin");
             const leadPrefix = job.freelancer_id ? `lead_${job.freelancer_id}_` : "lead_admin_";
             const leadId = `${leadPrefix}${normalizedPlace.place_id}`;
             if (await db.isLeadDeleted(leadId)) {
-              await db.logSearchResult({
+              searchResults.push({
                 job_id: jobId,
                 workspace_id: workspaceId,
                 place_id: normalizedPlace.place_id,
@@ -2001,7 +2175,7 @@ async function runSearchJob(jobId) {
             if (isDeleted) {
               continue;
             }
-            await db.logSearchResult({
+            searchResults.push({
               job_id: jobId,
               workspace_id: workspaceId,
               place_id: normalizedPlace.place_id,
@@ -2022,11 +2196,13 @@ async function runSearchJob(jobId) {
               break;
             }
           } else {
-            await db.logSearchResult({
+            const reason = !isRelevant ? "niche" : job.filters.onlyWithoutWebsite && normalizedPlace.website_status !== "no_website" ? "website" : !matchesRatingRange(normalizedPlace.rating, job.filters) ? "rating" : job.filters.onlyWithPhone && (!normalizedPlace.phone || normalizedPlace.phone.trim().length < 8) ? "phone" : "reviews";
+            searchResults.push({
               job_id: jobId,
               workspace_id: job.workspace_id || job.freelancer_id || "admin",
               place_id: normalizedPlace.place_id,
               result: isRelevant ? "filtered" : "irrelevant",
+              filter_reason: reason,
               rating: normalizedPlace.rating || 0,
               reviews_count: normalizedPlace.reviews_count || 0,
               website: normalizedPlace.website || "",
@@ -2036,30 +2212,26 @@ async function runSearchJob(jobId) {
             });
           }
         }
+        await db.logSearchResultsBatch(searchResults);
         citiesSeen.add(area.city);
-        await db.updateSearchArea(area.id, {
-          status: "completed",
-          places_found: rawPlaces.length,
-          processed_at: (/* @__PURE__ */ new Date()).toISOString()
+        const committed = await db.completeSearchArea(jobId, area.id, leaseToken, {
+          newPlaces: newPlacesFound,
+          withoutSite: newWithoutWebsite,
+          newLeads: newLeadsCreated,
+          matchingFilters,
+          placesInArea: rawPlaces.length
         });
-        const updatedJob = await db.getSearchJob(jobId);
-        if (updatedJob) {
-          await db.updateSearchJob(jobId, {
-            processed_search_areas: updatedJob.processed_search_areas + 1,
-            processed_cities: citiesSeen.size,
-            places_found: updatedJob.places_found + newPlacesFound,
-            places_without_website: updatedJob.places_without_website + newWithoutWebsite,
-            leads_created: updatedJob.leads_created + newLeadsCreated
-          });
-        }
+        if (!committed) return;
         if (targetGoal > 0 && persistedLeadCount >= targetGoal) {
           break;
         }
-        const delay = Math.max(300, settings.requestDelayMs || 600);
-        await new Promise((r) => setTimeout(r, delay));
+        if (maxAreas > 1) {
+          const delay = Math.max(300, settings.requestDelayMs || 600);
+          await new Promise((r) => setTimeout(r, delay));
+        }
       } catch (areaErr) {
         console.warn(`[SearchWorker] Erro ao processar \xE1rea ${area.id}:`, areaErr);
-        await db.updateSearchArea(area.id, {
+        await db.updateJobArea(jobId, area.id, {
           status: "failed",
           error: areaErr instanceof Error ? areaErr.message : String(areaErr)
         });
@@ -2072,11 +2244,14 @@ async function runSearchJob(jobId) {
         }
       }
     }
+    const remaining = await db.getSearchAreas(jobId);
+    const reachedGoal = targetGoal > 0 && persistedLeadCount >= targetGoal;
+    if (!reachedGoal && remaining.some((a) => a.status === "pending" || a.status === "processing")) return;
     const finalJob = await db.getSearchJob(jobId);
     if (finalJob && finalJob.status === "running") {
       const failedAreas = (await db.getSearchAreas(jobId)).filter((a) => a.status === "failed");
       const goalReached = (finalJob.target_leads || 0) > 0 && finalJob.leads_created >= (finalJob.target_leads || 0);
-      await db.updateSearchJob(jobId, failedAreas.length > 0 && !goalReached ? { status: "failed", error_message: `${failedAreas.length} \xE1rea(s) falharam. Tente novamente para retomar.`, finished_at: (/* @__PURE__ */ new Date()).toISOString() } : { status: "completed", processed_search_areas: finalJob.total_search_areas, finished_at: (/* @__PURE__ */ new Date()).toISOString() });
+      await db.updateSearchJob(jobId, failedAreas.length > 0 && !goalReached ? { status: "failed", error_message: `${failedAreas.length} \xE1rea(s) falharam. Tente novamente para retomar.`, finished_at: (/* @__PURE__ */ new Date()).toISOString() } : { status: "completed", finished_at: (/* @__PURE__ */ new Date()).toISOString() });
     }
     if (job.freelancer_id) {
       const completedJob = await db.getSearchJob(jobId);
@@ -2133,26 +2308,7 @@ async function pauseSearchJob(jobId) {
   return true;
 }
 async function resumeSearchJob(jobId) {
-  const job = await db.getSearchJob(jobId);
-  if (!job) return false;
-  const worker = activeWorkers.get(jobId);
-  if (worker) {
-    worker.paused = false;
-  }
-  const areas = await db.getSearchAreas(jobId);
-  const retriedCount = areas.filter((a) => a.status === "failed").length;
-  await db.updateSearchJob(jobId, {
-    status: "running",
-    error_message: void 0,
-    processed_search_areas: Math.max(0, job.processed_search_areas - retriedCount)
-  });
-  for (const a of areas) {
-    if (a.status === "failed" || a.status === "processing") {
-      await db.updateSearchArea(a.id, { status: "pending", error: void 0 });
-    }
-  }
-  runSearchJob(jobId).catch(console.error);
-  return true;
+  return db.prepareSearchJobResume(jobId);
 }
 async function cancelSearchJob(jobId) {
   const worker = activeWorkers.get(jobId);
@@ -2175,11 +2331,12 @@ async function cleanupStaleJobs() {
       if (job.status === "running") {
         const lastUpdated = job.updated_at ? new Date(job.updated_at).getTime() : 0;
         const isStale = now2 - lastUpdated > 12e4;
-        if (!activeWorkers.has(job.id) && isStale) {
+        if (!activeWorkers.has(job.id) && isStale && (job.lease_until || 0) < now2) {
           await db.updateSearchJob(job.id, {
-            status: "failed",
-            error_message: "A execu\xE7\xE3o foi interrompida. Retome a busca para processar as \xE1reas restantes.",
-            finished_at: (/* @__PURE__ */ new Date()).toISOString()
+            status: "pending",
+            lease_token: "",
+            lease_until: 0,
+            error_message: void 0
           });
           cleaned++;
           console.warn(`[SearchWorker] Busca interrompida detectada: ${job.id} (${job.niche})`);
@@ -2221,7 +2378,9 @@ app.use((req, _res, next) => {
   next();
 });
 app.use("/api", async (req, _res, next) => {
-  if (req.path === "" || req.path === "/" || req.path === "/health" || req.path.startsWith("/health/")) {
+  if (req.path === "" || req.path === "/" || req.path === "/health" || req.path.startsWith("/health/") || // O login consulta diretamente a fonte autoritativa do Supabase.
+  // Evita uma segunda consulta de "health" antes de cada autenticação.
+  req.method === "POST" && req.path === "/freelancer/auth/verify") {
     return next();
   }
   try {
@@ -2264,60 +2423,67 @@ function verifySession(token) {
   }
 }
 app.use("/api", async (req, res, next) => {
-  const authHeader = req.headers.authorization || req.headers["x-access-token"];
-  const token = authHeader ? authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : authHeader.trim() : "";
-  if (!token) {
-    req.user = void 0;
-    return next();
-  }
-  const payload = verifySession(token);
-  if (!payload || await db.isSessionRevoked(token)) {
-    req.user = void 0;
-    return next();
-  }
-  if (payload.role === "admin") {
-    req.user = {
-      role: "admin",
-      id: payload.id || "admin_1",
-      email: payload.email || ADMIN_DEFAULT_EMAIL,
-      name: "Gustavo Santos (Admin)"
-    };
-    return actorContext.run({ role: "admin" }, next);
-  }
-  if (payload.role === "freelancer") {
-    let freelancer = await db.getFreelancerById(payload.freelancerId) || await db.getFreelancerByAccessCode(payload.accessCode);
-    if (!freelancer) {
-      try {
-        await db.syncFromSupabase();
-        freelancer = await db.getFreelancerById(payload.freelancerId) || await db.getFreelancerByAccessCode(payload.accessCode);
-      } catch (syncErr) {
-        console.warn("[Server] Falha ao consultar o Supabase na autentica\xE7\xE3o:", syncErr);
-      }
-    }
-    if (!freelancer) {
+  try {
+    const authHeader = req.headers.authorization || req.headers["x-access-token"];
+    const token = authHeader ? authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : authHeader.trim() : "";
+    if (!token) {
       req.user = void 0;
       return next();
     }
-    if (freelancer.status === "blocked") {
-      return res.status(403).json({
-        error: "Acesso desativado",
-        blocked: true,
-        message: "Seu acesso ao GHProspec\xE7\xE3o foi desativado. Entre em contato com o administrador."
-      });
+    const payload = verifySession(token);
+    if (!payload || await db.isSessionRevoked(token)) {
+      req.user = void 0;
+      return next();
     }
-    req.user = {
-      role: "freelancer",
-      id: freelancer.id,
-      freelancerId: freelancer.id,
-      name: freelancer.name,
-      email: freelancer.email,
-      freelancer
-    };
-    await db.updateFreelancer(freelancer.id, { last_activity_at: (/* @__PURE__ */ new Date()).toISOString() });
-    return actorContext.run({ role: "freelancer", freelancerId: freelancer.id }, next);
+    if (payload.role === "admin") {
+      req.user = {
+        role: "admin",
+        id: payload.id || "admin_1",
+        email: payload.email || ADMIN_DEFAULT_EMAIL,
+        name: "Gustavo Santos (Admin)"
+      };
+      return actorContext.run({ role: "admin" }, next);
+    }
+    if (payload.role === "freelancer") {
+      let freelancer = await db.getFreelancerById(payload.freelancerId) || await db.getFreelancerByAccessCode(payload.accessCode);
+      if (!freelancer) {
+        try {
+          await db.syncFromSupabase();
+          freelancer = await db.getFreelancerById(payload.freelancerId) || await db.getFreelancerByAccessCode(payload.accessCode);
+        } catch (syncErr) {
+          console.warn("[Server] Falha ao consultar o Supabase na autentica\xE7\xE3o:", syncErr);
+        }
+      }
+      if (!freelancer) {
+        req.user = void 0;
+        return next();
+      }
+      if (freelancer.status === "blocked") {
+        return res.status(403).json({
+          error: "Acesso desativado",
+          blocked: true,
+          message: "Seu acesso ao GHProspec\xE7\xE3o foi desativado. Entre em contato com o administrador."
+        });
+      }
+      req.user = {
+        role: "freelancer",
+        id: freelancer.id,
+        freelancerId: freelancer.id,
+        name: freelancer.name,
+        email: freelancer.email,
+        freelancer
+      };
+      return actorContext.run({ role: "freelancer", freelancerId: freelancer.id }, next);
+    }
+    req.user = void 0;
+    next();
+  } catch (err) {
+    console.error("[Server] Falha ao validar sess\xE3o:", err);
+    return res.status(503).json({
+      error: "Falha tempor\xE1ria na valida\xE7\xE3o da sess\xE3o. Tente novamente.",
+      code: "WORKSPACE_SESSION_UNAVAILABLE"
+    });
   }
-  req.user = void 0;
-  next();
 });
 function requireAuth(req, res, next) {
   if (!req.user) {
@@ -2537,60 +2703,49 @@ app.post("/api/auth/logout", async (req, res) => {
   res.json({ success: true });
 });
 app.post("/api/freelancer/auth/verify", async (req, res) => {
-  const { accessCode, pin } = req.body;
-  if (!accessCode) {
-    return res.status(400).json({ error: "C\xF3digo de acesso do freelancer \xE9 obrigat\xF3rio." });
-  }
-  let freelancer = await db.getFreelancerByAccessCode(accessCode) || await db.getFreelancerById(accessCode);
-  if (!freelancer) {
-    try {
-      await db.syncFromSupabase();
-      freelancer = await db.getFreelancerByAccessCode(accessCode) || await db.getFreelancerById(accessCode);
-    } catch (err) {
-      console.warn("[Server] Falha ao consultar Supabase ao verificar c\xF3digo:", err);
+  try {
+    const { accessCode, pin } = req.body || {};
+    if (!accessCode) {
+      return res.status(400).json({ error: "C\xF3digo de acesso do freelancer \xE9 obrigat\xF3rio." });
     }
-  }
-  if (!freelancer) {
-    return res.status(404).json({
-      error: "Link de acesso n\xE3o encontrado",
-      message: "Este link de acesso ao GHProspec\xE7\xE3o n\xE3o existe ou foi revogado."
+    const freelancer = await db.getFreelancerByAccessCode(String(accessCode)) || await db.getFreelancerById(String(accessCode));
+    if (!freelancer) {
+      return res.status(404).json({
+        error: "Link de acesso n\xE3o encontrado",
+        message: "Este link de acesso ao GHProspec\xE7\xE3o n\xE3o existe ou foi revogado."
+      });
+    }
+    if (freelancer.status === "blocked") {
+      return res.status(403).json({
+        error: "Acesso desativado",
+        blocked: true,
+        message: "Seu acesso ao GHProspec\xE7\xE3o foi desativado. Entre em contato com o administrador."
+      });
+    }
+    if (freelancer.status === "inactive") {
+      return res.status(403).json({
+        error: "Acesso inativo",
+        message: "Seu cadastro est\xE1 inativo no momento. Entre em contato com o administrador."
+      });
+    }
+    const token = signSession({
+      role: "freelancer",
+      freelancerId: freelancer.id,
+      accessCode: freelancer.access_code,
+      exp: Date.now() + 7 * 24 * 60 * 60 * 1e3
+    });
+    return res.json({
+      success: true,
+      token,
+      freelancer
+    });
+  } catch (err) {
+    console.error("[Server] Falha ao autenticar workspace de freelancer:", err);
+    return res.status(503).json({
+      error: "N\xE3o foi poss\xEDvel abrir este workspace. Tente novamente em instantes.",
+      code: "WORKSPACE_LOGIN_FAILED"
     });
   }
-  if (freelancer.status === "blocked") {
-    return res.status(403).json({
-      error: "Acesso desativado",
-      blocked: true,
-      message: "Seu acesso ao GHProspec\xE7\xE3o foi desativado. Entre em contato com o administrador."
-    });
-  }
-  if (freelancer.status === "inactive") {
-    return res.status(403).json({
-      error: "Acesso inativo",
-      message: "Seu cadastro est\xE1 inativo no momento. Entre em contato com o administrador."
-    });
-  }
-  const token = signSession({
-    role: "freelancer",
-    freelancerId: freelancer.id,
-    accessCode: freelancer.access_code,
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1e3
-  });
-  const updated = await db.updateFreelancer(freelancer.id, {
-    last_access_at: (/* @__PURE__ */ new Date()).toISOString(),
-    last_activity_at: (/* @__PURE__ */ new Date()).toISOString()
-  });
-  await db.logActivity({
-    freelancer_id: freelancer.id,
-    freelancer_name: freelancer.name,
-    action_type: "login",
-    description: `${freelancer.name} acessou seu workspace individual via link exclusivo.`,
-    metadata: { access_code: freelancer.access_code }
-  });
-  return res.json({
-    success: true,
-    token,
-    freelancer: updated || freelancer
-  });
 });
 app.post("/api/freelancer/logout", requireAuth, async (req, res) => {
   const authHeader = req.headers.authorization || "";
@@ -3232,6 +3387,9 @@ app.post("/api/leads/:id/hide", requireAuth, async (req, res) => {
     }
     const explicitValue = typeof req.body?.is_hidden === "boolean" ? req.body.is_hidden : void 0;
     const updated = await db.toggleHideLead(req.params.id, explicitValue);
+    if (!updated) {
+      return res.status(404).json({ error: "Lead n\xE3o encontrado. Recarregue a lista." });
+    }
     res.json(updated);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -3332,7 +3490,7 @@ app.get("/api/search-jobs", requireAuth, async (req, res) => {
     await cleanupStaleJobs();
     const scope = resolveWorkspaceScope(req);
     const jobs = await db.getAllSearchJobs(scope.freelancerId);
-    res.json(jobs);
+    res.json(jobs.map(({ area_plan, ...summary }) => summary));
   } catch (err) {
     const status = err?.status || 500;
     const message = err instanceof Error ? err.message : String(err);
@@ -3419,8 +3577,8 @@ app.post("/api/search-jobs", requireAuth, async (req, res) => {
         metadata: { jobId: job.id, niche, city, state, target_leads: job.target_leads }
       });
     }
-    runSearchJob(job.id).catch(console.error);
-    res.json({ job, estimatedQueries, totalCities, totalAreas });
+    const { area_plan, ...summary } = job;
+    res.json({ job: summary, estimatedQueries, totalCities, totalAreas });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
@@ -3436,10 +3594,32 @@ app.get("/api/search-jobs/:id", requireAuth, async (req, res) => {
       return res.status(403).json({ error: "Acesso negado: esta busca pertence a outro workspace." });
     }
     const [areas, queries] = await Promise.all([db.getSearchAreas(job.id), db.getSearchQueries(job.id)]);
-    res.json({ job, areas, queries });
+    const { area_plan, ...summary } = job;
+    const activeAreas = areas.filter((a) => a.status !== "pending").slice(-80);
+    const nextAreas = areas.filter((a) => a.status === "pending").slice(0, 20);
+    res.json({ job: summary, areas: [...activeAreas, ...nextAreas], queries: queries.slice(-30) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
+  }
+});
+app.post("/api/search-jobs/:id/step", requireAuth, async (req, res) => {
+  try {
+    const job = await db.getSearchJob(req.params.id);
+    if (!job) return res.status(404).json({ error: "Busca n\xE3o encontrada." });
+    if (req.user.role === "freelancer" && !isLeadInWorkspace(job, req.user.freelancerId)) {
+      return res.status(403).json({ error: "Acesso negado ao workspace." });
+    }
+    if (job.status === "pending" || job.status === "running") {
+      await runSearchJob(job.id, 1);
+    }
+    const fresh = await db.getSearchJob(job.id);
+    if (!fresh) return res.status(404).json({ error: "Busca n\xE3o encontrada." });
+    const { area_plan, ...summary } = fresh;
+    res.json({ job: summary });
+  } catch (err) {
+    const status = err?.status || 500;
+    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
 app.post("/api/search-jobs/:id/pause", requireAuth, async (req, res) => {
@@ -3534,36 +3714,6 @@ app.post("/api/settings/test-key", requireAdmin, async (req, res) => {
     res.status(500).json({ valid: false, error: message });
   }
 });
-var recoveryTimer = setTimeout(async () => {
-  try {
-    await cleanupStaleJobs();
-    const jobs = await db.getAllSearchJobs();
-    for (const job of jobs) {
-      if (job.status === "running") {
-        const areas = await db.getSearchAreas(job.id);
-        const hasPending = areas.some((a) => a.status === "pending" || a.status === "processing" || a.status === "failed");
-        if (hasPending && areas.length > 0) {
-          for (const a of areas) {
-            if (a.status === "processing") {
-              await db.updateSearchArea(a.id, { status: "pending" });
-            }
-          }
-          console.log(`[Server] Retomando busca pendente ${job.id} (${job.niche} em ${job.city})...`);
-          runSearchJob(job.id).catch(console.error);
-        } else {
-          await db.updateSearchJob(job.id, {
-            status: "failed",
-            error_message: "Busca interrompida durante a execu\xE7\xE3o. Retome para verificar as \xE1reas pendentes.",
-            finished_at: (/* @__PURE__ */ new Date()).toISOString()
-          });
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("[Server] Falha ao verificar jobs anteriores:", err);
-  }
-}, 2e3);
-recoveryTimer.unref?.();
 var app_default = app;
 
 // src/server/serverless.ts
