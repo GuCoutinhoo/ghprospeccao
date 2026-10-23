@@ -669,6 +669,7 @@ export const api = {
   async getLeadById(id: string): Promise<{ lead: Lead; notes: LeadNote[]; place?: Place }> {
     const res = await fetch(`/api/leads/${id}`, {
       headers: getAuthHeaders(),
+      cache: 'no-store',
     });
     if (res.ok) {
       return await res.json();
@@ -732,7 +733,7 @@ export const api = {
     return res.json();
   },
 
-  async toggleLeadHide(id: string, explicitValue?: boolean): Promise<Lead> {
+  async toggleLeadHide(id: string, explicitValue?: boolean): Promise<Lead & { is_hidden: boolean }> {
     const res = await fetch(`/api/leads/${id}/hide`, {
       method: 'POST',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -748,7 +749,7 @@ export const api = {
       throw new Error('O servidor não confirmou a ocultação do lead. Atualize a lista e tente novamente.');
     }
     invalidateLeadsCache();
-    return updated;
+    return { ...updated, is_hidden: updated.is_hidden };
   },
 
   async addLeadNote(id: string, content: string): Promise<LeadNote> {

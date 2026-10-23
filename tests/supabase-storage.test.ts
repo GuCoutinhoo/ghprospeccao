@@ -1,3 +1,4 @@
+import { createSupabaseHarness } from "./helpers/supabaseHarness";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import request from 'supertest';
@@ -8,8 +9,7 @@ import { checkLeadFilters } from '../src/lib/search/searchWorker';
 import { searchPlacesOfficial, searchPlacesAdaptive } from '../src/lib/google/places';
 import { prioritizeSearchAreas } from '../src/lib/search/smartScheduler';
 import type { Lead, SearchJob, Place, SearchArea } from '../src/types';
-
-type Row = { collection:string; id:string; workspace_id:string; document:Record<string,any>; revision:number };
+import { createLeadMutationQueue } from '../src/lib/leadMutationQueue';
 
 process.env.GH_SUPABASE_URL = 'https://tests.supabase.co';
 process.env.GH_SUPABASE_SECRET_KEY = 'test-server-secret';
@@ -18,55 +18,6 @@ process.env.ADMIN_EMAIL = 'admin@example.com';
 process.env.ADMIN_PASSWORD = 'test-admin-password';
 
 const clone = <T>(value:T):T => JSON.parse(JSON.stringify(value));
-
-function createSupabaseHarness() {
-  const rows = new Map<string,Row>();
-  let failNextCommit = false;
-  const key = (collection:string,id:string) => `${collection}/${id}`;
-  const response = (body:unknown,status=200) => new Response(typeof body === 'string' ? body : JSON.stringify(body), {status,headers:{'content-type':'application/json'}});
-
-  const fetchMock:typeof fetch = async (input,init) => {
-    const url = new URL(String(input));
-    if (url.pathname.endsWith('/app_records')) {
-      const collection = String(url.searchParams.get('collection') || '').replace(/^eq\./,'');
-      const idFilter = String(url.searchParams.get('id') || '');
-      const id = idFilter.startsWith('eq.') ? idFilter.slice(3) : '';
-      const ids = idFilter.startsWith('in.(') ? idFilter.slice(4,-1).split(',').map(value=>value.replace(/^"|"$/g,'')) : [];
-      const workspace = String(url.searchParams.get('workspace_id') || '').replace(/^eq\./,'');
-      let result = [...rows.values()].filter(row => !collection || row.collection===collection);
-      if(id)result=result.filter(row=>row.id===id);
-      if(ids.length)result=result.filter(row=>ids.includes(row.id));
-      if(workspace)result=result.filter(row=>row.workspace_id===workspace);
-      const jsonFilter = [...url.searchParams.entries()].find(([name])=>name.startsWith('document->>'));
-      if(jsonFilter) {
-        const field=jsonFilter[0].slice('document->>'.length);
-        const value=jsonFilter[1].replace(/^eq\./,'');
-        result=result.filter(row=>String(row.document[field] ?? '')===value);
-      }
-      return response(result.map(clone));
-    }
-    if (url.pathname.endsWith('/rpc/gh_commit_changes')) {
-      if (failNextCommit) { failNextCommit=false; return response('forced write failure',503); }
-      const body=JSON.parse(String(init?.body || '{}')) as {p_reads:Array<{collection:string;id:string;revision:number}>;p_operations:Array<{collection:string;id:string;op:string;document?:Record<string,any>}>};
-      for(const read of body.p_reads || []) {
-        const current=rows.get(key(read.collection,read.id));
-        if((current?.revision || 0)!==read.revision)return response('GH_TX_CONFLICT',409);
-      }
-      for(const operation of body.p_operations || []) {
-        const mapKey=key(operation.collection,operation.id);
-        const current=rows.get(mapKey);
-        if(operation.op==='create' && current)return response('23505 duplicate key value violates unique constraint',409);
-        if(operation.op==='update' && !current)return response('missing record',404);
-        if(operation.op==='delete'){rows.delete(mapKey);continue;}
-        const document=['merge','update'].includes(operation.op)?{...(current?.document || {}),...(operation.document || {})}:clone(operation.document || {});
-        rows.set(mapKey,{collection:operation.collection,id:operation.id,workspace_id:String(document.workspace_id || document.freelancer_id || document.user_id || 'admin'),document,revision:(current?.revision || 0)+1});
-      }
-      return response(true);
-    }
-    throw new Error(`Unexpected request ${url}`);
-  };
-  return {rows,fetchMock,failCommit(){failNextCommit=true;}};
-}
 
 function lead(overrides:Partial<Lead>={}):Lead {
   const stamp='2026-10-17T12:00:00.000Z';
@@ -375,6 +326,60 @@ test('cliente de ocultação não mascara erro com PATCH e exige confirmação d
   } finally {
     globalThis.fetch=original;
   }
+});
+
+test('nova entrada e releitura da lista preservam ocultação e todos os documentos de leads', async () => {
+  const harness = createSupabaseHarness(); globalThis.fetch = harness.fetchMock;
+  const repository = new Repository(new DocumentStore());
+  const freelancer = await repository.createFreelancer({name:'Reentrada fictícia',email:'reentry@example.com',access_code:'reentry-test'});
+  const existing = await repository.createLead(lead({workspace_id:freelancer.id,freelancer_id:freelancer.id,user_id:freelancer.id}));
+  await repository.createLead(lead({place_id:'protected',is_hidden:true}));
+  const { app } = await import('../src/server/app');
+  const login = async () => {
+    const result = await request(app).post('/api/freelancer/auth/verify').send({accessCode:'reentry-test'}).expect(200);
+    return `Bearer ${result.body.token}`;
+  };
+  const firstToken = await login();
+  await request(app).post(`/api/leads/${existing.lead.id}/hide`).set('Authorization', firstToken).send({is_hidden:true}).expect(200);
+  const documents = () => clone([...harness.rows.values()].filter(row => row.collection === 'leads'));
+  const snapshot = documents();
+  for (const token of [firstToken, await login()]) {
+    const list = await request(app).get('/api/leads?limit=0').set('Authorization',token).expect(200);
+    assert.equal(list.body.leads.find((item:Lead) => item.id === existing.lead.id)?.is_hidden,true);
+    const hidden = await request(app).get('/api/leads?onlyHidden=true&limit=0').set('Authorization',token).expect(200);
+    assert.equal(hidden.body.total,1);
+    const visible = await request(app).get('/api/leads?excludeHidden=true&limit=0').set('Authorization',token).expect(200);
+    assert.equal(visible.body.total,0);
+  }
+  assert.equal((await new Repository(new DocumentStore()).getLeadById(existing.lead.id))?.is_hidden,true);
+  assert.deepEqual(documents(),snapshot,'reentrada e consultas não podem modificar nenhum lead');
+});
+
+test('ações no modal preservam ocultação quando o favorito anterior demora para responder', async () => {
+  const enqueue = createLeadMutationQueue();
+  let release!: () => void;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  let leadState = lead();
+  const favorite = enqueue(async () => {
+    const oldResponse = {...leadState,is_favorite:true};
+    await delayed;
+    leadState = oldResponse;
+  });
+  const hide = enqueue(async () => { leadState = {...leadState,is_hidden:true}; });
+  await Promise.resolve();
+  assert.equal(leadState.is_hidden,false,'não simular ocultação antes da gravação');
+  release();
+  await Promise.all([favorite,hide]);
+  assert.equal(leadState.is_hidden,true);
+  assert.equal(leadState.is_favorite,true);
+});
+
+test('falha de uma ação no modal não bloqueia a próxima ocultação', async () => {
+  const enqueue = createLeadMutationQueue();
+  const failed = enqueue(async () => { throw new Error('write failed'); });
+  const hide = enqueue(async () => ({is_hidden:true}));
+  await assert.rejects(failed,/write failed/);
+  assert.equal((await hide).is_hidden,true);
 });
 
 test('contexto de freelancer bloqueia leitura e mutação de outro workspace', async () => {

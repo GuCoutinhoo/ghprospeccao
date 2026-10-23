@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-tests.mjs",
+    "test:hidden:browser": "npm run build && node scripts/run-hidden-browser-tests.mjs",
     "test:rating": "tsx --test scripts/test-rating-filter.ts"
   },
   "engines": {
@@ -39,6 +40,7 @@
     "@types/react-dom": "^19.3.0",
     "@types/supertest": "^7.2.1",
     "autoprefixer": "^10.4.21",
+    "playwright": "1.64.1",
     "supertest": "^7.3.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"

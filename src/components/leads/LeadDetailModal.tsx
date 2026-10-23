@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   ExternalLink,
@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { Lead, LeadNote, PipelineStatus } from '../../types';
 import { api } from '../../lib/api';
+import { createLeadMutationQueue } from '../../lib/leadMutationQueue';
 import { calculateLeadScore, getScoreColorClass } from '../../lib/scoring/leadScore';
 import { formatBrazilianPhone, getWhatsAppUrl } from '../../utils/whatsapp';
 import { PitchGeneratorModal } from './PitchGeneratorModal';
@@ -100,6 +101,14 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isTogglingHide, setIsTogglingHide] = useState(false);
   const [hideError, setHideError] = useState<string | null>(null);
+  const enqueueMutation = useMemo(() => createLeadMutationQueue(), [leadId]);
+
+  const saveLead = (mutation: () => Promise<Lead>) => enqueueMutation(async () => {
+    const updated = await mutation();
+    setLead(updated);
+    onLeadUpdated(updated);
+    return updated;
+  });
 
   // Tabs do modal: 'loja' (vitrine e mapas), 'mockup' (prévia do site), 'pitch' (scripts), 'audit' (diagnóstico), 'notas'
   const [activeTab, setActiveTab] = useState<'loja' | 'mockup' | 'pitch' | 'audit' | 'notas'>('loja');
@@ -125,12 +134,10 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const handleStatusChange = async (newStatus: PipelineStatus) => {
     if (!lead) return;
     try {
-      const updated = await api.updateLead(lead.id, {
+      await saveLead(() => api.updateLead(lead.id, {
         pipeline_status: newStatus,
         contacted_at: newStatus === 'CONTATADO' ? new Date().toISOString() : lead.contacted_at,
-      });
-      setLead(updated);
-      onLeadUpdated(updated);
+      }));
     } catch (err) {
       console.error(err);
     }
@@ -139,11 +146,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const handleRegisterContact = async (channel: string = 'WhatsApp') => {
     if (!lead) return;
     try {
-      const res = await api.registerContactAttempt(lead.id, channel);
-      if (res?.lead) {
-        setLead(res.lead);
-        onLeadUpdated(res.lead);
-      }
+      await saveLead(async () => (await api.registerContactAttempt(lead.id, channel)).lead);
     } catch (err) {
       console.error('Erro ao registrar contato:', err);
     }
@@ -152,12 +155,10 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const handleRegisterResponse = async () => {
     if (!lead) return;
     try {
-      const updated = await api.updateLead(lead.id, {
+      await saveLead(() => api.updateLead(lead.id, {
         pipeline_status: 'RESPONDEU',
         response_at: new Date().toISOString(),
-      });
-      setLead(updated);
-      onLeadUpdated(updated);
+      }));
     } catch (err) {
       console.error('Erro ao registrar resposta:', err);
     }
@@ -166,12 +167,10 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const handleRegisterFollowUp = async () => {
     if (!lead) return;
     try {
-      const updated = await api.updateLead(lead.id, {
+      await saveLead(() => api.updateLead(lead.id, {
         pipeline_status: 'FOLLOW_UP',
         follow_up_at: new Date().toISOString(),
-      });
-      setLead(updated);
-      onLeadUpdated(updated);
+      }));
     } catch (err) {
       console.error('Erro ao registrar follow-up:', err);
     }
@@ -180,12 +179,10 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const handleRegisterNegotiation = async () => {
     if (!lead) return;
     try {
-      const updated = await api.updateLead(lead.id, {
+      await saveLead(() => api.updateLead(lead.id, {
         pipeline_status: 'NEGOCIACAO',
         negotiation_at: new Date().toISOString(),
-      });
-      setLead(updated);
-      onLeadUpdated(updated);
+      }));
     } catch (err) {
       console.error('Erro ao iniciar negociação:', err);
     }
@@ -197,12 +194,8 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
     if (valStr === null) return;
     const value = parseFloat(valStr.replace(',', '.')) || 0;
     try {
-      const res = await api.registerSale(lead.id, value);
-      if (res?.lead) {
-        setLead(res.lead);
-        onLeadUpdated(res.lead);
-        alert(`Venda fechada de R$ ${value.toFixed(2)} registrada com sucesso no sistema!`);
-      }
+      await saveLead(async () => (await api.registerSale(lead.id, value)).lead);
+      alert(`Venda fechada de R$ ${value.toFixed(2)} registrada com sucesso no sistema!`);
     } catch (err) {
       console.error('Erro ao registrar venda:', err);
     }
@@ -211,9 +204,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
   const handleToggleFavorite = async () => {
     if (!lead) return;
     try {
-      const updated = await api.toggleLeadFavorite(lead.id);
-      setLead(updated);
-      onLeadUpdated(updated);
+      await saveLead(() => api.toggleLeadFavorite(lead.id));
     } catch (err) {
       console.error(err);
     }
@@ -224,9 +215,7 @@ export const LeadDetailModal: React.FC<LeadDetailModalProps> = ({
     setIsTogglingHide(true);
     setHideError(null);
     try {
-      const updated = await api.toggleLeadHide(lead.id, !lead.is_hidden);
-      setLead(updated);
-      onLeadUpdated(updated);
+      await saveLead(() => api.toggleLeadHide(lead.id, !lead.is_hidden));
     } catch (err) {
       console.error('Erro ao alternar status de ocultação/cinza do lead:', err);
       setHideError(err instanceof Error ? err.message : 'Não foi possível salvar a ocultação.');

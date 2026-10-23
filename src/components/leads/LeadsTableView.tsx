@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createLeadMutationQueue } from '../../lib/leadMutationQueue';
 import {
   Search,
   Filter,
@@ -202,6 +203,15 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   const requestIdRef = useRef(0);
   // Impede que respostas antigas da atualização automática desfaçam uma ocultação pendente.
   const pendingHideRef = useRef(new Map<string, boolean>());
+  const mutationQueuesRef = useRef(new Map<string, ReturnType<typeof createLeadMutationQueue>>());
+  const enqueueLeadMutation = <T,>(leadId: string, operation: () => Promise<T>) => {
+    let enqueue = mutationQueuesRef.current.get(leadId);
+    if (!enqueue) {
+      enqueue = createLeadMutationQueue();
+      mutationQueuesRef.current.set(leadId, enqueue);
+    }
+    return enqueue(operation);
+  };
   const [hidingLeadIds, setHidingLeadIds] = useState<string[]>([]);
 
   const loadLeads = useCallback(async (silent = false) => {
@@ -404,10 +414,12 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   const handleToggleFavorite = async (e: React.MouseEvent, leadId: string) => {
     e.stopPropagation();
     try {
-      const updated = await api.toggleLeadFavorite(leadId);
-      setLeads((prev) => prev.map((l) => (l.id === leadId
-        ? { ...l, ...updated, is_hidden: pendingHideRef.current.get(leadId) ?? updated.is_hidden }
-        : l)));
+      await enqueueLeadMutation(leadId, async () => {
+        const updated = await api.toggleLeadFavorite(leadId);
+        setLeads((prev) => prev.map((l) => (l.id === leadId
+          ? { ...l, ...updated, is_hidden: pendingHideRef.current.get(leadId) ?? updated.is_hidden }
+          : l)));
+      });
     } catch (err) {
       console.error('Erro ao salvar favorito:', err);
       setToastMessage({type:'error',text:'Não foi possível salvar o favorito. Tente novamente.'});
@@ -419,7 +431,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     const targetLead = leads.find((l) => l.id === leadId);
     if (!targetLead || pendingHideRef.current.has(leadId)) return;
     const newHiddenState = !targetLead.is_hidden;
-    pendingHideRef.current.set(leadId, targetLead.is_hidden);
+    pendingHideRef.current.set(leadId, Boolean(targetLead.is_hidden));
     setHidingLeadIds((prev) => [...prev, leadId]);
     // Descarta carregamentos iniciados antes da ação do usuário.
     requestIdRef.current += 1;
@@ -429,20 +441,22 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     // informado incorretamente que uma ocultação não persistida foi concluída.
 
     try {
-      const updated = await api.toggleLeadHide(leadId, newHiddenState);
-      requestIdRef.current += 1;
-      pendingHideRef.current.set(leadId, updated.is_hidden);
-      setLeads((prev) =>
-        prev.map((l) => (l.id === leadId ? { ...l, ...updated } : l))
-      );
-      setToastMessage({
-        type: 'success',
-        text: newHiddenState
-          ? `"${targetLead.name}" ocultado e salvo com sucesso.`
-          : `"${targetLead.name}" reexibido e salvo com sucesso.`,
+      await enqueueLeadMutation(leadId, async () => {
+        const updated = await api.toggleLeadHide(leadId, newHiddenState);
+        requestIdRef.current += 1;
+        pendingHideRef.current.set(leadId, updated.is_hidden);
+        setLeads((prev) =>
+          prev.map((l) => (l.id === leadId ? { ...l, ...updated } : l))
+        );
+        setToastMessage({
+          type: 'success',
+          text: newHiddenState
+            ? `"${targetLead.name}" ocultado e salvo com sucesso.`
+            : `"${targetLead.name}" reexibido e salvo com sucesso.`,
+        });
+        // Confere o estado persistido, inclusive durante varreduras simultâneas.
+        await loadLeads(true);
       });
-      // Confere o estado persistido, inclusive durante varreduras simultâneas.
-      await loadLeads(true);
     } catch (err) {
       console.error('Erro ao alternar ocultação do lead:', err);
       pendingHideRef.current.delete(leadId);
@@ -467,11 +481,13 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   const markAsContacted = async (lead: Lead) => {
     try {
-      const updated = await api.updateLead(lead.id, {
-        pipeline_status: 'CONTATADO',
-        contacted_at: new Date().toISOString(),
+      await enqueueLeadMutation(lead.id, async () => {
+        const updated = await api.updateLead(lead.id, {
+          pipeline_status: 'CONTATADO',
+          contacted_at: new Date().toISOString(),
+        });
+        setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       });
-      setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
     } catch (err) {
       console.error(err);
     }
