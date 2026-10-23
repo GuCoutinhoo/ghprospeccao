@@ -419,19 +419,19 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     const targetLead = leads.find((l) => l.id === leadId);
     if (!targetLead || pendingHideRef.current.has(leadId)) return;
     const newHiddenState = !targetLead.is_hidden;
-    pendingHideRef.current.set(leadId, newHiddenState);
+    pendingHideRef.current.set(leadId, targetLead.is_hidden);
     setHidingLeadIds((prev) => [...prev, leadId]);
     // Descarta carregamentos iniciados antes da ação do usuário.
     requestIdRef.current += 1;
 
-    // Atualização provisória; só confirma após persistência no Supabase.
-    setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, is_hidden: newHiddenState } : l))
-    );
+    // Não apresenta o lead como oculto antes de o servidor confirmar a gravação.
+    // Se o usuário atualizar a página durante a requisição, a UI não terá
+    // informado incorretamente que uma ocultação não persistida foi concluída.
 
     try {
       const updated = await api.toggleLeadHide(leadId, newHiddenState);
       requestIdRef.current += 1;
+      pendingHideRef.current.set(leadId, updated.is_hidden);
       setLeads((prev) =>
         prev.map((l) => (l.id === leadId ? { ...l, ...updated } : l))
       );
