@@ -42,7 +42,9 @@ export class Projections {
     limit?: number;
   }, snapshots: Map<string, Partial<Lead>> = new Map()): { leads: Lead[]; total: number; page: number; totalPages: number } {
     let filtered = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
-    if (params.search_job_id) filtered = filtered.filter(l => l.search_job_ids?.includes(params.search_job_id!));
+    // search_results é a fonte autoritativa da relação lead ↔ busca.
+    // Mesmo uma busca sem resultados precisa retornar zero (e não o workspace inteiro).
+    if (params.search_job_id) filtered = filtered.filter(l => snapshots.has(l.id));
 
     if (snapshots.size > 0) {
       filtered = filtered
@@ -119,7 +121,7 @@ export class Projections {
       filtered = filtered.filter((l) => l.reviews_count >= params.minReviews!);
     }
 
-    if (params.maxReviews) {
+    if (params.maxReviews !== undefined) {
       filtered = filtered.filter((l) => l.reviews_count <= params.maxReviews!);
     }
 

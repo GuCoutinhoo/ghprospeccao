@@ -21,7 +21,7 @@ import { api } from '../../lib/api';
 interface SearchJobDetailViewProps {
   jobId: string;
   onBack: () => void;
-  onViewLeads: (niche?: string, state?: string) => void;
+  onViewLeads: (niche?: string, state?: string, searchJobId?: string) => void;
 }
 
 export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
@@ -205,7 +205,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
           <button
             onClick={() => {
               api.invalidateLeadsCache();
-              onViewLeads(job.niche, job.state);
+              onViewLeads(job.niche, job.state, job.id);
             }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-neutral-900 rounded-md hover:bg-neutral-800 transition-colors shadow-xs cursor-pointer"
           >

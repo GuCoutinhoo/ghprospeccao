@@ -6,7 +6,8 @@ import { DocumentStore } from '../src/lib/supabase/documentStore';
 import { api } from '../src/lib/api';
 import { Repository, actorContext } from '../src/lib/store/repository';
 import { checkLeadFilters } from '../src/lib/search/searchWorker';
-import { searchPlacesOfficial, searchPlacesAdaptive } from '../src/lib/google/places';
+import { searchPlacesOfficial, searchPlacesAdaptive, getIncludedTypesForQuery } from '../src/lib/google/places';
+import { isPlaceRelevantToNiche } from '../src/lib/search/relevance';
 import { prioritizeSearchAreas } from '../src/lib/search/smartScheduler';
 import type { Lead, SearchJob, Place, SearchArea } from '../src/types';
 import { createLeadMutationQueue } from '../src/lib/leadMutationQueue';
@@ -372,6 +373,69 @@ test('ações no modal preservam ocultação quando o favorito anterior demora p
   await Promise.all([favorite,hide]);
   assert.equal(leadState.is_hidden,true);
   assert.equal(leadState.is_favorite,true);
+});
+
+test('visualizar busca de 10 leads exibe só os 10 novos, não os 30 históricos nem repetidos', async () => {
+  const harness = createSupabaseHarness(); globalThis.fetch = harness.fetchMock;
+  const repository = new Repository(new DocumentStore());
+  const job = searchJob('job-exact-ten', 'free_alpha');
+  await repository.createSearchJob({...job, target_leads:10}, []);
+  const createdIds:string[] = [];
+  const receipts:Array<Record<string,unknown>> = [];
+  for (let index = 0; index < 40; index++) {
+    const persisted = await repository.createLead(lead({place_id:`place-${index}`,name:`Empresa ${index}`}));
+    if (index >= 30) createdIds.push(persisted.lead.id);
+    receipts.push({job_id:job.id,workspace_id:'free_alpha',place_id:`place-${index}`,
+      lead_id:persisted.lead.id,result:index>=30?'created':'duplicate',
+      rating:3.5,reviews_count:20,website:'',website_status:'no_website',phone:'11999999999'});
+  }
+  await repository.logSearchResultsBatch(receipts);
+  assert.equal((await repository.getLeads({freelancer_id:'free_alpha',limit:0})).total,40);
+  const scoped = await repository.getLeads({freelancer_id:'free_alpha',search_job_id:job.id,limit:0});
+  assert.equal(scoped.total,10,'a meta de 10 não deve listar os 40 leads do nicho');
+  assert.deepEqual(new Set(scoped.leads.map(l=>l.id)),new Set(createdIds));
+
+  await repository.toggleHideLead(createdIds[0],true);
+  const visible = await repository.getLeads({freelancer_id:'free_alpha',search_job_id:job.id,limit:0});
+  assert.equal(visible.total,9,'lead ocultado permanece salvo e sai da lista da busca');
+  assert.equal((await repository.getLeadById(createdIds[0]))?.is_hidden,true);
+  const emptyJob = searchJob('job-no-results','free_alpha');
+  await repository.createSearchJob(emptyJob,[]);
+  assert.equal((await repository.getLeads({freelancer_id:'free_alpha',search_job_id:emptyJob.id,limit:0})).total,0,
+    'busca sem recibos não pode mostrar leads históricos por acidente');
+  assert.equal((await repository.getLeads({freelancer_id:'free_beta',search_job_id:job.id,limit:0})).total,0,
+    'o ID da busca não autoriza dados de outro workspace');
+});
+
+test('clínica de estética prioriza categoria correta e recusa clínicas odontológicas e salões genéricos', () => {
+  assert.deepEqual(getIncludedTypesForQuery('Clínica de estética em São Paulo SP'),['skin_care_clinic','spa']);
+  assert.equal(isPlaceRelevantToNiche({name:'Instituto Derma',raw_types:['skin_care_clinic']},'Clínica de estética'),true);
+  assert.equal(isPlaceRelevantToNiche({name:'Clínica de Estética e Odontologia',raw_types:['dental_clinic','beauty_salon']},'Clínica de estética'),false);
+  assert.equal(isPlaceRelevantToNiche({name:'Salão de Cabelos X',raw_types:['beauty_salon']},'Clínica de estética'),false);
+  assert.equal(isPlaceRelevantToNiche({name:'Clínica Estética Avançada',raw_types:['beauty_salon']},'Clínica de estética'),true);
+});
+
+test('API aplica search_job_id ao workspace autenticado, sem misturar contatos antigos', async () => {
+  const harness = createSupabaseHarness(); globalThis.fetch = harness.fetchMock;
+  const repository = new Repository(new DocumentStore());
+  const freelancer = await repository.createFreelancer({name:'Busca isolada',email:'isolated-job@example.com',access_code:'job-scope-test'});
+  const own = {workspace_id:freelancer.id,freelancer_id:freelancer.id,user_id:freelancer.id};
+  const previous = (await repository.createLead(lead({...own,place_id:'old-job-lead',name:'CONTATO ANTIGO'}))).lead;
+  const fresh = (await repository.createLead(lead({...own,place_id:'new-job-lead',name:'CONTATO NOVO'}))).lead;
+  const job = searchJob('job-api-10',freelancer.id);
+  await repository.createSearchJob({...job,target_leads:10},[]);
+  await repository.logSearchResultsBatch([
+    {job_id:job.id,workspace_id:freelancer.id,lead_id:previous.id,result:'duplicate',rating:3.5,reviews_count:20,website:'',website_status:'no_website',phone:'11999999999'},
+    {job_id:job.id,workspace_id:freelancer.id,lead_id:fresh.id,result:'created',rating:3.5,reviews_count:20,website:'',website_status:'no_website',phone:'11999999999'},
+  ]);
+  const { app } = await import('../src/server/app');
+  const login = await request(app).post('/api/freelancer/auth/verify').send({accessCode:'job-scope-test'}).expect(200);
+  const auth = `Bearer ${login.body.token}`;
+  const response = await request(app).get(`/api/leads?search_job_id=${job.id}&limit=0`).set('Authorization',auth).expect(200);
+  assert.equal(response.body.total,1);
+  assert.equal(response.body.leads[0].id,fresh.id);
+  assert.equal((await request(app).get('/api/leads?limit=0').set('Authorization',auth).expect(200)).body.total,2);
+  assert.equal((await request(app).get('/api/leads?search_job_id=job-inexistente&limit=0').set('Authorization',auth).expect(200)).body.total,0);
 });
 
 test('falha de uma ação no modal não bloqueia a próxima ocultação', async () => {

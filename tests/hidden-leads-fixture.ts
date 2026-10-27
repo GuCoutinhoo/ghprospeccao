@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { createSupabaseHarness } from './helpers/supabaseHarness';
-import type { Lead } from '../src/types';
+import type { Lead, SearchJob } from '../src/types';
 
 // Local browser fixture: no production credentials, Supabase calls or real leads.
 export async function startHiddenLeadsFixture() {
@@ -32,6 +32,27 @@ export async function startHiddenLeadsFixture() {
   const failure = await seed('AUDITORIA FALHA');
   const protectedLead = await seed('OCULTO PRESERVADO',true);
   const otherWorkspace = await seed('OUTRO WORKSPACE',true,'free_other');
+  // Simula exatamente a reclamação: 30 contatos antigos + uma busca com meta 10.
+  const searchJobId = 'browser-job-ten';
+  for (let index = 0; index < 30; index++) await seed(`HISTORICO ${index}`);
+  const receipts:Array<Record<string,unknown>> = [];
+  for (let index = 0; index < 10; index++) {
+    const created = await seed(`BUSCA NOVA ${index}`);
+    receipts.push({job_id:searchJobId,workspace_id:freelancer.id,lead_id:created.id,
+      place_id:created.place_id,result:'created',rating:3.5,reviews_count:20,
+      website:'',website_status:'no_website',phone:'11999999999'});
+  }
+  await repository.logSearchResultsBatch(receipts);
+  const timestamp = '2026-10-23T12:00:00.000Z';
+  const job: SearchJob = {
+    id:searchJobId,workspace_id:freelancer.id,user_id:freelancer.id,freelancer_id:freelancer.id,
+    niche:'barbearia',state:'SP',city:'São Paulo',status:'completed',target_leads:10,
+    filters:{onlyWithoutWebsite:false,onlyWithPhone:false,minRating:0,minReviews:0},
+    total_cities:1,processed_cities:1,total_search_areas:1,processed_search_areas:1,
+    places_found:10,places_without_website:10,leads_created:10,
+    created_at:timestamp,updated_at:timestamp,finished_at:timestamp,
+  };
+  await repository.createSearchJob(job,[]);
   const protectedRows = [protectedLead,otherWorkspace].map(lead =>
     JSON.stringify(harness.rows.get(`leads/${lead.id}`)));
   const { app } = await import('../src/server/app');
@@ -44,7 +65,7 @@ export async function startHiddenLeadsFixture() {
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Missing fixture port');
   return {
-    url:`http://127.0.0.1:${address.port}`,harness,target,race,tableRace,failure,
+    url:`http://127.0.0.1:${address.port}`,harness,target,race,tableRace,failure,searchJobId,
     protectedRows,
     currentProtectedRows:() => [protectedLead,otherWorkspace].map(lead =>
       JSON.stringify(harness.rows.get(`leads/${lead.id}`))),

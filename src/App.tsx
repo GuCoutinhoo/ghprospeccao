@@ -155,6 +155,16 @@ export default function App() {
   // Filtros contextuais passados para a tabela de leads
   const [leadsNicheFilter, setLeadsNicheFilter] = useState<string | undefined>(undefined);
   const [leadsStateFilter, setLeadsStateFilter] = useState<string | undefined>(undefined);
+  const [leadsSearchJobId, setLeadsSearchJobId] = useState<string | undefined>(() =>
+    new URLSearchParams(window.location.search).get('search_job_id') || undefined
+  );
+
+  const rememberSearchJobInUrl = (jobId?: string) => {
+    const url = new URL(window.location.href);
+    if (jobId) url.searchParams.set('search_job_id',jobId);
+    else url.searchParams.delete('search_job_id');
+    window.history.replaceState(window.history.state,'',`${url.pathname}${url.search}${url.hash}`);
+  };
 
   // Mobile sidebar
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
@@ -397,6 +407,9 @@ export default function App() {
     }
 
     setCurrentPath(path);
+    // Uma nova navegação abandona a visualização de uma busca específica.
+    setLeadsSearchJobId(undefined);
+    rememberSearchJobInUrl();
     if (!path.startsWith('/search/')) {
       setActiveSearchJobId(null);
     }
@@ -406,6 +419,7 @@ export default function App() {
     if (path === '/leads') {
       setLeadsNicheFilter(undefined);
       setLeadsStateFilter(undefined);
+      setLeadsSearchJobId(undefined);
     }
   };
 
@@ -420,9 +434,11 @@ export default function App() {
     setCurrentPath(`/search/${jobId}`);
   };
 
-  const handleViewLeadsFromJob = (niche?: string, state?: string) => {
+  const handleViewLeadsFromJob = (niche?: string, state?: string, searchJobId?: string) => {
     setLeadsNicheFilter(niche);
     setLeadsStateFilter(state);
+    setLeadsSearchJobId(searchJobId);
+    rememberSearchJobInUrl(searchJobId);
     setCurrentPath('/leads');
   };
 
@@ -734,9 +750,12 @@ export default function App() {
               onSelectLead={(lead) => setSelectedLead(lead)}
               initialNicheFilter={leadsNicheFilter}
               initialStateFilter={leadsStateFilter}
+              initialSearchJobId={leadsSearchJobId}
               onClearInitialFilters={() => {
                 setLeadsNicheFilter(undefined);
                 setLeadsStateFilter(undefined);
+                setLeadsSearchJobId(undefined);
+                rememberSearchJobInUrl();
               }}
               onStartSpeedOutreach={() => handleNavigate('/outreach')}
               onNavigateToSearch={() => handleNavigate('/search')}

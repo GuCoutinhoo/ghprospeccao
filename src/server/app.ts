@@ -1101,6 +1101,7 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
     const scope = resolveWorkspaceScope(req);
 
     const result = await db.getLeads({
+      search_job_id: typeof req.query.search_job_id === 'string' ? req.query.search_job_id : undefined,
       freelancer_id: scope.freelancerId,
       state: state as string,
       city: city as string,
@@ -1108,7 +1109,7 @@ app.get('/api/leads', requireAuth, async (req: Request, res: Response) => {
       onlyWithoutWebsite: onlyWithoutWebsite === 'true',
       onlyWithPhone: onlyWithPhone === 'true',
       onlyFavorites: onlyFavorites === 'true',
-      excludeHidden: req.query.excludeHidden === 'true',
+      excludeHidden: req.query.excludeHidden === undefined ? undefined : req.query.excludeHidden === 'true',
       onlyHidden: req.query.onlyHidden === 'true',
       minRating: minRating ? Number(minRating) : undefined,
       maxRating: maxRating !== undefined && maxRating !== '' ? Number(maxRating) : undefined,

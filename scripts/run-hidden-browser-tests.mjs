@@ -123,6 +123,20 @@ try {
     await assertHidden('OCULTO PRESERVADO');
     assert.deepEqual(errors,[]);
   });
+  await check('botão Ver Leads da Busca mostra 10 novos e nenhum histórico',async () => {
+    await page.getByRole('navigation').getByRole('button',{name:'Buscar Leads',exact:true}).click();
+    await page.getByText('Barbearia — São Paulo, SP',{exact:true}).click();
+    await page.getByRole('button',{name:/Ver Leads da Busca \(10\)/}).click();
+    await page.getByText(/Exibindo somente os leads novos desta busca/).waitFor();
+    await page.getByText('BUSCA NOVA 0',{exact:true}).waitFor();
+    assert.equal(await page.locator('div.group').filter({hasText:/BUSCA NOVA/}).count(),10);
+    assert.equal(await page.getByText('HISTORICO 0',{exact:true}).count(),0);
+    await page.reload();
+    await page.getByText(/Exibindo somente os leads novos desta busca/).waitFor();
+    assert.equal(await page.getByText('HISTORICO 0',{exact:true}).count(),0);
+    await page.getByRole('button',{name:'Ver todos os leads do workspace'}).click();
+    await page.getByText('HISTORICO 0',{exact:true}).waitFor();
+  });
   console.log(`${checks} verificações de navegador passaram; armazenamento inteiramente simulado.`);
 } finally {
   await browser?.close();

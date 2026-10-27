@@ -369,7 +369,7 @@ var groups = [
   { key: "mecanica", terms: ["mecanica", "mecanicas", "oficina", "oficinas"], types: ["car_repair"] },
   { key: "imobiliaria", terms: ["imobiliaria", "imobiliarias", "corretor"], types: ["real_estate_agency"] },
   { key: "pet", terms: ["pet", "veterinario", "veterinaria"], types: ["pet_store", "veterinary_care"] },
-  { key: "estetica", terms: ["estetica", "beleza", "manicure"], types: ["beauty_salon", "spa"] },
+  { key: "estetica", terms: ["estetica", "estetico", "beleza", "manicure"], types: ["skin_care_clinic", "beauty_salon", "spa"] },
   { key: "eletricista", terms: ["eletricista", "eletricistas"], types: ["electrician"] }
 ];
 var words = (s) => normalizeStr(s).split(" ");
@@ -385,8 +385,12 @@ function matchesNicheSemantics(text, niche) {
 function isPlaceRelevantToNiche(place, niche) {
   const g = group(niche);
   const types = place.raw_types || [];
-  if (g && types.some((t) => g.types.includes(t))) return true;
   if (g && groups.some((other) => other !== g && types.some((t) => other.types.includes(t)))) return false;
+  if (g?.key === "estetica" && normalizeStr(niche).includes("clinica")) {
+    if (types.includes("skin_care_clinic")) return true;
+    return types.some((t) => ["spa", "beauty_salon", "medical_clinic"].includes(t)) && matchesNicheSemantics(place.name || "", niche);
+  }
+  if (g && types.some((t) => g.types.includes(t))) return true;
   return matchesNicheSemantics(place.name || "", niche) || types.some((t) => matchesNicheSemantics(t, niche));
 }
 
@@ -398,7 +402,7 @@ var Projections = class {
   }
   getLeads(params, snapshots = /* @__PURE__ */ new Map()) {
     let filtered = (this.data.leads || []).filter((l) => l && l.id && !this.deletedLeadIds.has(l.id));
-    if (params.search_job_id) filtered = filtered.filter((l) => l.search_job_ids?.includes(params.search_job_id));
+    if (params.search_job_id) filtered = filtered.filter((l) => snapshots.has(l.id));
     if (snapshots.size > 0) {
       filtered = filtered.filter((lead) => snapshots.has(lead.id)).map((lead) => ({ ...lead, ...snapshots.get(lead.id) }));
     }
@@ -458,7 +462,7 @@ var Projections = class {
     if (params.minReviews) {
       filtered = filtered.filter((l) => l.reviews_count >= params.minReviews);
     }
-    if (params.maxReviews) {
+    if (params.maxReviews !== void 0) {
       filtered = filtered.filter((l) => l.reviews_count <= params.maxReviews);
     }
     if (params.minScore) {
@@ -976,7 +980,7 @@ var Repository = class {
     const receipts = await this.list("search_results", "job_id", job.id);
     const snapshots = /* @__PURE__ */ new Map();
     for (const receipt of receipts) {
-      if (!receipt.lead_id || typeof receipt.rating !== "number" || typeof receipt.reviews_count !== "number") continue;
+      if (receipt.result !== "created" || !receipt.lead_id || typeof receipt.rating !== "number" || typeof receipt.reviews_count !== "number") continue;
       snapshots.set(receipt.lead_id, {
         rating: receipt.rating,
         reviews_count: receipt.reviews_count,
@@ -987,6 +991,7 @@ var Repository = class {
     }
     return (await this.projection(false, params.freelancer_id)).getLeads({
       ...params,
+      excludeHidden: params.excludeHidden ?? !params.onlyHidden,
       onlyWithoutWebsite: Boolean(params.onlyWithoutWebsite || job.filters.onlyWithoutWebsite),
       onlyWithPhone: Boolean(params.onlyWithPhone || job.filters.onlyWithPhone),
       minRating: Math.max(params.minRating ?? 0, job.filters.minRating ?? 0),
@@ -1711,7 +1716,7 @@ var NICHE_TO_PLACE_TYPES = {
   restaurante: ["restaurant"],
   pizzaria: ["restaurant", "meal_delivery"],
   academia: ["gym", "fitness_center"],
-  estetica: ["beauty_salon", "spa"],
+  estetica: ["skin_care_clinic", "beauty_salon", "spa"],
   advogado: ["lawyer"],
   oficina: ["car_repair"],
   mecanica: ["car_repair"],
@@ -1724,6 +1729,9 @@ var NICHE_TO_PLACE_TYPES = {
 };
 function getIncludedTypesForQuery(query) {
   const norm = query.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (norm.includes("clinica de estetica") || norm.includes("clinica estetica")) {
+    return ["skin_care_clinic", "spa"];
+  }
   for (const [key, types] of Object.entries(NICHE_TO_PLACE_TYPES)) {
     if (norm.includes(key)) {
       return types;
@@ -2292,7 +2300,7 @@ function checkLeadFilters(place, filters) {
   if (filters.minReviews > 0 && reviews < filters.minReviews) {
     return false;
   }
-  if (filters.maxReviews && filters.maxReviews > 0 && reviews > filters.maxReviews) {
+  if (filters.maxReviews !== void 0 && reviews > filters.maxReviews) {
     return false;
   }
   return true;
@@ -3217,6 +3225,7 @@ app.get("/api/leads", requireAuth, async (req, res) => {
     } = req.query;
     const scope = resolveWorkspaceScope(req);
     const result = await db.getLeads({
+      search_job_id: typeof req.query.search_job_id === "string" ? req.query.search_job_id : void 0,
       freelancer_id: scope.freelancerId,
       state,
       city,
@@ -3224,7 +3233,7 @@ app.get("/api/leads", requireAuth, async (req, res) => {
       onlyWithoutWebsite: onlyWithoutWebsite === "true",
       onlyWithPhone: onlyWithPhone === "true",
       onlyFavorites: onlyFavorites === "true",
-      excludeHidden: req.query.excludeHidden === "true",
+      excludeHidden: req.query.excludeHidden === void 0 ? void 0 : req.query.excludeHidden === "true",
       onlyHidden: req.query.onlyHidden === "true",
       minRating: minRating ? Number(minRating) : void 0,
       maxRating: maxRating !== void 0 && maxRating !== "" ? Number(maxRating) : void 0,

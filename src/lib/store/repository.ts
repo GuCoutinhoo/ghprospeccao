@@ -78,10 +78,12 @@ export class Repository {
     if (!job || (params.freelancer_id !== 'ALL' && !isLeadInWorkspace(job,params.freelancer_id))) {
       return {leads:[] as Lead[],total:0,page:1,totalPages:1};
     }
-    const receipts = await this.list<{lead_id?:string;rating?:number;reviews_count?:number;website?:string;website_status?:Lead['website_status'];phone?:string}>('search_results','job_id',job.id);
+    const receipts = await this.list<{result?:string;lead_id?:string;rating?:number;reviews_count?:number;website?:string;website_status?:Lead['website_status'];phone?:string}>('search_results','job_id',job.id);
     const snapshots = new Map<string,Partial<Lead>>();
     for (const receipt of receipts) {
-      if (!receipt.lead_id || typeof receipt.rating !== 'number' || typeof receipt.reviews_count !== 'number') continue;
+      // A busca deve mostrar apenas os novos leads gerados por ela, jamais
+      // duplicatas antigas do mesmo nicho nem resultados de outras buscas.
+      if (receipt.result !== 'created' || !receipt.lead_id || typeof receipt.rating !== 'number' || typeof receipt.reviews_count !== 'number') continue;
       snapshots.set(receipt.lead_id, {
         rating: receipt.rating,
         reviews_count: receipt.reviews_count,
@@ -92,6 +94,7 @@ export class Repository {
     }
     return (await this.projection(false,params.freelancer_id)).getLeads({
       ...params,
+      excludeHidden: params.excludeHidden ?? !params.onlyHidden,
       onlyWithoutWebsite:Boolean(params.onlyWithoutWebsite || job.filters.onlyWithoutWebsite),
       onlyWithPhone:Boolean(params.onlyWithPhone || job.filters.onlyWithPhone),
       minRating:Math.max(params.minRating??0,job.filters.minRating??0),

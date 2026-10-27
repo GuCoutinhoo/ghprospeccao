@@ -79,6 +79,7 @@ interface LeadsTableViewProps {
   onSelectLead: (lead: Lead) => void;
   initialNicheFilter?: string;
   initialStateFilter?: string;
+  initialSearchJobId?: string;
   onClearInitialFilters?: () => void;
   onStartSpeedOutreach?: () => void;
   onNavigateToSearch?: () => void;
@@ -102,6 +103,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   onSelectLead,
   initialNicheFilter,
   initialStateFilter,
+  initialSearchJobId,
   onClearInitialFilters,
   onStartSpeedOutreach,
   onNavigateToSearch,
@@ -165,6 +167,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   // Ref sempre atualizada com os filtros vigentes para evitar closures defasadas
   const latestFiltersRef = useRef({
+    initialSearchJobId,
     effectiveFreelancerId,
     stateFilter,
     cityFilter,
@@ -183,6 +186,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   });
 
   latestFiltersRef.current = {
+    initialSearchJobId,
     effectiveFreelancerId,
     stateFilter,
     cityFilter,
@@ -231,6 +235,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
     try {
       const data = await api.getLeads({
+        search_job_id: current.initialSearchJobId,
         freelancer_id: current.effectiveFreelancerId,
         state: current.stateFilter,
         city: current.cityFilter,
@@ -322,6 +327,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
     loadNiches();
     loadStates();
   }, [
+    initialSearchJobId,
     effectiveFreelancerId,
     page,
     pageSize,
@@ -585,6 +591,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
   };
 
   const hasActiveFilters =
+    Boolean(initialSearchJobId) ||
     (nicheFilter && nicheFilter !== 'ALL') ||
     (stateFilter && stateFilter !== 'ALL') ||
     (cityFilter && cityFilter !== 'ALL') ||
@@ -618,6 +625,14 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
 
   return (
     <div className="space-y-4">
+      {initialSearchJobId && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+          <span className="font-semibold">Exibindo somente os leads novos desta busca — contatos antigos e ocultados não entram nesta lista.</span>
+          <button type="button" onClick={handleClearAllFilters} className="font-semibold underline cursor-pointer">
+            Ver todos os leads do workspace
+          </button>
+        </div>
+      )}
       {/* Banner de Varredura em Andamento em Tempo Real */}
       {runningJob && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-blue-200 bg-blue-50/90 text-blue-900 shadow-2xs animate-pulse">
@@ -933,7 +948,7 @@ export const LeadsTableView: React.FC<LeadsTableViewProps> = ({
         )}
 
         {/* Indicador de Filtros Ativos (Categoria / Estado / Favoritos) */}
-        {(nicheFilter !== 'ALL' || stateFilter !== 'ALL' || onlyFavorites) && (
+        {(initialSearchJobId || nicheFilter !== 'ALL' || stateFilter !== 'ALL' || onlyFavorites) && (
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-neutral-100 text-xs text-neutral-600">
             <div className="flex flex-wrap items-center gap-2">
               {nicheFilter !== 'ALL' && (
