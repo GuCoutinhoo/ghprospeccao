@@ -111,3 +111,77 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$BODY" \
             "https://api.github.com/repos/$REPOSITORY/statuses/$COMMIT" >/dev/null
+
+  production-api-diagnostic:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Diagnose live API timings safely without exposing credentials
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, time, urllib.error, urllib.request
+          base="https://ghprospeccao.vercel.app"
+          checks=[
+            ("health","GET","/api/health",None),
+            ("leads anonymous","GET","/api/leads",None),
+            ("invalid freelancer","POST","/api/freelancer/auth/verify",{"accessCode":"__invalid_ci_read_probe__"}),
+            ("danilo freelancer","POST","/api/freelancer/auth/verify",{"accessCode":"danilo"}),
+          ]
+          for name,method,path,payload in checks:
+              body=None if payload is None else json.dumps(payload).encode()
+              req=urllib.request.Request(base+path,data=body,method=method,headers={"Content-Type":"application/json","User-Agent":"GHProspecao-Diagnostic/1.0"})
+              start=time.monotonic()
+              try:
+                  with urllib.request.urlopen(req,timeout=11) as resp:
+                      status=resp.status
+                      result=resp.read(16384).decode("utf-8","replace")
+                      content_type=resp.headers.get("content-type","")
+              except urllib.error.HTTPError as e:
+                  status=e.code
+                  content_type=e.headers.get("content-type","")
+                  result=e.read(16384).decode("utf-8","replace")
+              except Exception as e:
+                  print(name,"network error",type(e).__name__,str(e)[:130],"seconds",round(time.monotonic()-start,2),flush=True)
+                  continue
+              keys={}
+              if "json" in content_type:
+                  try:
+                      data=json.loads(result)
+                      if isinstance(data,dict):
+                          keys={k:data.get(k) for k in ("status","storage","code","success","error") if k in data}
+                          keys["freelancer_present"]=isinstance(data.get("freelancer"),dict)
+                          keys["token_present"]=isinstance(data.get("token"),str)
+                  except Exception: pass
+              print(name,"HTTP",status,"seconds",round(time.monotonic()-start,2),"type",content_type,"fields",keys,flush=True)
+          PY
+      - name: Diagnose static vs Supabase vs backend full timeout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,time,urllib.request,urllib.error
+          checks=[
+              ('site static','https://ghprospeccao.vercel.app/','GET',8),
+              ('supabase public','https://omvcjpewxiuavjblrlnx.supabase.co/rest/v1/','GET',8),
+              ('backend health full timeout','https://ghprospeccao.vercel.app/api/health','GET',65),
+          ]
+          for name,url,method,timeout in checks:
+              started=time.monotonic()
+              try:
+                  req=urllib.request.Request(url,method=method,headers={'User-Agent':'GHProspecao-HealthProbe/1.0'})
+                  try:
+                      with urllib.request.urlopen(req,timeout=timeout) as response:
+                          status=response.status; content_type=response.headers.get('content-type',''); content=response.read(2048).decode('utf-8','replace')
+                  except urllib.error.HTTPError as e:
+                      status=e.code; content_type=e.headers.get('content-type',''); content=e.read(2048).decode('utf-8','replace')
+                  summary={}
+                  if 'json' in content_type:
+                      try:
+                          data=json.loads(content)
+                          summary={key:str(data.get(key))[:120] for key in ('status','storage','code','error') if key in data}
+                      except Exception: pass
+                  print(name,'status',status,'seconds',round(time.monotonic()-started,2),'summary',summary,flush=True)
+              except Exception as e:
+                  print(name,'EXCEPTION',type(e).__name__,'seconds',round(time.monotonic()-started,2),flush=True)
+          PY
