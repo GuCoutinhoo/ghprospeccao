@@ -154,7 +154,7 @@ const NICHE_TO_PLACE_TYPES: Record<string, string[]> = {
   restaurante: ['restaurant'],
   pizzaria: ['restaurant', 'meal_delivery'],
   academia: ['gym', 'fitness_center'],
-  estetica: ['beauty_salon', 'spa'],
+  estetica: ['skin_care_clinic', 'beauty_salon', 'spa'],
   advogado: ['lawyer'],
   oficina: ['car_repair'],
   mecanica: ['car_repair'],
@@ -171,6 +171,12 @@ export function getIncludedTypesForQuery(query: string): string[] | undefined {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+
+  // Busca específica de clínicas: evita que os 20 primeiros resultados de
+  // uma célula sejam consumidos por salões/manicures genéricos.
+  if (norm.includes('clinica de estetica') || norm.includes('clinica estetica')) {
+    return ['skin_care_clinic', 'spa'];
+  }
 
   for (const [key, types] of Object.entries(NICHE_TO_PLACE_TYPES)) {
     if (norm.includes(key)) {

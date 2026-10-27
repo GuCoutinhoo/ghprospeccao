@@ -606,6 +606,7 @@ export const api = {
   },
 
   async getLeads(params: {
+    search_job_id?: string;
     freelancer_id?: string;
     state?: string;
     city?: string;
@@ -628,6 +629,7 @@ export const api = {
     const session = getActiveFreelancerSession();
     const targetFreelancerId = params.freelancer_id || session?.freelancer?.id;
     const query = new URLSearchParams();
+    if (params.search_job_id) query.set('search_job_id', params.search_job_id);
     if (params.state) query.set('state', params.state);
     if (params.city) query.set('city', params.city);
     if (params.niche) query.set('niche', params.niche);

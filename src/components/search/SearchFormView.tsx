@@ -40,6 +40,7 @@ const NICHE_PRESETS = [
   'Eletricista',
   'Energia solar',
   'Academia',
+  'Clínica de estética',
   'Estética',
   'Advogado',
   'Restaurante',
@@ -155,6 +156,10 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
     setErrorMessage(null);
     if (maxRating !== '' && Number(maxRating) < minRating) {
       setErrorMessage('A nota máxima precisa ser maior ou igual à nota mínima.');
+      return;
+    }
+    if (maxReviews !== '' && Number(maxReviews) < minReviews) {
+      setErrorMessage('O máximo de avaliações não pode ser menor que o mínimo.');
       return;
     }
     if (!activeNiche) {
@@ -721,21 +726,35 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                   </p>
                 </div>
 
-                {/* Avaliações mínimas */}
-                <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs">
-                  <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
-                    Mínimo de avaliações
+                {/* Avaliações do Google: limites independentes da meta de leads */}
+                <div className="bg-white p-3 rounded-lg border border-neutral-200/80 shadow-2xs space-y-2">
+                  <label className="block text-[11px] font-semibold text-neutral-700">
+                    Quantidade de avaliações no Google
                   </label>
-                  <select
-                    value={minReviews}
-                    onChange={(e) => setMinReviews(Number(e.target.value))}
-                    className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 font-mono shadow-2xs focus:border-neutral-900 focus:outline-hidden"
-                  >
-                    <option value={0}>Qualquer quantidade</option>
-                    <option value={10}>Pelo menos 10 avaliações</option>
-                    <option value={20}>Pelo menos 20 avaliações</option>
-                    <option value={50}>Pelo menos 50 avaliações</option>
-                  </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-neutral-500 block mb-1">Mínimo</label>
+                      <input type="number" min="0" step="1" value={minReviews}
+                        onChange={(e) => setMinReviews(Math.max(0,Math.floor(Number(e.target.value)||0)))}
+                        className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs font-mono" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-neutral-500 block mb-1">Máximo (opcional)</label>
+                      <input type="number" min="0" step="1" value={maxReviews}
+                        onChange={(e) => setMaxReviews(e.target.value)} placeholder="Sem limite"
+                        className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs font-mono" />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button type="button" onClick={() => {setMinReviews(0);setMaxReviews('9');}}
+                      className="rounded bg-neutral-100 px-2 py-1 text-[10px] font-semibold text-neutral-700 hover:bg-neutral-200 cursor-pointer">Menos de 10</button>
+                    <button type="button" onClick={() => {setMinReviews(4);setMaxReviews('4');}}
+                      className="rounded bg-neutral-100 px-2 py-1 text-[10px] font-semibold text-neutral-700 hover:bg-neutral-200 cursor-pointer">Exatamente 4</button>
+                    <button type="button" onClick={() => {setMinReviews(10);setMaxReviews('10');}}
+                      className="rounded bg-neutral-100 px-2 py-1 text-[10px] font-semibold text-neutral-700 hover:bg-neutral-200 cursor-pointer">Exatamente 10</button>
+                    <button type="button" onClick={() => {setMinReviews(0);setMaxReviews('');}}
+                      className="rounded bg-neutral-100 px-2 py-1 text-[10px] font-semibold text-neutral-700 hover:bg-neutral-200 cursor-pointer">Qualquer quantidade</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -774,6 +793,7 @@ export const SearchFormView: React.FC<SearchFormViewProps> = ({
                   {activeTargetLeads === 0 ? 'Sem limite' : `${activeTargetLeads} leads`}
                   {onlyWithPhone ? ' · C/ Tel' : ''}
                   {onlyWithoutWebsite ? ' · S/ Site' : ''}
+                  {(minReviews > 0 || maxReviews !== '') ? ` · ${minReviews}–${maxReviews || '∞'} avaliações` : ''}
                   {ratingMode === 'around_3_5'
                     ? ' · ⭐ Nota ~3,5 (3,0–3,9)'
                     : ratingMode === 'exact_3_5'

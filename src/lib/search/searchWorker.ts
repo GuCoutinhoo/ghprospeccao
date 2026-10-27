@@ -477,7 +477,7 @@ export function checkLeadFilters(
     return false;
   }
 
-  if (filters.maxReviews && filters.maxReviews > 0 && reviews > filters.maxReviews) {
+  if (filters.maxReviews !== undefined && reviews > filters.maxReviews) {
     return false;
   }
 
