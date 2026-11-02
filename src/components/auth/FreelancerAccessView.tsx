@@ -172,6 +172,13 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
             </div>
           )}
 
+          {(accessCode.trim().toLowerCase() === 'test' || initialCode.trim().toLowerCase() === 'test') && error && (
+            <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 space-y-2">
+              <p className="text-xs text-amber-200">Supabase temporariamente indisponível? A prospecção emergencial da workspace TEST salva os novos leads apenas neste navegador.</p>
+              <a href="/temporario" className="block text-center rounded-lg bg-amber-400 text-neutral-950 px-3 py-2 text-xs font-bold hover:bg-amber-300">Abrir prospecção temporária</a>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-neutral-300 mb-1">

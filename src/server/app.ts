@@ -13,6 +13,7 @@ import {
 } from '../lib/search/searchWorker';
 import { searchPlacesOfficial } from '../lib/google/places';
 import { Freelancer } from '../types';
+import { temporaryProspectingRouter } from './temporaryProspecting';
 
 dotenv.config();
 
@@ -53,6 +54,10 @@ app.use((req, _res, next) => {
   }
   next();
 });
+
+// Apenas este serviço isolado pode funcionar enquanto Supabase estiver inacessível.
+// Tem autenticação própria e não lê, altera ou sincroniza nenhum lead existente.
+app.use('/api/temporary', temporaryProspectingRouter);
 
 // Falha fechada: nenhuma rota de dados opera sem confirmar a conexão com o Supabase.
 app.use('/api', async (req, _res, next) => {
