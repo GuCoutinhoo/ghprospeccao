@@ -1,6 +1,7 @@
 import type { DashboardStats, Freelancer, Lead, LeadNote, PipelineStatus, SearchArea, SearchJob, SearchJobFilters, SearchQueryLog } from '../types';
 import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
 import type { IBGECity } from '../types';
+import { addCollectedIdentity, isAlreadyCollected } from './search/localDedup';
 
 // Only the original /f/test workspace is in local mode. All other workspaces
 // retain their original API, permissions and database semantics unchanged.
@@ -11,6 +12,9 @@ const PREFIX = 'gh_local_test_original_ui_';
 const LEADS_KEY = PREFIX + 'leads_v1';
 const JOBS_KEY = PREFIX + 'jobs_v1';
 const NOTES_KEY = PREFIX + 'notes_v1';
+// Separate history of collected identities: deletion from the list does not
+// make the business eligible to be collected again on a subsequent search.
+const COLLECTED_KEY = PREFIX + 'collected_identities_v1';
 const PREVIOUS_KEY = 'gh_temporary_test_prospecting_v1'; // read-only migration
 const MIGRATED_KEY = PREFIX + 'legacy_migrated_v1';
 const ID = 'gh_local_test';
@@ -212,19 +216,34 @@ async function stepJob(id:string):Promise<SearchJob> {
     const latest=getJobs().find(j=>j.id===id);
     if (!latest || latest.status!=='running') return latest||job;
     const raw=Array.isArray(data.leads)?data.leads:[];
-    const leads=getLeadsRaw(),seen=new Set(leads.map(l=>l.place_id));
+    const leads=getLeadsRaw();
+    // Include all already collected leads, including hidden or previously
+    // contacted ones. Read-only inspection; never change their saved state.
+    const known=new Set(read<string[]>(COLLECTED_KEY, []));
+    for (const lead of leads) addCollectedIdentity(lead, known);
     let created=0;
     const target=latest.target_leads || 0;
     for (const place of raw) {
-      if (!place.id || seen.has(place.id) || (target>0 && latest.leads_created+created>=target)) continue;
-      seen.add(place.id);
+      if (!place.id) continue;
+      const candidate={...place,place_id:place.id};
+      if (isAlreadyCollected(candidate,known)) {
+        // Remember alternate Google IDs for the same business, too.
+        addCollectedIdentity(candidate,known);
+        continue;
+      }
+      if (target>0 && latest.leads_created+created>=target) break;
+      addCollectedIdentity(candidate,known);
       const lead=legacyToLead({...place,place_id:place.id,reviews:place.reviews,mapsUrl:place.mapsUrl,
         capturedAt:place.capturedAt||now(),search_job_ids:[id]});
       lead.pipeline_status='NOVO';
       leads.push(lead);created++;
     }
-    // Commit lead data first; if quota fails, do not advance the job cursor.
+    // Commit new leads first; no existing lead is rewritten.
     if (created>0) write(LEADS_KEY,leads);
+    // Best-effort browser-only identity history also prevents re-collection
+    // after deleting a local record. Existing saved leads remain the source of
+    // truth if the browser's quota prevents this auxiliary write.
+    try { write(COLLECTED_KEY,[...known]); } catch { /* no lead data was lost */ }
     latest.leads_created+=created;
     latest.places_found+=(data.scanned||raw.length);
     latest.places_without_website+=raw.filter(l=>!l.website).length;
@@ -235,7 +254,8 @@ async function stepJob(id:string):Promise<SearchJob> {
       currentArea.places_found+=(data.scanned||raw.length);
       currentArea.new_leads=(currentArea.new_leads||0)+created;
       currentArea.pages=(currentArea.pages||0)+1;
-      if(data.nextPageToken && currentArea.pages<3 && !(target>0 && latest.leads_created>=target)) {
+      if(data.nextPageToken && data.nextPageToken!==current.pageToken && currentArea.pages<3 &&
+          !(target>0 && latest.leads_created>=target)) {
         currentArea.pageToken=data.nextPageToken;
       } else {
         currentArea.status='completed';currentArea.processed_at=now();currentArea.pageToken=undefined;

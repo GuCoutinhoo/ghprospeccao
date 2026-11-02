@@ -75,3 +75,93 @@ test('original search job creates and saves only browser leads, no Supabase writ
     assert.ok(calls.every(path=>path==='/api/temporary/search'));
   } finally { globalThis.fetch=originalFetch; }
 });
+
+
+test('duplicate filters skip hidden and renamed Google IDs, then continue pages until unique goal', async()=>{
+  store.clear();
+  localStorageMock.setItem('gh_temporary_test_prospecting_v1', JSON.stringify([{
+    id:'existing-place',name:'Clínica Sorriso',city:'Campinas',state:'SP',
+    niche:'Odontologia',phone:'(19) 99999-1234',address:'Av. Brasil, 200',
+    status:'CONTATADO',hidden:true,notes:'Já prospectado',
+  }]));
+  const existing=(await api.getLeads({limit:0})).leads[0];
+  assert.ok(existing.is_hidden);
+  const snapshot=JSON.stringify(existing);
+  const fetchOriginal=globalThis.fetch;
+  const dateNowOriginal=Date.now;
+  let time=100_000;
+  Date.now=()=>time;
+  const requests:string[]=[];
+  globalThis.fetch=(async (_input: RequestInfo|URL, init?: RequestInit)=>{
+    requests.push(String(_input));
+    const payload=JSON.parse(String(init?.body || '{}'));
+    const first=!payload.pageToken;
+    const dupExisting={id:'different-google-id',name:'Clinica Sorriso',city:'Campinas',state:'SP',
+      phone:'+55 19 99999-1234',address:'Rua Mudou, 999'};
+    const dupAddress={id:'another-google-id',name:'CLINICA SORRISO',city:'Campinas',state:'SP',
+      phone:'',address:'Avenida Brasil, 200'};
+    const firstNew={id:'new-a',name:'Odonto Azul',city:'Campinas',state:'SP',address:'Rua A, 100',
+      phone:'(19) 98765-1111',website:'',rating:4.5,reviews:8};
+    const secondNew={id:'new-b',name:'Odonto Verde',city:'Campinas',state:'SP',address:'Rua B, 222',
+      phone:'(19) 98765-2222',website:'',rating:4.1,reviews:15};
+    const leads=first ? [dupExisting,dupAddress,firstNew,{...firstNew,id:'changed-id-same-business'}]
+      : [{...firstNew,id:'another-id-a'},secondNew,{...secondNew,id:'id-b-other'}];
+    return {ok:true,status:200,json:async()=>({leads,scanned:leads.length,nextPageToken:first?'next-1':null})} as Response;
+  });
+  try {
+    const {job}=await api.createSearchJob({state:'SP',city:'Campinas',niche:'Odontologia',
+      filters:{onlyWithoutWebsite:false,onlyWithPhone:false,minRating:0,minReviews:0,targetLeads:2}});
+    const first=await api.stepSearchJob(job.id);
+    assert.equal(first.status,'running');
+    assert.equal(first.leads_created,1);
+    time+=4000;
+    const second=await api.stepSearchJob(job.id);
+    assert.equal(second.status,'completed');
+    assert.equal(second.leads_created,2);
+    const saved=(await api.getLeads({limit:0})).leads;
+    assert.equal(saved.length,3);
+    assert.deepEqual(saved.map(l=>l.id).sort(),['existing-place','new-a','new-b']);
+    assert.equal(JSON.stringify(saved.find(l=>l.id==='existing-place')),snapshot);
+    assert.equal((await api.getLeads({search_job_id:job.id,limit:0})).total,2);
+    assert.equal(requests.length,2);
+    assert.ok(requests.every(x=>x==='/api/temporary/search'));
+  } finally { globalThis.fetch=fetchOriginal;Date.now=dateNowOriginal; }
+});
+
+test('deleted local leads stay deduplicated; exhaustion stops short of target',async()=>{
+  // The previous test stored new-b identity in the browser-only ledger.
+  const original=globalThis.fetch;
+  const calls:string[]=[];
+  globalThis.fetch=(async(input:RequestInfo|URL)=>{
+    calls.push(String(input));
+    return {ok:true,status:200,json:async()=>({
+      leads:[{id:'new-b',name:'Odonto Verde',city:'Campinas',state:'SP',
+        address:'Rua B, 222',phone:'19987652222'}],
+      scanned:1,nextPageToken:null,
+    })} as Response;
+  });
+  try {
+    await api.deleteLead('new-b');
+    const {job}=await api.createSearchJob({state:'SP',city:'Campinas',niche:'Odontologia',
+      filters:{onlyWithoutWebsite:false,onlyWithPhone:false,minRating:0,minReviews:0,targetLeads:10}});
+    const finished=await api.stepSearchJob(job.id);
+    assert.equal(finished.status,'completed');
+    assert.equal(finished.leads_created,0);
+    assert.equal((await api.getLeads({limit:0})).total,2);
+    assert.equal(calls.length,1);
+  } finally {globalThis.fetch=original;}
+});
+
+test('identity matching is conservative for different businesses with shared phone',async()=>{
+  const {prospectIdentityKeys,isAlreadyCollected,addCollectedIdentity}=await import('../src/lib/search/localDedup');
+  const keys=new Set<string>();
+  addCollectedIdentity({id:'a',name:'Clínica Sorriso',phone:'(19) 99999-1234',
+    city:'Campinas',state:'SP',address:'Av. Brasil, 200'},keys);
+  assert.ok(isAlreadyCollected({id:'b',name:'Clinica Sorriso',phone:'+55 19 99999-1234',
+    city:'Campinas',state:'SP',address:'Outra rua, 500'},keys));
+  assert.ok(isAlreadyCollected({id:'c',name:'Clínica Sorriso',city:'Campinas',
+    state:'SP',address:'Avenida Brasil, 200'},keys));
+  assert.equal(isAlreadyCollected({id:'d',name:'Outra Empresa',phone:'19999991234',
+    city:'Campinas',state:'SP',address:'Rua B, 201'},keys),false);
+  assert.ok(prospectIdentityKeys({id:'a'}).includes('id:a'));
+});
