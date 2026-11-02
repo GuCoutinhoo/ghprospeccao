@@ -8,64 +8,35 @@ import { hasWebsite, OFFICIAL_PLACES_FIELD_MASK, type GooglePlaceRaw, type Googl
  * separate key. Never reuse this route as a substitute for freelancer auth.
  */
 export const temporaryProspectingRouter = Router();
-const attempts = new Map<string, { count: number; reset: number }>();
-const recentQueries = new Map<string, number>();
+// Best-effort per-client throttle: independent of the Supabase database.
+// Google Cloud billing quotas should also be configured because serverless
+// instances do not share in-memory counters.
+const recentQueries = new Map<string, { last: number; count: number; day: string }>();
 const VALID_STATES = new Set('AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' '));
-
-function safeEqual(value: string, expected: string): boolean {
-  return crypto.timingSafeEqual(
-    crypto.createHash('sha256').update(value).digest(),
-    crypto.createHash('sha256').update(expected).digest(),
-  );
-}
-
-function signTempToken(): string {
-  const secret = process.env.SESSION_SECRET || process.env.JWT_SECRET || '';
-  if (secret.length < 32) throw new Error('O servidor não possui segredo de sessão seguro.');
-  const data = Buffer.from(JSON.stringify({ purpose: 'temporary-test-prospect', exp: Date.now() + 8 * 60 * 60 * 1000 })).toString('base64url');
-  const signature = crypto.createHmac('sha256', secret + ':temporary-test-prospect').update(data).digest('base64url');
-  return data + '.' + signature;
-}
-
-function validateTempToken(token: string): boolean {
-  const secret = process.env.SESSION_SECRET || process.env.JWT_SECRET || '';
-  if (secret.length < 32 || token.length > 2000 || !token.includes('.')) return false;
-  const pieces = token.split('.');
-  if (pieces.length !== 2) return false;
-  const [data, signature] = pieces;
-  const expected = crypto.createHmac('sha256', secret + ':temporary-test-prospect').update(data).digest('base64url');
-  if (!safeEqual(signature, expected)) return false;
-  try {
-    const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-    return payload?.purpose === 'temporary-test-prospect' && Number.isFinite(payload.exp) && payload.exp > Date.now();
-  } catch { return false; }
-}
-
-temporaryProspectingRouter.post('/login', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  const ip = String(req.ip || req.socket.remoteAddress || 'unknown');
-  const now = Date.now();
-  for (const [key, item] of attempts) if (item.reset < now) attempts.delete(key);
-  const current = attempts.get(ip) || { count: 0, reset: now + 15 * 60_000 };
-  if (current.count >= 8) return res.status(429).json({ error: 'Muitas tentativas. Tente novamente mais tarde.' });
-  const adminEmail = process.env.ADMIN_EMAIL || '';
-  const adminPassword = process.env.ADMIN_PASSWORD || '';
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
-  if (!adminEmail || !adminPassword || !email || password.length > 500 ||
-      !safeEqual(email, adminEmail.trim().toLowerCase()) || !safeEqual(password, adminPassword)) {
-    attempts.set(ip, { count: current.count + 1, reset: current.reset });
-    return res.status(401).json({ error: 'Credenciais administrativas inválidas.' });
-  }
-  attempts.delete(ip);
-  try { return res.json({ token: signTempToken() }); }
-  catch { return res.status(503).json({ error: 'Login temporário indisponível nesta configuração.' }); }
-});
 
 temporaryProspectingRouter.post('/search', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  const token = String(req.headers['x-temporary-token'] || '');
-  if (!validateTempToken(token)) return res.status(401).json({ error: 'Sessão temporária expirada. Faça login novamente.' });
+  // This mode is intentionally accessible without an account only for the
+  // isolated TEST workflow. Never remove auth checks from the real API.
+  const origin = req.get('origin');
+  const requestHost = req.get('host');
+  const fetchSite = req.get('sec-fetch-site');
+  if (!origin || !requestHost || !/^https?:\/\//.test(origin) ||
+      new URL(origin).host !== requestHost ||
+      (fetchSite && fetchSite !== 'same-origin')) {
+    return res.status(403).json({ error: 'Pesquisa disponível apenas dentro do GH Prospecção.' });
+  }
+  const now = Date.now();
+  if (recentQueries.size > 1500) recentQueries.clear();
+  const clientId = crypto.createHash('sha256').update(
+    String(req.headers['x-forwarded-for'] || req.ip || 'unknown').split(',')[0] +
+    ':' + String(req.headers['user-agent'] || '')
+  ).digest('hex');
+  const day = new Date(now).toISOString().slice(0, 10);
+  const usage = recentQueries.get(clientId) || { last: 0, count: 0, day };
+  if (usage.day !== day) { usage.day = day; usage.count = 0; usage.last = 0; }
+  if (usage.count >= 40) return res.status(429).json({ error: 'Limite preventivo de buscas deste navegador atingido. Volte amanhã.' });
+  if (now - usage.last < 2500) return res.status(429).json({ error: 'Aguarde alguns segundos antes da próxima consulta.' });
   const state = String(req.body?.state || '').trim().toUpperCase();
   const city = String(req.body?.city || '').trim();
   const niche = String(req.body?.niche || '').trim();
@@ -76,12 +47,8 @@ temporaryProspectingRouter.post('/search', async (req, res) => {
   }
   const key = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || '';
   if (!key) return res.status(503).json({ error: 'Chave Google Places não configurada no servidor.' });
-  const now = Date.now();
-  if (recentQueries.size > 2000) recentQueries.clear();
-  const queryId = crypto.createHash('sha256').update(token).digest('hex');
-  const last = recentQueries.get(queryId) || 0;
-  if (now - last < 2500) return res.status(429).json({ error: 'Aguarde alguns segundos antes de pesquisar novamente.' });
-  recentQueries.set(queryId, now);
+  // Count only valid search requests before charging Google Places.
+  recentQueries.set(clientId, { last: now, count: usage.count + 1, day });
 
   const query: Record<string, unknown> = {
     textQuery: niche + ' em ' + city + ', ' + state + ', Brasil',
