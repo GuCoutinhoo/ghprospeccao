@@ -47,6 +47,16 @@ export const FreelancerAccessView: React.FC<FreelancerAccessViewProps> = ({
       return;
     }
 
+    // In the temporary local-only mode, both original freelancer codes
+    // open their own URL. No database authentication or layout changes.
+    // Other freelancer codes retain their existing server verification.
+    const normalizedCode = code.toLowerCase();
+    if ((normalizedCode === 'test' || normalizedCode === 'danilo') &&
+        window.location.pathname.toLowerCase().replace(/\/$/, '') !== '/f/' + normalizedCode) {
+      window.location.assign('/f/' + normalizedCode);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setIsBlocked(false);

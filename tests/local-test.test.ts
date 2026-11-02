@@ -24,6 +24,12 @@ test('original API uses local adapter only in /f/test, no password or Supabase c
   assert.equal(leads.total,0);
   assert.notEqual(api.getLeads, undefined);
   (window as any).location.pathname='/f/DANILO';
+  assert.equal(isLocalTestWorkspace(),true);
+  assert.equal(getActiveFreelancerSession()?.freelancer.access_code,'danilo');
+  assert.equal((await api.verifyFreelancerLink('danilo')).freelancer.name,'Danilo');
+  assert.equal((await api.getLeads({limit:0})).total,0);
+  assert.equal(api.getLeads,localTestOverrides.getLeads);
+  (window as any).location.pathname='/f/other';
   assert.equal(isLocalTestWorkspace(),false);
   assert.notEqual(api.getLeads,localTestOverrides.getLeads);
   (window as any).location.pathname='/f/test';
@@ -164,4 +170,95 @@ test('identity matching is conservative for different businesses with shared pho
   assert.equal(isAlreadyCollected({id:'d',name:'Outra Empresa',phone:'19999991234',
     city:'Campinas',state:'SP',address:'Rua B, 201'},keys),false);
   assert.ok(prospectIdentityKeys({id:'a'}).includes('id:a'));
+});
+
+
+test('DANILO has distinct browser storage, preserves TEST hidden leads and never accesses Supabase',async()=>{
+  store.clear();
+  // Only TEST has the historical migration source.
+  localStorageMock.setItem('gh_temporary_test_prospecting_v1',JSON.stringify([{
+    id:'historical-test-id',name:'Lead exclusivo TEST',state:'SP',city:'Campinas',
+    niche:'Barbearia',hidden:true,phone:'11988888888',
+  }]));
+  (window as any).location.pathname='/f/test';
+  const testBefore=await api.getLeads({limit:0});
+  assert.equal(testBefore.total,1);
+  assert.equal(testBefore.leads[0].is_hidden,true);
+  const testSnapshot=store.get('gh_local_test_original_ui_leads_v1');
+
+  (window as any).location.pathname='/f/danilo';
+  assert.equal((await api.verifyFreelancerLink('danilo')).freelancer.id,'gh_local_danilo');
+  assert.equal((await api.getLeads({limit:0})).total,0);
+  assert.equal(store.get('gh_local_danilo_original_ui_leads_v1'),undefined);
+
+  const originalFetch=globalThis.fetch;
+  const calls:string[]=[];
+  globalThis.fetch=(async(input:RequestInfo|URL)=>{
+    calls.push(String(input));
+    return {ok:true,status:200,json:async()=>({
+      leads:[{id:'danilo-new-1',name:'Empresa Danilo',state:'SP',city:'Campinas',
+        niche:'Clínica',phone:'11977777777',website:'',rating:4.2,
+        reviews:11,address:'Av Danilo, 90',capturedAt:new Date().toISOString()}],
+      scanned:1,nextPageToken:null,
+    })} as Response;
+  });
+  try {
+    const created=await api.createSearchJob({state:'SP',city:'Campinas',niche:'Clínica',
+      filters:{onlyWithoutWebsite:true,onlyWithPhone:false,minRating:0,minReviews:0,targetLeads:5}});
+    assert.equal(created.job.freelancer_id,'gh_local_danilo');
+    const result=await api.stepSearchJob(created.job.id);
+    assert.equal(result.leads_created,1);
+    assert.equal(result.status,'completed');
+    assert.deepEqual(calls,['/api/temporary/search']);
+    assert.equal((await api.getLeads({limit:0})).total,1);
+    const hidden=await api.toggleLeadHide('danilo-new-1',true);
+    assert.equal(hidden.is_hidden,true);
+    const note=await api.addLeadNote('danilo-new-1','Falar amanhã');
+    assert.equal(note.content,'Falar amanhã');
+    assert.equal((await api.getLeadById('danilo-new-1')).notes[0].content,'Falar amanhã');
+    assert.equal((await api.getLeads({limit:0})).leads[0].is_hidden,true);
+    assert.ok(store.get('gh_local_danilo_original_ui_notes_v1'));
+  } finally {globalThis.fetch=originalFetch;}
+  (window as any).location.pathname='/f/test';
+  assert.equal(store.get('gh_local_test_original_ui_leads_v1'),testSnapshot);
+  assert.equal((await api.getLeads({limit:0})).total,1);
+  assert.equal((await api.getLeads({limit:0})).leads[0].id,'historical-test-id');
+  assert.equal((await api.getLeads({limit:0})).leads[0].is_hidden,true);
+  (window as any).location.pathname='/f/DANILO';
+  assert.equal((await api.getLeads({limit:0})).leads[0].id,'danilo-new-1');
+});
+
+test('DANILO deduplicates its own leads without reading TEST identity history',async()=>{
+  store.clear();
+  (window as any).location.pathname='/f/danilo';
+  const originalFetch=globalThis.fetch;
+  const origTime=Date.now;
+  let tick=10_000;
+  Date.now=()=>tick;
+  globalThis.fetch=(async()=>({ok:true,status:200,json:async()=>({
+    leads:[{id:'same-place',name:'Empresa compartilhada',state:'SP',city:'Campinas',
+      niche:'Odontologia',address:'Rua Um, 123',phone:'(19) 99999-0000'}],
+    scanned:1,nextPageToken:null,
+  })} as Response));
+  try {
+    const filters={onlyWithoutWebsite:false,onlyWithPhone:false,minRating:0,minReviews:0,targetLeads:5};
+    const search=async()=>{
+      const {job}=await api.createSearchJob({state:'SP',city:'Campinas',niche:'Odontologia',filters});
+      return api.stepSearchJob(job.id);
+    };
+    assert.equal((await search()).leads_created,1);
+    tick+=4000;
+    assert.equal((await search()).leads_created,0);
+    assert.equal((await api.getLeads({limit:0})).total,1);
+    (window as any).location.pathname='/f/test';
+    assert.equal((await api.getLeads({limit:0})).total,0);
+    tick+=4000;
+    assert.equal((await search()).leads_created,1);
+    assert.equal((await api.getLeads({limit:0})).total,1);
+    (window as any).location.pathname='/f/danilo';
+    assert.equal((await api.getLeads({limit:0})).total,1);
+  } finally {
+    globalThis.fetch=originalFetch;Date.now=origTime;
+    (window as any).location.pathname='/f/test';
+  }
 });

@@ -3,30 +3,34 @@ import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
 import type { IBGECity } from '../types';
 import { addCollectedIdentity, isAlreadyCollected } from './search/localDedup';
 
-// Only the original /f/test workspace is in local mode. All other workspaces
-// retain their original API, permissions and database semantics unchanged.
-export function isLocalTestWorkspace(): boolean {
-  return typeof window !== 'undefined' && /^\/f\/test\/?$/i.test(window.location.pathname);
+// Only the explicitly permitted TEST and DANILO routes use browser storage.
+// Preserve legacy TEST storage keys exactly; keep DANILO's dataset separate.
+export function localWorkspaceCode(): 'test' | 'danilo' | null {
+  if (typeof window === 'undefined') return null;
+  const match = /^\/f\/(test|danilo)\/?$/i.exec(window.location.pathname);
+  return match ? (match[1].toLowerCase() as 'test' | 'danilo') : null;
 }
-const PREFIX = 'gh_local_test_original_ui_';
-const LEADS_KEY = PREFIX + 'leads_v1';
-const JOBS_KEY = PREFIX + 'jobs_v1';
-const NOTES_KEY = PREFIX + 'notes_v1';
-// Separate history of collected identities: deletion from the list does not
-// make the business eligible to be collected again on a subsequent search.
-const COLLECTED_KEY = PREFIX + 'collected_identities_v1';
-const PREVIOUS_KEY = 'gh_temporary_test_prospecting_v1'; // read-only migration
-const MIGRATED_KEY = PREFIX + 'legacy_migrated_v1';
-const ID = 'gh_local_test';
+export function isLocalBrowserWorkspace(): boolean { return localWorkspaceCode() !== null; }
+// Legacy export name retained for callers and existing tests.
+export const isLocalTestWorkspace = isLocalBrowserWorkspace;
+
+const scopedKey = (suffix: string) => 'gh_local_' + (localWorkspaceCode() || 'test') + '_original_ui_' + suffix;
+// The one-time legacy migration belongs to TEST only; never copy TEST leads to DANILO.
+const PREVIOUS_KEY = 'gh_temporary_test_prospecting_v1';
+const localId = () => 'gh_local_' + (localWorkspaceCode() || 'test');
 const now = () => new Date().toISOString();
 const jobsInFlight = new Set<string>();
 const stepTimes = new Map<string, number>();
-const LOCAL_FREELANCER: Freelancer = {
-  id: ID, name: 'test', email: '', access_code: 'test',
-  status: 'active', created_at: '2026-11-02T00:00:00.000Z', updated_at: '2026-11-02T00:00:00.000Z',
-};
+function localFreelancer(): Freelancer {
+  const code = localWorkspaceCode() || 'test';
+  return {
+    id: localId(), name: code === 'danilo' ? 'Danilo' : 'test',
+    email: '', access_code: code,
+    status: 'active', created_at: '2026-11-02T00:00:00.000Z', updated_at: '2026-11-02T00:00:00.000Z',
+  };
+}
 export function localFreelancerSession() {
-  return { token: 'local.test', freelancer: LOCAL_FREELANCER };
+  return { token: 'local.' + (localWorkspaceCode() || 'test'), freelancer: localFreelancer() };
 }
 function read<T>(key: string, fallback: T): T {
   try {
@@ -50,8 +54,8 @@ function legacyToLead(l: LegacyLead): Lead {
   const website = l.website || '';
   const date = l.created_at || l.capturedAt || now();
   return {
-    id: l.id, place_id: l.place_id || l.id, user_id: ID, workspace_id: ID,
-    freelancer_id: ID, freelancer_name: 'test',
+    id: l.id, place_id: l.place_id || l.id, user_id: localId(), workspace_id: localId(),
+    freelancer_id: localId(), freelancer_name: localWorkspaceCode() || 'test',
     name: l.name, niche: l.niche || 'Geral', city: l.city || '', state: l.state || '',
     address: l.address || '', phone: l.phone || '', website,
     website_status: website ? 'website_found' : 'no_website',
@@ -64,10 +68,10 @@ function legacyToLead(l: LegacyLead): Lead {
   };
 }
 function getLeadsRaw(): Lead[] {
-  const entries = read<Lead[]>(LEADS_KEY, []);
+  const entries = read<Lead[]>(scopedKey('leads_v1'), []);
   // One-time copy from the previous temporary BROWSER store only (never Supabase).
   // Do not re-import deleted/hidden leads on every refresh.
-  if (localStorage.getItem(MIGRATED_KEY) !== '1') {
+  if (localWorkspaceCode() === 'test' && localStorage.getItem(scopedKey('legacy_migrated_v1')) !== '1') {
     const old = read<LegacyLead[]>(PREVIOUS_KEY, []);
     const seen = new Set(entries.map(l => l.id));
     let changed = false;
@@ -76,15 +80,15 @@ function getLeadsRaw(): Lead[] {
         entries.push(legacyToLead(lead)); seen.add(lead.id); changed = true;
       }
     }
-    if (changed) write(LEADS_KEY, entries);
-    try { localStorage.setItem(MIGRATED_KEY, '1'); } catch { /* storage failure reported by writes */ }
+    if (changed) write(scopedKey('leads_v1'), entries);
+    try { localStorage.setItem(scopedKey('legacy_migrated_v1'), '1'); } catch { /* storage failure reported by writes */ }
   }
   return entries;
 }
-function getJobs(): SearchJob[] { return read<SearchJob[]>(JOBS_KEY, []); }
-function saveJobs(jobs: SearchJob[]) { write(JOBS_KEY, jobs); }
+function getJobs(): SearchJob[] { return read<SearchJob[]>(scopedKey('jobs_v1'), []); }
+function saveJobs(jobs: SearchJob[]) { write(scopedKey('jobs_v1'), jobs); }
 function replaceJob(job: SearchJob) { saveJobs(getJobs().map(j => j.id === job.id ? job : j)); }
-function getNotes(): LeadNote[] { return read<LeadNote[]>(NOTES_KEY, []); }
+function getNotes(): LeadNote[] { return read<LeadNote[]>(scopedKey('notes_v1'), []); }
 function updateLeadStrict(id: string, updates: Partial<Lead>): Lead {
   const leads = getLeadsRaw();
   const idx = leads.findIndex(l => l.id === id);
@@ -93,7 +97,7 @@ function updateLeadStrict(id: string, updates: Partial<Lead>): Lead {
   const { id: _id, user_id: _user, workspace_id: _workspace, freelancer_id: _freelancer, ...fields } = updates;
   const next = { ...leads[idx], ...fields, updated_at: now() };
   leads[idx] = next;
-  write(LEADS_KEY, leads);
+  write(scopedKey('leads_v1'), leads);
   return next;
 }
 type LeadParams = {
@@ -106,7 +110,7 @@ type LeadParams = {
 };
 function getLocalLeads(params: LeadParams) {
   let leads = getLeadsRaw();
-  if (params.freelancer_id && !['ALL', ID].includes(params.freelancer_id)) leads = [];
+  if (params.freelancer_id && !['ALL', localId()].includes(params.freelancer_id)) leads = [];
   if (params.search_job_id) leads = leads.filter(l => l.search_job_ids?.includes(params.search_job_id!));
   if (params.state && params.state !== 'ALL') leads = leads.filter(l => l.state === params.state);
   if (params.city && params.city !== 'ALL') leads = leads.filter(l => l.city === params.city);
@@ -170,7 +174,7 @@ function createJob(p: SearchPayload) {
   if (!cityPlan.length) throw new Error('Escolha uma cidade específica para esta UF.');
   const at = now();
   const job:SearchJob = {
-    id:'local-job-'+crypto.randomUUID(),user_id:ID,workspace_id:ID,freelancer_id:ID,freelancer_name:'test',
+    id:'local-job-'+crypto.randomUUID(),user_id:localId(),workspace_id:localId(),freelancer_id:localId(),freelancer_name:localWorkspaceCode() || 'test',
     state:p.state,city:p.city,niche:p.niche,filters:p.filters,status:'running',
     target_leads:p.filters.targetLeads||0,total_cities:cityPlan.length,processed_cities:0,
     total_search_areas:cityPlan.length,processed_search_areas:0,
@@ -219,7 +223,7 @@ async function stepJob(id:string):Promise<SearchJob> {
     const leads=getLeadsRaw();
     // Include all already collected leads, including hidden or previously
     // contacted ones. Read-only inspection; never change their saved state.
-    const known=new Set(read<string[]>(COLLECTED_KEY, []));
+    const known=new Set(read<string[]>(scopedKey('collected_identities_v1'), []));
     for (const lead of leads) addCollectedIdentity(lead, known);
     let created=0;
     const target=latest.target_leads || 0;
@@ -239,11 +243,11 @@ async function stepJob(id:string):Promise<SearchJob> {
       leads.push(lead);created++;
     }
     // Commit new leads first; no existing lead is rewritten.
-    if (created>0) write(LEADS_KEY,leads);
+    if (created>0) write(scopedKey('leads_v1'),leads);
     // Best-effort browser-only identity history also prevents re-collection
     // after deleting a local record. Existing saved leads remain the source of
     // truth if the browser's quota prevents this auxiliary write.
-    try { write(COLLECTED_KEY,[...known]); } catch { /* no lead data was lost */ }
+    try { write(scopedKey('collected_identities_v1'),[...known]); } catch { /* no lead data was lost */ }
     latest.leads_created+=created;
     latest.places_found+=(data.scanned||raw.length);
     latest.places_without_website+=raw.filter(l=>!l.website).length;
@@ -285,7 +289,7 @@ function changeJob(id:string,status:SearchJob['status']):boolean {
 }
 export const localTestOverrides = {
   verifyFreelancerLink:async (_code:string)=>localFreelancerSession(),
-  getFreelancerMe:async()=>({freelancer:LOCAL_FREELANCER}),
+  getFreelancerMe:async()=>({freelancer:localFreelancer()}),
   freelancerLogout:async()=>{},
   getStates:async()=>BRAZILIAN_STATES,
   getCities:async(uf:string):Promise<IBGECity[]>=>{
@@ -320,8 +324,8 @@ export const localTestOverrides = {
   toggleLeadHide:async (id:string,value?:boolean)=>{const l=getLeadsRaw().find(x=>x.id===id);if(!l)throw new Error('Lead não encontrado');return updateLeadStrict(id,{is_hidden:value??!l.is_hidden}) as Lead &{is_hidden:boolean};},
   addLeadNote:async(id:string,content:string)=>{
     if(!getLeadsRaw().some(l=>l.id===id)) throw new Error('Lead não encontrado');
-    const note:LeadNote={id:crypto.randomUUID(),lead_id:id,user_id:ID,content,created_at:now()};
-    write(NOTES_KEY,[...getNotes(),note]);
+    const note:LeadNote={id:crypto.randomUUID(),lead_id:id,user_id:localId(),content,created_at:now()};
+    write(scopedKey('notes_v1'),[...getNotes(),note]);
     return note;
   },
   registerContactAttempt:async(id:string,_channel?:string)=>{
@@ -336,7 +340,7 @@ export const localTestOverrides = {
   },
   recordSale:async(id:string,value:number)=>localTestOverrides.registerSale(id,value),
   deleteLead:async(id:string)=>{
-    const ls=getLeadsRaw();write(LEADS_KEY,ls.filter(l=>l.id!==id));
+    const ls=getLeadsRaw();write(scopedKey('leads_v1'),ls.filter(l=>l.id!==id));
     return {success:true};
   },
   // No global deletion on a temporary workspace; preserve all original leads.

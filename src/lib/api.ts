@@ -16,7 +16,7 @@ import {
   FreelancerPerformance,
 } from '../types';
 import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
-import { isLocalTestWorkspace, localFreelancerSession, localTestOverrides } from './localTest';
+import { isLocalBrowserWorkspace, localFreelancerSession, localTestOverrides } from './localTest';
 
 // API responses are intentionally not persisted in the browser; Supabase remains authoritative.
 export function invalidateLeadsCache(): void {}
@@ -58,7 +58,7 @@ export function isFreelancerMode(): boolean {
 }
 
 export function getActiveFreelancerSession(): { token: string; freelancer: Freelancer } | null {
-  if (isLocalTestWorkspace()) return localFreelancerSession();
+  if (isLocalBrowserWorkspace()) return localFreelancerSession();
   if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem('gh_freelancer_session');
   if (!raw) return null;
@@ -946,11 +946,11 @@ const originalApi = {
   },
 };
 
-// Keep every original production API path untouched. ONLY /f/test receives
-// the isolated browser-storage adapter; no Supabase reads or writes occur there.
+// Keep every original production API path untouched. ONLY /f/test and
+// /f/danilo use separate local datasets; no Supabase reads or writes occur there.
 export const api: typeof originalApi = new Proxy(originalApi, {
   get(target, property, receiver) {
-    if (isLocalTestWorkspace() && typeof property === 'string' && Object.prototype.hasOwnProperty.call(localTestOverrides, property)) {
+    if (isLocalBrowserWorkspace() && typeof property === 'string' && Object.prototype.hasOwnProperty.call(localTestOverrides, property)) {
       return (localTestOverrides as unknown as Record<string, unknown>)[property];
     }
     return Reflect.get(target, property, receiver);
