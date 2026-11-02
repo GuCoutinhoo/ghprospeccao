@@ -1,5 +1,6 @@
 import type { DashboardStats, Freelancer, Lead, LeadNote, PipelineStatus, SearchArea, SearchJob, SearchJobFilters, SearchQueryLog } from '../types';
-import { POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
+import { BRAZILIAN_STATES, POPULAR_CITIES_BY_STATE } from './ibge/ibgeService';
+import type { IBGECity } from '../types';
 
 // Only the original /f/test workspace is in local mode. All other workspaces
 // retain their original API, permissions and database semantics unchanged.
@@ -266,6 +267,17 @@ export const localTestOverrides = {
   verifyFreelancerLink:async (_code:string)=>localFreelancerSession(),
   getFreelancerMe:async()=>({freelancer:LOCAL_FREELANCER}),
   freelancerLogout:async()=>{},
+  getStates:async()=>BRAZILIAN_STATES,
+  getCities:async(uf:string):Promise<IBGECity[]>=>{
+    const normalized=uf.toUpperCase();
+    const fallback=(POPULAR_CITIES_BY_STATE[normalized]||[]).map((nome,i)=>({id:i+1,nome}));
+    try {
+      const res=await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados/'+encodeURIComponent(normalized)+'/municipios',{signal:AbortSignal.timeout(7000)});
+      if(!res.ok) return fallback;
+      const places=await res.json() as {id:number;nome:string}[];
+      return Array.isArray(places)?places.map(p=>({id:p.id,nome:p.nome})).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')):fallback;
+    }catch{return fallback;}
+  },
   getDashboardStats:async()=>stats(),
   getNiches:async (params?:{onlyFavorites?:boolean;freelancer_id?:string})=>{
     const ls=getLeadsRaw().filter(l=>!params?.onlyFavorites||l.is_favorite);
