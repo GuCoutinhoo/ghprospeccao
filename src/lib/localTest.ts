@@ -213,8 +213,14 @@ async function stepJob(id:string):Promise<SearchJob> {
     });
     const data=await result.json().catch(()=>({})) as {leads?:GoogleLead[];nextPageToken?:string|null;scanned?:number;error?:string};
     if (!result.ok) {
-      if (result.status===429) {stepTimes.set(id,Date.now()+4000);return job;}
-      job.status='paused';job.error_message=data.error||'Falha no Google Places. Continue após verificar o serviço.';
+      // A short throttle is retryable. Daily browser limits and Google quota
+      // errors are not: pause explicitly instead of showing an endless scan.
+      if (result.status===429 && /aguarde alguns segundos/i.test(data.error||'')) {
+        stepTimes.set(id,Date.now()+4000);
+        return job;
+      }
+      job.status='paused';
+      job.error_message=data.error||`Falha na varredura (HTTP ${result.status}). Verifique o Google Places antes de continuar.`;
       job.updated_at=now();replaceJob(job);return job;
     }
     const latest=getJobs().find(j=>j.id===id);
@@ -272,6 +278,17 @@ async function stepJob(id:string):Promise<SearchJob> {
     }
     replaceJob(latest);
     return latest;
+  } catch (err: unknown) {
+    // A network/transport failure should not leave the task permanently
+    // marked as running with zero progress.
+    const latest=getJobs().find(j=>j.id===id) || existing;
+    if (latest.status==='running' || latest.status==='pending') {
+      latest.status='paused';
+      latest.error_message=`Falha na varredura: ${err instanceof Error ? err.message : 'erro de conexão ou armazenamento'}`;
+      latest.updated_at=now();
+      replaceJob(latest);
+    }
+    return latest;
   } finally { jobsInFlight.delete(id); }
 }
 function getJobDetails(id:string) {
@@ -283,6 +300,7 @@ function changeJob(id:string,status:SearchJob['status']):boolean {
   const job=getJobs().find(j=>j.id===id);
   if(!job) return false;
   job.status=status;job.updated_at=now();
+  if(status==='running')job.error_message=undefined;
   if(status==='cancelled')job.finished_at=now();
   replaceJob(job);
   return true;
