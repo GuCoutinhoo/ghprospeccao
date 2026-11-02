@@ -24,7 +24,7 @@ const stepTimes = new Map<string, number>();
 function localFreelancer(): Freelancer {
   const code = localWorkspaceCode() || 'test';
   return {
-    id: localId(), name: code === 'danilo' ? 'danilo' : 'test',
+    id: localId(), name: code === 'danilo' ? 'Danilo' : 'test',
     email: '', access_code: code,
     status: 'active', created_at: '2026-11-02T00:00:00.000Z', updated_at: '2026-11-02T00:00:00.000Z',
   };
@@ -93,7 +93,7 @@ function updateLeadStrict(id: string, updates: Partial<Lead>): Lead {
   const leads = getLeadsRaw();
   const idx = leads.findIndex(l => l.id === id);
   if (idx === -1) throw new Error('Lead não encontrado neste navegador.');
-  // Never permit changing an localId(), workspace ownership, or historical provenance.
+  // Never permit changing an ID, workspace ownership, or historical provenance.
   const { id: _id, user_id: _user, workspace_id: _workspace, freelancer_id: _freelancer, ...fields } = updates;
   const next = { ...leads[idx], ...fields, updated_at: now() };
   leads[idx] = next;
