@@ -262,3 +262,65 @@ test('DANILO deduplicates its own leads without reading TEST identity history',a
     (window as any).location.pathname='/f/test';
   }
 });
+
+
+test('varredura local pausa com mensagem visível quando a cota diária termina (HTTP 429)',async()=>{
+  store.clear();
+  (window as any).location.pathname='/f/test';
+  const originalFetch=globalThis.fetch;
+  globalThis.fetch=(async()=>({
+    ok:false,status:429,
+    json:async()=>({error:'Limite preventivo de buscas deste navegador atingido. Volte amanhã.'}),
+  } as Response));
+  try {
+    const {job}=await api.createSearchJob({state:'SP',city:'Campinas',niche:'Odontologia',
+      filters:{onlyWithoutWebsite:true,onlyWithPhone:false,minRating:0,minReviews:0,targetLeads:10}});
+    const updated=await api.stepSearchJob(job.id);
+    assert.equal(updated.status,'paused');
+    assert.match(updated.error_message||'',/Limite preventivo de buscas/);
+    assert.equal(updated.leads_created,0);
+    assert.equal((await api.getSearchJob(job.id)).job.status,'paused');
+    assert.equal((await api.getLeads({limit:0})).total,0);
+    await api.resumeSearchJob(job.id);
+    assert.equal((await api.getSearchJob(job.id)).job.status,'running');
+    assert.equal((await api.getSearchJob(job.id)).job.error_message,undefined);
+  } finally {globalThis.fetch=originalFetch;}
+});
+
+test('varredura local retenta apenas o throttle curto, sem mascarar erros permanentes',async()=>{
+  store.clear();
+  (window as any).location.pathname='/f/test';
+  const originalFetch=globalThis.fetch;
+  globalThis.fetch=(async()=>({
+    ok:false,status:429,json:async()=>({error:'Aguarde alguns segundos antes da próxima consulta.'}),
+  } as Response));
+  try {
+    const {job}=await api.createSearchJob({state:'SP',city:'Campinas',niche:'Barbearia',
+      filters:{onlyWithoutWebsite:false,onlyWithPhone:false,minRating:0,minReviews:0,targetLeads:10}});
+    const updated=await api.stepSearchJob(job.id);
+    assert.equal(updated.status,'running');
+    assert.equal(updated.leads_created,0);
+    assert.equal(updated.error_message,undefined);
+  } finally {globalThis.fetch=originalFetch;}
+});
+
+test('varredura local informa falha de rede sem alterar leads já salvos',async()=>{
+  store.clear();
+  (window as any).location.pathname='/f/test';
+  const originalFetch=globalThis.fetch;
+  const existing={id:'saved-before-network-failure',name:'Clínica Preservada',state:'SP',
+    city:'Campinas',niche:'Odontologia',phone:'11999999999',hidden:true,notes:'não alterar'};
+  localStorageMock.setItem('gh_temporary_test_prospecting_v1',JSON.stringify([existing]));
+  const before=(await api.getLeads({limit:0})).leads;
+  const snapshot=JSON.stringify(before);
+  globalThis.fetch=(async()=>{throw new TypeError('Failed to fetch');}) as typeof fetch;
+  try {
+    const {job}=await api.createSearchJob({state:'SP',city:'Campinas',niche:'Odontologia',
+      filters:{onlyWithoutWebsite:false,onlyWithPhone:false,minRating:0,minReviews:0,targetLeads:10}});
+    const updated=await api.stepSearchJob(job.id);
+    assert.equal(updated.status,'paused');
+    assert.match(updated.error_message||'',/Falha na varredura: Failed to fetch/);
+    assert.equal(JSON.stringify((await api.getLeads({limit:0})).leads),snapshot);
+    assert.equal((await api.getLeads({limit:0})).leads[0].is_hidden,true);
+  } finally {globalThis.fetch=originalFetch;}
+});
