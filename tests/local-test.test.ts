@@ -30,6 +30,7 @@ test('original API uses local adapter only in /f/test, no password or Supabase c
 });
 
 test('legacy browser leads migrate once; hide and notes persist after re-reading storage',async()=>{
+  store.clear();
   localStorageMock.setItem('gh_temporary_test_prospecting_v1',JSON.stringify([
     { id:'old-123',name:'Clínica de teste',state:'SP',city:'Campinas',niche:'Odontologia',
       address:'Rua Teste',phone:'11999999999',website:'',rating:4,reviews:8,notes:'Primeira anotação' },
