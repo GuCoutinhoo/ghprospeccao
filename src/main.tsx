@@ -6,6 +6,6 @@ import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {window.location.pathname === '/temporario' ? <TemporaryProspectingView /> : <App />}
+    {(window.location.pathname.replace(/\/$/, '') === '/f/test' || window.location.pathname === '/temporario') ? <TemporaryProspectingView /> : <App />}
   </StrictMode>,
 );
