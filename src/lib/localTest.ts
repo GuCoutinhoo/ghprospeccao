@@ -11,6 +11,7 @@ const LEADS_KEY = PREFIX + 'leads_v1';
 const JOBS_KEY = PREFIX + 'jobs_v1';
 const NOTES_KEY = PREFIX + 'notes_v1';
 const PREVIOUS_KEY = 'gh_temporary_test_prospecting_v1'; // read-only migration
+const MIGRATED_KEY = PREFIX + 'legacy_migrated_v1';
 const ID = 'gh_local_test';
 const now = () => new Date().toISOString();
 const jobsInFlight = new Set<string>();
@@ -59,16 +60,20 @@ function legacyToLead(l: LegacyLead): Lead {
 }
 function getLeadsRaw(): Lead[] {
   const entries = read<Lead[]>(LEADS_KEY, []);
-  // Migration only reads the old browser-only temporary data, never real leads.
-  const old = read<LegacyLead[]>(PREVIOUS_KEY, []);
-  const seen = new Set(entries.map(l => l.id));
-  let changed = false;
-  for (const lead of old) {
-    if (lead && typeof lead.id === 'string' && lead.id && typeof lead.name === 'string' && !seen.has(lead.id)) {
-      entries.push(legacyToLead(lead)); seen.add(lead.id); changed = true;
+  // One-time copy from the previous temporary BROWSER store only (never Supabase).
+  // Do not re-import deleted/hidden leads on every refresh.
+  if (localStorage.getItem(MIGRATED_KEY) !== '1') {
+    const old = read<LegacyLead[]>(PREVIOUS_KEY, []);
+    const seen = new Set(entries.map(l => l.id));
+    let changed = false;
+    for (const lead of old) {
+      if (lead && typeof lead.id === 'string' && lead.id && typeof lead.name === 'string' && !seen.has(lead.id)) {
+        entries.push(legacyToLead(lead)); seen.add(lead.id); changed = true;
+      }
     }
+    if (changed) write(LEADS_KEY, entries);
+    try { localStorage.setItem(MIGRATED_KEY, '1'); } catch { /* storage failure reported by writes */ }
   }
-  if (changed) write(LEADS_KEY, entries);
   return entries;
 }
 function getJobs(): SearchJob[] { return read<SearchJob[]>(JOBS_KEY, []); }
