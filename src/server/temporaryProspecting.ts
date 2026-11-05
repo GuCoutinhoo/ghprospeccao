@@ -13,6 +13,9 @@ export const temporaryProspectingRouter = Router();
 // instances do not share in-memory counters.
 const recentQueries = new Map<string, { last: number; count: number; day: string }>();
 const VALID_STATES = new Set('AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' '));
+// Google Places pagination cursors are opaque and can exceed 1,500 characters.
+// Express already limits JSON request bodies; this generous cap only rejects corrupt tokens.
+const MAX_PAGE_TOKEN_LENGTH = 32 * 1024;
 
 temporaryProspectingRouter.post('/search', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -42,8 +45,11 @@ temporaryProspectingRouter.post('/search', async (req, res) => {
   const niche = String(req.body?.niche || '').trim();
   const pageToken = String(req.body?.pageToken || '').trim();
   if (!VALID_STATES.has(state) || city.length < 2 || city.length > 75 || niche.length < 2 || niche.length > 75 ||
-      pageToken.length > 1500 || /[<>]/.test(city + niche)) {
+      /[<>]/.test(city + niche)) {
     return res.status(400).json({ error: 'Informe UF, cidade e nicho válidos.' });
+  }
+  if (pageToken.length > MAX_PAGE_TOKEN_LENGTH) {
+    return res.status(400).json({ error: 'Token de paginação inválido ou muito longo. Os leads já encontrados foram preservados.' });
   }
   const key = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || '';
   if (!key) return res.status(503).json({ error: 'Chave Google Places não configurada no servidor.' });
