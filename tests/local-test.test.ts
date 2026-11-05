@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { isLocalTestWorkspace, localTestOverrides } from '../src/lib/localTest';
 import { api, getActiveFreelancerSession } from '../src/lib/api';
+import express from 'express';
+import request from 'supertest';
+import { temporaryProspectingRouter } from '../src/server/temporaryProspecting';
 
 // Browser mock: no real API credentials, network requests, or Supabase database.
 const store = new Map<string,string>();
@@ -323,4 +326,61 @@ test('varredura local informa falha de rede sem alterar leads já salvos',async(
     assert.equal(JSON.stringify((await api.getLeads({limit:0})).leads),snapshot);
     assert.equal((await api.getLeads({limit:0})).leads[0].is_hidden,true);
   } finally {globalThis.fetch=originalFetch;}
+});
+
+test('endpoint temporário aceita pageToken realista de 1.620 caracteres sem rejeitar UF, cidade e nicho', async()=>{
+  const app=express();
+  app.use(express.json());
+  app.use('/api/temporary',temporaryProspectingRouter);
+  const oldFetch=globalThis.fetch;
+  const oldKey=process.env.GOOGLE_PLACES_API_KEY;
+  const oldMapsKey=process.env.GOOGLE_MAPS_API_KEY;
+  process.env.GOOGLE_MAPS_API_KEY='isolated-regression-test-key';
+  delete process.env.GOOGLE_PLACES_API_KEY;
+  const pageToken='token-'.padEnd(1620,'x');
+  let sentToGoogle:Record<string,unknown>|undefined;
+  globalThis.fetch=(async(input:RequestInfo|URL,init?:RequestInit)=>{
+    assert.equal(String(input),'https://places.googleapis.com/v1/places:searchText');
+    sentToGoogle=JSON.parse(String(init?.body||'{}'));
+    return {ok:true,status:200,json:async()=>({
+      places:[{id:'regression-place',displayName:{text:'Barbearia Teste'},userRatingCount:4}],
+      nextPageToken:null,
+    })} as Response;
+  }) as typeof fetch;
+  try {
+    const res=await request(app).post('/api/temporary/search')
+      .set('Host','temporary.test').set('Origin','https://temporary.test')
+      .set('Sec-Fetch-Site','same-origin').set('User-Agent','token-regression-1620')
+      .send({state:'SP',city:'Campinas',niche:'Barbearia',pageToken,
+        filters:{onlyWithoutWebsite:true,minRating:0,minReviews:0}});
+    assert.equal(res.status,200,JSON.stringify(res.body));
+    assert.equal(sentToGoogle?.pageToken,pageToken);
+    assert.equal(res.body.leads[0].name,'Barbearia Teste');
+    assert.equal(res.body.leads[0].city,'Campinas');
+  } finally {
+    globalThis.fetch=oldFetch;
+    if(oldMapsKey===undefined) delete process.env.GOOGLE_MAPS_API_KEY;
+    else process.env.GOOGLE_MAPS_API_KEY=oldMapsKey;
+    if(oldKey===undefined) delete process.env.GOOGLE_PLACES_API_KEY;
+    else process.env.GOOGLE_PLACES_API_KEY=oldKey;
+  }
+});
+
+test('endpoint diferencia token inválido de UF, cidade ou nicho inválidos', async()=>{
+  const app=express();
+  app.use(express.json());
+  app.use('/api/temporary',temporaryProspectingRouter);
+  const tooLong='x'.repeat(32*1024+1);
+  const requestTest=(userAgent:string)=>request(app).post('/api/temporary/search')
+    .set('Host','temporary.test').set('Origin','https://temporary.test')
+    .set('Sec-Fetch-Site','same-origin').set('User-Agent',userAgent);
+  const tokenError=await requestTest('oversized-pagination-token')
+    .send({state:'SP',city:'Campinas',niche:'Barbearia',pageToken:tooLong});
+  assert.equal(tokenError.status,400);
+  assert.match(tokenError.body.error,/token de paginação/i);
+  assert.doesNotMatch(tokenError.body.error,/Informe UF, cidade e nicho/i);
+  const fieldsError=await requestTest('invalid-uf-regression')
+    .send({state:'ZZ',city:'Campinas',niche:'Barbearia'});
+  assert.equal(fieldsError.status,400);
+  assert.match(fieldsError.body.error,/Informe UF, cidade e nicho/i);
 });
