@@ -874,11 +874,15 @@ const originalApi = {
   },
 
   async resumeSearchJob(id: string): Promise<boolean> {
-    const res = await fetch(`/api/search-jobs/${id}/resume`, {
+    const res = await fetch(`/api/search-jobs/${encodeURIComponent(id)}/resume`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
-    return res.ok;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success !== true) {
+      throw new Error(data.error || 'Não foi possível retomar esta busca. Atualize a página e tente novamente.');
+    }
+    return true;
   },
 
   async cancelSearchJob(id: string): Promise<boolean> {
