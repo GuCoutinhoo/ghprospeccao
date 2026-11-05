@@ -45,7 +45,15 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
     const load = async () => {
       let keepRunning = false;
       try {
-        const data = await api.getSearchJob(jobId);
+        // Serverless workers cannot continue after the HTTP response. Advance one
+        // area per request; only pending/running jobs are eligible for execution.
+        let data = await api.getSearchJob(jobId);
+        if (stopped) return;
+        if (data.job.status === 'pending' || data.job.status === 'running') {
+          await api.stepSearchJob(jobId);
+          if (stopped) return;
+          data = await api.getSearchJob(jobId);
+        }
         if (stopped) return;
         setJob(data.job);
         setAreas(data.areas);
