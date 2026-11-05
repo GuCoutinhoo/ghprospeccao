@@ -97,6 +97,7 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
       setRefreshNonce(n => n + 1);
     } catch (err) {
       console.error(err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setActionLoading(false);
     }
@@ -155,6 +156,11 @@ export const SearchJobDetailView: React.FC<SearchJobDetailViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {errorMsg && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+          {errorMsg}
+        </div>
+      )}
       {/* Top Bar de Navegação e Ações */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <button
